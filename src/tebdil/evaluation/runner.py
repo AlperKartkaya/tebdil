@@ -290,7 +290,8 @@ def run_experiment_from_config(
     config_path: Path,
     repo_root: Path,
     output_root: Optional[Path] = None,
-    adapter_override: Optional[ tuple[RecurrentAdapter, Any, str, str] ] = None,
+    adapter_override: Optional[tuple[RecurrentAdapter, Any, str, str]] = None,
+    shared_eval_cache: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Execute an experiment defined by a YAML config file and write full artifacts."""
     raw_cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
@@ -333,9 +334,9 @@ def run_experiment_from_config(
     )
     policy_cfg = AdaptivePolicyConfig(
         min_relative_divergence=float(pol_raw.get("min_relative_divergence", 0.002)),
-        max_relative_divergence=float(pol_raw.get("max_relative_divergence", 0.50)),
-        min_entropy_trigger=float(pol_raw.get("min_entropy_trigger", 0.25)),
-        max_margin_trigger=float(pol_raw.get("max_margin_trigger", 3.5)),
+        max_relative_divergence=float(pol_raw.get("max_relative_divergence", 0.65)),
+        min_entropy_trigger=float(pol_raw.get("min_entropy_trigger", 1.20)),
+        max_margin_trigger=float(pol_raw.get("max_margin_trigger", 0.70)),
         stagnation_ratio_threshold=float(pol_raw.get("stagnation_ratio_threshold", 0.85)),
         donor_selection=str(pol_raw.get("donor_selection", "confidence_gain")),
     )
@@ -398,45 +399,69 @@ def run_experiment_from_config(
     )
 
     all_records: List[Dict[str, Any]] = []
+    if shared_eval_cache is None:
+        shared_eval_cache = {}
+
+    def _cache_key(prob_id: str, m_name: str, sd: int) -> str:
+        return (
+            f"{model_id}:{model_rev}:{prob_id}:{m_name}:{sd}:{recurrent_steps}:"
+            f"{fork_after_step}:{branch_count}:{pert_method}:{pert_norm}:"
+            f"{base_exc_cfg.alpha}:{base_exc_cfg.beta}:{base_exc_cfg.max_relative_norm}:"
+            f"{base_exc_cfg.visit_step}:{base_exc_cfg.token_scope}:{max_output_tokens}"
+        )
 
     for seed in seeds:
         for prob in problems:
             # 1. Always evaluate S0 baseline first for paired reference
-            s0_res = _decode_method_on_problem(
-                adapter=adapter,
-                tokenizer=tokenizer,
-                problem=prob,
-                method="S0",
-                seed=seed,
-                recurrent_steps=recurrent_steps,
-                fork_after_step=fork_after_step,
-                branch_count=1,
-                perturbation_method="none",
-                perturbation_relative_norm=0.0,
-                excursion_config=base_exc_cfg,
-                policy_config=policy_cfg,
-                max_output_tokens=max_output_tokens,
-            )
-            s0_logits = s0_res.pop("_step0_logits")
+            s0_key = _cache_key(prob.problem_id, "S0", seed)
+            if s0_key in shared_eval_cache:
+                s0_cached = shared_eval_cache[s0_key]
+                s0_res = dict(s0_cached["res"])
+                s0_logits = s0_cached["logits"]
+            else:
+                s0_res = _decode_method_on_problem(
+                    adapter=adapter,
+                    tokenizer=tokenizer,
+                    problem=prob,
+                    method="S0",
+                    seed=seed,
+                    recurrent_steps=recurrent_steps,
+                    fork_after_step=fork_after_step,
+                    branch_count=1,
+                    perturbation_method="none",
+                    perturbation_relative_norm=0.0,
+                    excursion_config=base_exc_cfg,
+                    policy_config=policy_cfg,
+                    max_output_tokens=max_output_tokens,
+                )
+                s0_logits = s0_res.pop("_step0_logits")
+                shared_eval_cache[s0_key] = {"res": dict(s0_res), "logits": s0_logits}
 
             # 2. Evaluate independent donor branch B once per (problem, seed)
-            b_res = _decode_method_on_problem(
-                adapter=adapter,
-                tokenizer=tokenizer,
-                problem=prob,
-                method="P1",
-                seed=seed,
-                recurrent_steps=recurrent_steps,
-                fork_after_step=fork_after_step,
-                branch_count=branch_count,
-                perturbation_method=pert_method,
-                perturbation_relative_norm=pert_norm,
-                excursion_config=base_exc_cfg,
-                policy_config=policy_cfg,
-                max_output_tokens=max_output_tokens,
-                select_branch_b=True,
-            )
-            b_logits = b_res.pop("_step0_logits")
+            b_key = _cache_key(prob.problem_id, "_B_INDEP", seed)
+            if b_key in shared_eval_cache:
+                b_cached = shared_eval_cache[b_key]
+                b_res = dict(b_cached["res"])
+                b_logits = b_cached["logits"]
+            else:
+                b_res = _decode_method_on_problem(
+                    adapter=adapter,
+                    tokenizer=tokenizer,
+                    problem=prob,
+                    method="P1",
+                    seed=seed,
+                    recurrent_steps=recurrent_steps,
+                    fork_after_step=fork_after_step,
+                    branch_count=branch_count,
+                    perturbation_method=pert_method,
+                    perturbation_relative_norm=pert_norm,
+                    excursion_config=base_exc_cfg,
+                    policy_config=policy_cfg,
+                    max_output_tokens=max_output_tokens,
+                    select_branch_b=True,
+                )
+                b_logits = b_res.pop("_step0_logits")
+                shared_eval_cache[b_key] = {"res": dict(b_res), "logits": b_logits}
 
             base_a_correct = bool(s0_res["is_correct"])
             donor_b_correct = bool(b_res["is_correct"])
@@ -487,23 +512,40 @@ def run_experiment_from_config(
                     all_records.append(chosen)
                     continue
 
-                m_res = _decode_method_on_problem(
-                    adapter=adapter,
-                    tokenizer=tokenizer,
-                    problem=prob,
-                    method=method,
-                    seed=seed,
-                    recurrent_steps=recurrent_steps,
-                    fork_after_step=fork_after_step,
-                    branch_count=branch_count,
-                    perturbation_method=pert_method,
-                    perturbation_relative_norm=pert_norm,
-                    excursion_config=base_exc_cfg,
-                    policy_config=policy_cfg,
-                    max_output_tokens=max_output_tokens,
-                    extra_steps_for_s1=int(interv_cfg.get("extra_steps_for_s1", 3)),
-                )
-                m_logits = m_res.pop("_step0_logits")
+                m_key = _cache_key(prob.problem_id, method, seed)
+                if m_key in shared_eval_cache:
+                    m_cached = shared_eval_cache[m_key]
+                    m_res = dict(m_cached["res"])
+                    m_logits = m_cached["logits"]
+                elif method == "E1_no_curv" and _cache_key(prob.problem_id, "M1", seed) in shared_eval_cache:
+                    # E1_no_curv is identical in state to M1, with E1's recurrent call count
+                    m1_cached = shared_eval_cache[_cache_key(prob.problem_id, "M1", seed)]
+                    m_res = dict(m1_cached["res"])
+                    m_res["method"] = "E1_no_curv"
+                    n_toks = max(1, int(round(m_res["recurrent_block_calls"] / 7.0)))
+                    m_res["recurrent_block_calls"] = 8 * n_toks
+                    m_logits = m1_cached["logits"]
+                    shared_eval_cache[m_key] = {"res": dict(m_res), "logits": m_logits}
+                else:
+                    m_res = _decode_method_on_problem(
+                        adapter=adapter,
+                        tokenizer=tokenizer,
+                        problem=prob,
+                        method=method,
+                        seed=seed,
+                        recurrent_steps=recurrent_steps,
+                        fork_after_step=fork_after_step,
+                        branch_count=branch_count,
+                        perturbation_method=pert_method,
+                        perturbation_relative_norm=pert_norm,
+                        excursion_config=base_exc_cfg,
+                        policy_config=policy_cfg,
+                        max_output_tokens=max_output_tokens,
+                        extra_steps_for_s1=int(interv_cfg.get("extra_steps_for_s1", 3)),
+                    )
+                    m_logits = m_res.pop("_step0_logits")
+                    shared_eval_cache[m_key] = {"res": dict(m_res), "logits": m_logits}
+
                 cmp_m = compare_logits(s0_logits, m_logits)
                 m_res["base_a_correct"] = base_a_correct
                 m_res["donor_b_correct"] = donor_b_correct

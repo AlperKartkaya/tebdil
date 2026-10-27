@@ -14,9 +14,9 @@ from tebdil.core.state import BranchState, RecurrentAdapter, check_tensor_finite
 @dataclass(frozen=True)
 class AdaptivePolicyConfig:
     min_relative_divergence: float = 0.002
-    max_relative_divergence: float = 0.50
-    min_entropy_trigger: float = 0.25
-    max_margin_trigger: float = 3.5
+    max_relative_divergence: float = 0.65
+    min_entropy_trigger: float = 1.20
+    max_margin_trigger: float = 0.70
     stagnation_ratio_threshold: float = 0.85
     donor_selection: str = "confidence_gain"  # fixed | random | diversity | mid_diverse | confidence_gain
     extra_visit_cost: int = 1
@@ -179,19 +179,17 @@ class AdaptiveExcursionPolicy:
 
         chosen_idx, rel_div, d_ent, d_margin = chosen
 
-        # Trigger condition: A exhibits high uncertainty / low margin OR donor has stronger margin
-        uncertain_a = (entropy_a >= self.config.min_entropy_trigger) or (margin_a <= self.config.max_margin_trigger)
-        donor_more_confident = (d_margin > margin_a + 0.05) or (d_ent < entropy_a - 0.02)
-        stagnation_risk = stag_a <= self.config.stagnation_ratio_threshold
+        # Trigger condition calibrated on validation split:
+        # Visit only when A has low intermediate margin and high entropy, and donor is in trust bounds
+        uncertain_a = (margin_a <= self.config.max_margin_trigger) and (
+            entropy_a >= self.config.min_entropy_trigger
+        )
 
-        if uncertain_a and (donor_more_confident or stagnation_risk):
-            # Modulate beta by confidence differential so uncertain A relies moderately on promising donor
-            conf_gain = max(0.0, min(1.0, (d_margin - margin_a) / (abs(margin_a) + 1.0)))
-            adj_beta = float(max(0.2, min(0.85, base_beta * (0.8 + 0.4 * conf_gain))))
+        if uncertain_a:
             return PolicyDecision(
                 action="visit",
                 donor_index=chosen_idx,
-                reason="triggered_uncertainty_and_donor_signal",
+                reason="triggered_branch_a_uncertainty",
                 entropy_a=entropy_a,
                 margin_a=margin_a,
                 donor_entropy=d_ent,
@@ -199,7 +197,7 @@ class AdaptiveExcursionPolicy:
                 relative_divergence=rel_div,
                 stagnation_ratio=stag_a,
                 adaptive_alpha=base_alpha,
-                adaptive_beta=adj_beta,
+                adaptive_beta=base_beta,
             )
 
         return PolicyDecision(

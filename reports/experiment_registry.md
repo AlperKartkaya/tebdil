@@ -67,9 +67,9 @@ Across all three verifiable task families (**Arithmetic**, **Logic/CSP**, **Grap
 
 | Gate | Requirement | Status | Evidence Artifact |
 |---|---|---|---|
-| **G0** | Stepwise adapter reproduces standard Ouro forward within numerical tolerance | Pending execution | `reports/phase0_compatibility_report.md` |
-| **G1** | Branching & excursion produce finite, norm-bounded states and measurable logit shifts | Pending execution | `reports/phase1_report.md` |
-| **G2** | Sequence-level task accuracy and rescue/degradation measured with formal validators | Pending execution | `reports/phase2_report.md` |
-| **G3** | Matched-compute ablations and curvature $C_t$ causal analysis completed | Pending execution | `reports/phase3_report.md` |
-| **G4** | Label-free adaptive controller (`E2`) evaluated on held-out test split | Pending execution | `reports/phase4_report.md` |
-| **G5** | Cross-family generalization, Observatory UI, and reproduction suite verified | Pending execution | `reports/final_report.md` |
+| **G0** | Stepwise adapter reproduces standard Ouro forward within numerical tolerance | **PASSED (`max_abs_diff = 0.0`)** | `reports/phase0_compatibility_report.md` |
+| **G1** | Branching & excursion produce finite, norm-bounded states and measurable logit shifts | **PASSED (`100% finite`, `JSD > 0`, `rescue 1/17`)** | `reports/phase1_report.md` |
+| **G2** | Sequence-level task accuracy and rescue/degradation measured with formal validators | **PASSED (`n=18 validation`, rescue & degradation quantified)** | `reports/phase2_report.md` |
+| **G3** | Matched-compute ablations and curvature $C_t$ causal analysis completed | **PASSED (`12 methods` + timing/scope ablations)** | `reports/phase3_report.md` |
+| **G4** | Label-free adaptive controller (`E2`) evaluated on held-out test split | **PASSED (`+5.56%` vs `S0`, `0%` degradation, Pareto-optimal)** | `reports/phase4_report.md` |
+| **G5** | Cross-family generalization, Observatory UI, and reproduction suite verified | **PASSED (`634 records`, UI & `reproduce.sh` verified)** | `reports/final_report.md` |

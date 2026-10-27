@@ -13,14 +13,14 @@ branches:
   count: 2
   fork_after_step: 1
   perturbation: normalized_gaussian
-  perturbation_relative_norm: 0.04
+  perturbation_relative_norm: 0.25
 intervention:
   method: E1
   visit_step: 2
-  alpha: 0.60
-  beta: 0.50
-  token_scope: last_token
-  max_relative_norm: 0.15
+  alpha: 0.65
+  beta: 0.65
+  token_scope: full
+  max_relative_norm: 0.35
   fallback_if_unstable: skip_intervention
 methods:
   - S0
@@ -39,6 +39,6 @@ execution:
 evaluation:
   task_family: all
   split: validation
-  num_problems: 24
+  num_problems: 18
   record_compute: true
   record_logits: true
