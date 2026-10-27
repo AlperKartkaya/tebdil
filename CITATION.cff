@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+title: "TEBDIL: Cooperative Latent Excursions for Recurrent Reasoning"
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+version: 0.1.0
+date-released: "2026-10-27"
+license: Apache-2.0
+authors:
+  - family-names: "Kartkaya"
+    given-names: "Alper"
