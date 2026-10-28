@@ -64,6 +64,8 @@ class ExcursionConfig:
     selected_positions: Tuple[int, ...] = ()
     fallback_if_unstable: str = "skip_intervention"
     rms_Instability_threshold: float = 50.0
+    subspace_fraction: float = 1.0
+    gate_modulated: bool = False
 
 
 def check_tensor_finite(tensor: Tensor, name: str = "hidden") -> bool:

@@ -12,6 +12,7 @@ import torch
 from torch import Tensor
 import yaml
 
+from tebdil.controller.learned_policy import LearnedControllerCheckpoint
 from tebdil.core.policies import AdaptivePolicyConfig, compute_last_token_uncertainty
 from tebdil.core.scheduler import TrajectoryScheduleResult, run_scheduled_trajectory
 from tebdil.core.state import ExcursionConfig, RecurrentAdapter
@@ -135,6 +136,7 @@ def _decode_method_on_problem(
     perturbation_relative_norm: float,
     excursion_config: ExcursionConfig,
     policy_config: AdaptivePolicyConfig,
+    controller_checkpoint: Optional[LearnedControllerCheckpoint] = None,
     max_output_tokens: int = 2,
     extra_steps_for_s1: int = 3,
     select_branch_b: bool = False,
@@ -158,6 +160,7 @@ def _decode_method_on_problem(
         perturbation_relative_norm=perturbation_relative_norm,
         excursion_config=excursion_config,
         policy_config=policy_config,
+        controller_checkpoint=controller_checkpoint,
         seed=seed,
         extra_steps_for_s1=extra_steps_for_s1,
         record_pca=True,
@@ -175,6 +178,8 @@ def _decode_method_on_problem(
 
     total_calls = sched_0.recurrent_block_calls
     total_wall_ms = sched_0.wall_time_ms
+    total_ctrl_calls = sched_0.controller_calls
+    total_ctrl_ms = sched_0.controller_overhead_ms
     margins = [margin_0]
 
     # Determine whether a second continuation token is needed
@@ -202,6 +207,7 @@ def _decode_method_on_problem(
                 perturbation_relative_norm=perturbation_relative_norm,
                 excursion_config=excursion_config,
                 policy_config=policy_config,
+                controller_checkpoint=controller_checkpoint,
                 seed=seed + tok_step * 131,
                 extra_steps_for_s1=extra_steps_for_s1,
                 record_pca=False,
@@ -217,6 +223,8 @@ def _decode_method_on_problem(
             generated_tokens.append(tok_k)
             total_calls += sched_k.recurrent_block_calls
             total_wall_ms += sched_k.wall_time_ms
+            total_ctrl_calls += sched_k.controller_calls
+            total_ctrl_ms += sched_k.controller_overhead_ms
             dec_k = tokenizer.decode(generated_tokens)
             if "\n" in dec_k:
                 break
@@ -237,6 +245,13 @@ def _decode_method_on_problem(
 
     telem = sched_0.excursion_telemetry
     pol_dec = sched_0.policy_decision
+    act_type = getattr(pol_dec, "action_type", "EXCURSION" if (pol_dec and pol_dec.action == "visit") else ("CONTINUE" if pol_dec else "EXCURSION"))
+    act_id = getattr(pol_dec, "action_id", pol_dec.action if pol_dec else "always")
+    pred_adv = float(getattr(pol_dec, "predicted_advantage", 0.0))
+    act_scores = getattr(pol_dec, "action_scores", {})
+    eff_alpha = float(getattr(pol_dec, "adaptive_alpha", excursion_config.alpha)) if pol_dec else excursion_config.alpha
+    eff_beta = float(getattr(pol_dec, "adaptive_beta", excursion_config.beta)) if pol_dec else excursion_config.beta
+    donor_idx = int(getattr(pol_dec, "donor_index", 0)) if pol_dec else 0
 
     return {
         "problem_id": problem.problem_id,
@@ -258,12 +273,15 @@ def _decode_method_on_problem(
         "first_token_margin": round(margin_0, 6),
         "mean_sequence_margin": round(float(sum(margins) / len(margins)), 6),
         "recurrent_block_calls": total_calls,
+        "controller_calls": total_ctrl_calls,
+        "controller_overhead_ms": round(total_ctrl_ms, 4),
+        "exited_early_step": sched_0.exited_early_step,
         "estimated_flops": estimated_flops,
         "wall_time_ms": round(total_wall_ms, 3),
-        "alpha": excursion_config.alpha,
-        "beta": excursion_config.beta,
+        "alpha": eff_alpha,
+        "beta": eff_beta,
         "visit_step": excursion_config.visit_step,
-        "token_scope": excursion_config.token_scope,
+        "token_scope": getattr(pol_dec, "token_scope", excursion_config.token_scope) if pol_dec else excursion_config.token_scope,
         "perturbation_relative_norm": perturbation_relative_norm,
         "curvature_frob": round(telem.curvature_frob, 6) if telem is not None else 0.0,
         "curvature_relative": round(telem.curvature_relative_to_update_a, 6) if telem is not None else 0.0,
@@ -279,6 +297,11 @@ def _decode_method_on_problem(
         "post_finite": bool(telem.post_finite) if telem is not None else True,
         "policy_action": pol_dec.action if pol_dec is not None else "always",
         "policy_reason": pol_dec.reason if pol_dec is not None else "fixed_schedule",
+        "controller_action_type": act_type,
+        "controller_action_id": act_id,
+        "controller_donor_index": donor_idx,
+        "controller_predicted_advantage": round(pred_adv, 6),
+        "controller_action_scores": act_scores,
         "step_snapshots": [asdict(s) for s in sched_0.step_snapshots],
         "pca_coords": sched_0.pca_coords,
         "pca_explained_variance": sched_0.pca_explained_variance,
@@ -310,7 +333,22 @@ def run_experiment_from_config(
     interv_cfg = raw_cfg.get("intervention", {})
     exec_cfg = raw_cfg.get("execution", {})
     eval_cfg = raw_cfg.get("evaluation", {})
+    ctrl_raw = raw_cfg.get("controller", {})
     pol_raw = raw_cfg.get("policy", {})
+    ctrl_ckpt: Optional[LearnedControllerCheckpoint] = None
+    mlp_ckpt: Optional[LearnedControllerCheckpoint] = None
+    if ctrl_raw.get("checkpoint_path"):
+        cp = Path(str(ctrl_raw["checkpoint_path"]))
+        if not cp.is_absolute():
+            cp = repo_root / cp
+        if cp.exists():
+            ctrl_ckpt = LearnedControllerCheckpoint.load(cp)
+    if ctrl_raw.get("mlp_checkpoint_path"):
+        mcp = Path(str(ctrl_raw["mlp_checkpoint_path"]))
+        if not mcp.is_absolute():
+            mcp = repo_root / mcp
+        if mcp.exists():
+            mlp_ckpt = LearnedControllerCheckpoint.load(mcp)
 
     if adapter_override is not None:
         adapter, tokenizer, model_id, model_rev = adapter_override
@@ -368,6 +406,8 @@ def run_experiment_from_config(
     if "S0" not in canonical_methods:
         canonical_methods.insert(0, "S0")
 
+    t_exp_start = time.perf_counter()
+    calls_exp_start = adapter.recurrent_block_calls
     manifest = create_run_manifest(
         run_id=run_id,
         repo_root=repo_root,
@@ -526,7 +566,44 @@ def run_experiment_from_config(
                     m_res["recurrent_block_calls"] = 8 * n_toks
                     m_logits = m1_cached["logits"]
                     shared_eval_cache[m_key] = {"res": dict(m_res), "logits": m_logits}
+                elif method == "D_oracle":
+                    # Diagnostic Oracle Donor Selection (analytical upper bound only)
+                    # Evaluates D_nearest and D_farthest (which visit donor 0 or donor 1) and selects rescuing donor if any
+                    d_near_key = _cache_key(prob.problem_id, "D_nearest", seed)
+                    d_far_key = _cache_key(prob.problem_id, "D_farthest", seed)
+                    for d_m, d_k in (("D_nearest", d_near_key), ("D_farthest", d_far_key)):
+                        if d_k not in shared_eval_cache:
+                            tmp_res = _decode_method_on_problem(
+                                adapter=adapter,
+                                tokenizer=tokenizer,
+                                problem=prob,
+                                method=d_m,
+                                seed=seed,
+                                recurrent_steps=recurrent_steps,
+                                fork_after_step=fork_after_step,
+                                branch_count=branch_count,
+                                perturbation_method=pert_method,
+                                perturbation_relative_norm=pert_norm,
+                                excursion_config=base_exc_cfg,
+                                policy_config=policy_cfg,
+                                controller_checkpoint=ctrl_ckpt,
+                                max_output_tokens=max_output_tokens,
+                                extra_steps_for_s1=int(interv_cfg.get("extra_steps_for_s1", 3)),
+                            )
+                            tmp_logits = tmp_res.pop("_step0_logits")
+                            shared_eval_cache[d_k] = {"res": dict(tmp_res), "logits": tmp_logits}
+                    near_c = shared_eval_cache[d_near_key]
+                    far_c = shared_eval_cache[d_far_key]
+                    pick_far = (not near_c["res"]["is_correct"]) and (
+                        far_c["res"]["is_correct"] or far_c["res"]["gold_logprob"] > near_c["res"]["gold_logprob"]
+                    )
+                    chosen_c = far_c if pick_far else near_c
+                    m_res = dict(chosen_c["res"])
+                    m_res["method"] = "D_oracle"
+                    m_res["policy_reason"] = "diagnostic_oracle_donor_upper_bound"
+                    m_logits = chosen_c["logits"]
                 else:
+                    active_ckpt = mlp_ckpt if (method == "E3_mlp" and mlp_ckpt is not None) else ctrl_ckpt
                     m_res = _decode_method_on_problem(
                         adapter=adapter,
                         tokenizer=tokenizer,
@@ -540,6 +617,7 @@ def run_experiment_from_config(
                         perturbation_relative_norm=pert_norm,
                         excursion_config=base_exc_cfg,
                         policy_config=policy_cfg,
+                        controller_checkpoint=active_ckpt,
                         max_output_tokens=max_output_tokens,
                         extra_steps_for_s1=int(interv_cfg.get("extra_steps_for_s1", 3)),
                     )
@@ -555,6 +633,13 @@ def run_experiment_from_config(
                 all_records.append(m_res)
 
     write_trace_records(all_records, out_dir / "traces.jsonl")
+
+    manifest.tokenizer_revision = model_rev
+    manifest.controller_checkpoint = str(ctrl_raw.get("checkpoint_path", "none"))
+    manifest.recurrent_forward_calls = int(adapter.recurrent_block_calls - calls_exp_start)
+    manifest.controller_calls = int(sum(int(r.get("controller_calls", 0)) for r in all_records))
+    manifest.runtime_seconds = round(time.perf_counter() - t_exp_start, 3)
+    save_run_manifest(manifest, out_dir / "manifest.yaml")
 
     from tebdil.analysis.compute_frontier import compute_pareto_frontier
     from tebdil.analysis.curvature import analyze_curvature

@@ -100,6 +100,12 @@ class MethodPairedSummary:
     mean_estimated_flops: float
     mean_wall_time_ms: float
     instability_count: int
+    excursion_frequency: float = 0.0
+    exit_frequency: float = 0.0
+    continue_frequency: float = 0.0
+    unnecessary_relocation_rate: float = 0.0
+    mean_controller_overhead_ms: float = 0.0
+    mean_controller_calls: float = 0.0
 
 
 def summarize_paired_records(
@@ -171,7 +177,13 @@ def summarize_paired_records(
     calls_list: List[float] = []
     flops_list: List[float] = []
     wall_list: List[float] = []
+    ctrl_ms_list: List[float] = []
+    ctrl_calls_list: List[float] = []
     instabilities = 0
+    exc_count = 0
+    exit_count = 0
+    cont_count = 0
+    unnecessary_exc_count = 0
 
     for rec in records:
         key = f"{rec['problem_id']}:{rec['seed']}"
@@ -211,8 +223,21 @@ def summarize_paired_records(
         calls_list.append(float(rec.get("recurrent_block_calls", 0)))
         flops_list.append(float(rec.get("estimated_flops", 0.0)))
         wall_list.append(float(rec.get("wall_time_ms", 0.0)))
+        ctrl_ms_list.append(float(rec.get("controller_overhead_ms", 0.0)))
+        ctrl_calls_list.append(float(rec.get("controller_calls", 0)))
         if not bool(rec.get("post_finite", True)) or bool(rec.get("skipped_unstable", False)):
             instabilities += 1
+
+        c_act = str(rec.get("controller_action_type", ""))
+        p_act = str(rec.get("policy_action", ""))
+        if c_act == "EXIT" or p_act == "exit":
+            exit_count += 1
+        elif c_act == "CONTINUE" or p_act == "no_visit" or method in ("S0", "S1", "P0", "P1"):
+            cont_count += 1
+        else:
+            exc_count += 1
+            if (is_c <= is_b) and ((lp - base_lp) <= 1e-6):
+                unnecessary_exc_count += 1
 
     acc = float(np.mean(m_corr))
     base_acc = float(np.mean(b_corr))
@@ -255,4 +280,12 @@ def summarize_paired_records(
         mean_estimated_flops=float(np.mean(flops_list)),
         mean_wall_time_ms=float(np.mean(wall_list)),
         instability_count=instabilities,
+        excursion_frequency=round(exc_count / float(n), 4),
+        exit_frequency=round(exit_count / float(n), 4),
+        continue_frequency=round(cont_count / float(n), 4),
+        unnecessary_relocation_rate=round(unnecessary_exc_count / float(exc_count), 4)
+        if exc_count > 0
+        else 0.0,
+        mean_controller_overhead_ms=round(float(np.mean(ctrl_ms_list)), 4),
+        mean_controller_calls=round(float(np.mean(ctrl_calls_list)), 2),
     )

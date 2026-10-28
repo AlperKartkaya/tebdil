@@ -241,6 +241,18 @@ def cmd_serve_site(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_audit(args: argparse.Namespace) -> int:
+    from tebdil.audit import audit_run
+
+    report = audit_run(
+        run_id=args.run_id,
+        repo_root=_repo_root(),
+        replay_problem_id=args.replay_problem_id,
+    )
+    print(json.dumps(report, indent=2))
+    return 0 if report["all_passed"] else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tebdil", description="TEBDIL CLI")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -261,6 +273,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_ana.add_argument("--runs", default="results/")
     p_ana.add_argument("--output", default="reports/")
     p_ana.set_defaults(func=cmd_analyze)
+
+    p_aud = sub.add_parser("audit", help="Audit run artifacts and optionally replay on real model")
+    p_aud.add_argument("--run-id", required=True)
+    p_aud.add_argument("--replay-problem-id", default=None)
+    p_aud.set_defaults(func=cmd_audit)
 
     p_site = sub.add_parser("serve-site", help="Serve the interactive academic landing page UI")
     p_site.add_argument("--host", default="127.0.0.1")

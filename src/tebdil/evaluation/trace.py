@@ -38,6 +38,16 @@ class RunManifest:
     precision: str
     config_path: str
     output_dir: str
+    tokenizer_revision: str = "3aaa2224253a92ca45cf2e3d427c360e1ef9c93d"
+    controller_checkpoint: str = "none"
+    recurrent_forward_calls: int = 0
+    controller_calls: int = 0
+    runtime_seconds: float = 0.0
+    result_artifacts: List[str] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.result_artifacts is None:
+            self.result_artifacts = ["manifest.yaml", "traces.jsonl", "summary.json"]
 
 
 def get_git_commit(repo_root: Path) -> str:

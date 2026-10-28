@@ -1,0 +1,86 @@
+{
+  "model_id": "ByteDance/Ouro-1.4B-Thinking",
+  "model_revision": "3aaa2224253a92ca45cf2e3d427c360e1ef9c93d",
+  "tokenizer_revision": "3aaa2224253a92ca45cf2e3d427c360e1ef9c93d",
+  "snapshot_path": "/Users/alperkartkaya/.cache/huggingface/hub/models--ByteDance--Ouro-1.4B-Thinking/snapshots/3aaa2224253a92ca45cf2e3d427c360e1ef9c93d",
+  "weight_hashes": {
+    "model.safetensors": {
+      "size_bytes": 2869336434,
+      "sha256": "6730581fd366f6d1689728c61637520228385cdfc17c0b24f19aa840b00565fb"
+    },
+    "config.json": {
+      "size_bytes": 1471,
+      "sha256": "44e42ec2ed97f49f20f87985688b6e1be9dd61bbfe9f8a349daac192126e2c55"
+    },
+    "configuration_ouro.py": {
+      "size_bytes": 11550,
+      "sha256": "950443e32929047aa08d02abad2e1888bc1914b3db988d3d675f70787f65dafb"
+    },
+    "modeling_ouro.py": {
+      "size_bytes": 35500,
+      "sha256": "cb8c980b016ae8ae35b6c1193633b9b4496e89993e3a0e8c7853324f01904b30"
+    },
+    "tokenizer.json": {
+      "size_bytes": 3522644,
+      "sha256": "fcb808fe5e7642f5299be28aea07fc7f6d4f4364c3ac5e408e15a772cbc8fa8d"
+    },
+    "tokenizer_config.json": {
+      "size_bytes": 4392,
+      "sha256": "e41eafc6bf7269d6f90f2531124949073a57965f5f0765238a744c1c528e2448"
+    },
+    "vocab.json": {
+      "size_bytes": 800656,
+      "sha256": "7b9de3f47796abf8d00ab96be299fea0dc9afdf1827f34e7e0b9fb44593efe5c"
+    },
+    "merges.txt": {
+      "size_bytes": 466391,
+      "sha256": "0b54e8aa4e53d5383e2e4bc635a56b43f9647f7b13832d5d9ecd8f82dac4f510"
+    },
+    "special_tokens_map.json": {
+      "size_bytes": 965,
+      "sha256": "688ac94df221b18a4d2d4579dfa3c4f0fd5ca3e394da46cd0a317fb5d57d4685"
+    }
+  },
+  "model_config": {
+    "architectures": ["OuroForCausalLM"],
+    "model_type": "ouro",
+    "hidden_size": 2048,
+    "intermediate_size": 5504,
+    "num_hidden_layers": 24,
+    "num_attention_heads": 16,
+    "num_key_value_heads": 16,
+    "head_dim": 128,
+    "total_ut_steps": 4,
+    "early_exit_threshold": 1.0,
+    "vocab_size": 49152,
+    "rms_norm_eps": 1e-06,
+    "rope_theta": 1000000.0
+  },
+  "recurrent_step_count": 4,
+  "parameter_dtype": "torch.bfloat16",
+  "device": "mps:0",
+  "hardware": {
+    "os": "macOS-26.2-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "ram_gb": 16.0,
+    "accelerator": "Apple M1 Pro MPS (mps:0)"
+  },
+  "software_versions": {
+    "python": "3.12.13",
+    "torch": "2.14.1",
+    "transformers": "4.55.0",
+    "uv_lock_sha256_prefix": "cb7b5dd654ef14b0"
+  },
+  "custom_model_code": {
+    "used": true,
+    "vendored_path": "vendor/ouro_1_4b_thinking/",
+    "configuration_ouro_sha256": "950443e32929047aa08d02abad2e1888bc1914b3db988d3d675f70787f65dafb",
+    "modeling_ouro_sha256": "cb8c980b016ae8ae35b6c1193633b9b4496e89993e3a0e8c7853324f01904b30",
+    "stepwise_adapter": "src/tebdil/models/ouro_adapter.py",
+    "forward_equivalence_verified": true,
+    "forward_equivalence_max_abs_diff": 0.0,
+    "forward_equivalence_top1_match": true,
+    "forward_equivalence_js_divergence": 0.0
+  }
+}

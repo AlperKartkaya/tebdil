@@ -9,7 +9,7 @@ def compute_pareto_frontier(method_summaries: Dict[str, Dict[str, Any]]) -> Dict
     """Identify Pareto-efficient non-oracle methods trading off recurrent calls vs accuracy."""
     points: List[Dict[str, Any]] = []
     for method, stats in method_summaries.items():
-        is_oracle = method in ("P1", "E_oracle")
+        is_oracle = method in ("P1", "E_oracle", "D_oracle")
         calls = float(stats.get("mean_recurrent_calls", 0.0))
         acc = float(stats.get("accuracy", 0.0))
         net_diff = float(stats.get("paired_accuracy_diff", 0.0))

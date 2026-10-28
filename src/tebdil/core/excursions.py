@@ -15,6 +15,7 @@ from tebdil.core.state import (
     check_tensor_finite,
     compute_rms,
     frobenius_norm,
+    hash_tensor,
 )
 
 
@@ -40,6 +41,15 @@ class ExcursionTelemetry:
     post_rms_a: float
     post_rms_b: float
     post_finite: bool
+    donor_branch_id: str = "B"
+    receiving_state_hash: str = ""
+    donor_state_hash: str = ""
+    visit_state_hash: str = ""
+    normal_update_hash: str = ""
+    visit_update_hash: str = ""
+    applied_update_hash: str = ""
+    post_receiving_state_hash: str = ""
+    applied_update_frob: float = 0.0
 
 
 def compute_branch_similarity(a_hidden: Tensor, b_hidden: Tensor) -> tuple[float, float, float]:
@@ -140,6 +150,10 @@ def execute_excursion_step(
         or config.beta == 0.0
         or (dist <= 1e-12 and random_direction_seed is None)
     ):
+        h_a_hash = hash_tensor(state_a.hidden)
+        h_b_hash = hash_tensor(state_b.hidden)
+        v_a_hash = hash_tensor(v_a)
+        post_a_hash = hash_tensor(next_a_normal.hidden)
         telemetry = ExcursionTelemetry(
             step=step,
             alpha=config.alpha,
@@ -161,6 +175,15 @@ def execute_excursion_step(
             post_rms_a=compute_rms(next_a_normal.hidden),
             post_rms_b=compute_rms(next_b.hidden),
             post_finite=check_tensor_finite(next_a_normal.hidden),
+            donor_branch_id=state_b.branch_id,
+            receiving_state_hash=h_a_hash,
+            donor_state_hash=h_b_hash,
+            visit_state_hash=h_a_hash,
+            normal_update_hash=v_a_hash,
+            visit_update_hash=v_a_hash,
+            applied_update_hash=v_a_hash,
+            post_receiving_state_hash=post_a_hash,
+            applied_update_frob=norm_v_a,
         )
         return next_a_normal, next_b, telemetry
 
@@ -209,9 +232,21 @@ def execute_excursion_step(
     else:
         effective_v_visit = v_visit
 
-    combined_update = (1.0 - config.beta) * v_a + config.beta * (
-        v_a * (1.0 - scope_mask) + effective_v_visit * scope_mask
-    )
+    delta_v = (effective_v_visit - v_a) * scope_mask
+    if 0.0 < config.subspace_fraction < 1.0:
+        d_dim = delta_v.shape[-1]
+        k_keep = max(1, int(round(d_dim * config.subspace_fraction)))
+        topk_vals = torch.topk(delta_v.abs(), k=k_keep, dim=-1).values
+        thresh = topk_vals[..., -1:]
+        subspace_mask = (delta_v.abs() >= thresh).to(dtype= torch.float32)
+        delta_v = delta_v * subspace_mask
+
+    gate_scale: Tensor | float = 1.0
+    if config.gate_modulated and next_a_normal.gate_history:
+        g_prob = torch.sigmoid(next_a_normal.gate_history[-1].detach().float())
+        gate_scale = 1.0 - 0.5 * g_prob
+
+    combined_update = v_a + config.beta * gate_scale * delta_v
     h_a_prime = (h_a_f + combined_update).to(dtype=state_a.hidden.dtype)
 
     is_finite = check_tensor_finite(h_a_prime)
@@ -257,5 +292,14 @@ def execute_excursion_step(
         post_rms_a=post_rms,
         post_rms_b=compute_rms(next_b.hidden),
         post_finite=is_finite,
+        donor_branch_id=state_b.branch_id,
+        receiving_state_hash=hash_tensor(state_a.hidden),
+        donor_state_hash=hash_tensor(state_b.hidden),
+        visit_state_hash=hash_tensor(visit_state.hidden),
+        normal_update_hash=hash_tensor(v_a),
+        visit_update_hash=hash_tensor(v_visit),
+        applied_update_hash=hash_tensor(combined_update),
+        post_receiving_state_hash=hash_tensor(h_a_prime),
+        applied_update_frob=float(torch.linalg.vector_norm(combined_update).item()),
     )
     return next_a, next_b, telemetry

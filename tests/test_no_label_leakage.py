@@ -3,6 +3,9 @@
 import inspect
 from pathlib import Path
 
+import tebdil.controller.action_space as action_space_mod
+import tebdil.controller.features as features_mod
+import tebdil.controller.learned_policy as learned_policy_mod
 import tebdil.core.branching as branching_mod
 import tebdil.core.controls as controls_mod
 import tebdil.core.excursions as excursions_mod
@@ -32,6 +35,9 @@ def test_core_modules_never_reference_gold_labels_or_validators():
         controls_mod,
         policies_mod,
         scheduler_mod,
+        action_space_mod,
+        features_mod,
+        learned_policy_mod,
     ]
     for mod in core_modules:
         src_path = Path(inspect.getfile(mod))

@@ -4,10 +4,16 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, replace
 import time
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 import numpy as np
 import torch
 from torch import Tensor
+
+if TYPE_CHECKING:
+    from tebdil.controller.learned_policy import (
+        ControllerDecision,
+        LearnedControllerCheckpoint,
+    )
 
 from tebdil.core.branching import fork_branches
 from tebdil.core.controls import (
@@ -71,7 +77,10 @@ class TrajectoryScheduleResult:
     perturbation_reports: List[Dict[str, Any]]
     step_snapshots: List[StepSnapshot]
     excursion_telemetry: Optional[ExcursionTelemetry] = None
-    policy_decision: Optional[PolicyDecision] = None
+    policy_decision: Optional[PolicyDecision | ControllerDecision] = None
+    controller_calls: int = 0
+    controller_overhead_ms: float = 0.0
+    exited_early_step: Optional[int] = None
     pca_coords: Dict[str, List[List[float]]] = field(default_factory=dict)
     pca_explained_variance: List[float] = field(default_factory=list)
 
@@ -127,6 +136,7 @@ def run_scheduled_trajectory(
     perturbation_relative_norm: float = 0.02,
     excursion_config: Optional[ExcursionConfig] = None,
     policy_config: Optional[AdaptivePolicyConfig] = None,
+    controller_checkpoint: Optional[LearnedControllerCheckpoint] = None,
     seed: int = 42,
     extra_steps_for_s1: int = 3,
     record_pca: bool = True,
@@ -163,7 +173,10 @@ def run_scheduled_trajectory(
     step_snapshots: List[StepSnapshot] = []
     pert_reports: List[PerturbationReport] = []
     exc_telemetry: Optional[ExcursionTelemetry] = None
-    pol_decision: Optional[PolicyDecision] = None
+    pol_decision: Optional[PolicyDecision | ControllerDecision] = None
+    ctrl_calls = 0
+    ctrl_overhead_ms = 0.0
+    exited_step: Optional[int] = None
 
     branch_vec_history: Dict[str, List[np.ndarray]] = {}
 
@@ -262,18 +275,106 @@ def run_scheduled_trajectory(
     if actual_fork > 0:
         step_snapshots.append(_snapshot(actual_fork, branches))
 
+    # Map controller method names to SelfDirectedController mode
+    ctrl_mode_map = {
+        "EXIT_2": "fixed_exit",
+        "RAND_CTRL": "random_controller",
+        "H_budget": "budgeted_heuristic",
+        "E3_learned": "learned_ridge",
+        "E3_ridge": "learned_ridge",
+        "E3_mlp": "learned_mlp",
+        "E3_no_exit": "learned_ridge",
+        "D_random": "donor_random",
+        "D_nearest": "donor_nearest",
+        "D_farthest": "donor_farthest",
+        "D_confidence": "donor_confidence",
+        "D_learned": "donor_learned",
+    }
+
+    prev_exc_count = 0
+    prev_exc_margin_delta = 0.0
+    prev_top1_prob_a: Optional[float] = None
+    prev_margin_a: Optional[float] = None
+    if step_snapshots and "A" in step_snapshots[-1].branch_margin:
+        prev_margin_a = step_snapshots[-1].branch_margin["A"]
+
     # Advance branches through remaining steps (actual_fork .. total_steps - 1)
     for t in range(actual_fork, total_steps):
-        if t == excursion_config.visit_step and method not in ("P0", "P1"):
+        is_visit_step = (t == excursion_config.visit_step) or (
+            method == "E1_multi_visit" and t in (excursion_config.visit_step, excursion_config.visit_step + 1)
+        )
+        if is_visit_step and method not in ("P0", "P1"):
             state_a = branches[0]
             donors = branches[1:]
             donor_idx = 0
             intervened = True
             active_cfg = excursion_config
 
-            if method == "E2":
+            if method == "E1_last_token":
+                active_cfg = replace(excursion_config, token_scope="last_token")
+            elif method == "E1_norm_tight":
+                active_cfg = replace(excursion_config, max_relative_norm=0.10)
+            elif method == "E1_subspace":
+                active_cfg = replace(excursion_config, subspace_fraction=0.50)
+            elif method == "E1_gated":
+                active_cfg = replace(excursion_config, gate_modulated=True)
+
+            if method in ctrl_mode_map:
+                from tebdil.controller.learned_policy import SelfDirectedController
+
+                allow_exit_flag = method not in ("E3_no_exit", "D_random", "D_nearest", "D_farthest", "D_confidence", "D_learned")
+                sd_ctrl = SelfDirectedController(
+                    mode=ctrl_mode_map[method],
+                    checkpoint=controller_checkpoint,
+                    min_relative_divergence=policy_config.min_relative_divergence,
+                    max_relative_divergence=policy_config.max_relative_divergence,
+                    rms_instability_limit=policy_config.rms_Instability_limit,
+                    e2_max_margin_trigger=policy_config.max_margin_trigger,
+                    e2_min_entropy_trigger=policy_config.min_entropy_trigger,
+                    allow_exit=allow_exit_flag,
+                )
+                budget_rem = max(1, (total_steps - t) * len(branches))
+                c_dec = sd_ctrl.decide(
+                    adapter=adapter,
+                    state_a=state_a,
+                    donors=donors,
+                    total_steps=total_steps,
+                    budget_remaining=budget_rem,
+                    base_alpha=active_cfg.alpha,
+                    base_beta=active_cfg.beta,
+                    base_scope=active_cfg.token_scope,
+                    max_relative_norm=active_cfg.max_relative_norm,
+                    prev_excursions=prev_exc_count,
+                    prev_excursion_margin_delta=prev_exc_margin_delta,
+                    prev_top1_prob_a=prev_top1_prob_a,
+                    prev_margin_a=prev_margin_a,
+                    seed=seed,
+                )
+                pol_decision = c_dec
+                ctrl_calls += sd_ctrl.controller_calls
+                ctrl_overhead_ms += c_dec.controller_overhead_ms
+                donor_idx = c_dec.donor_index
+
+                if c_dec.action_type == "EXIT":
+                    exited_step = t
+                    if step_snapshots:
+                        step_snapshots[-1].policy_decision = asdict(c_dec)
+                    else:
+                        step_snapshots.append(_snapshot(t, branches, intervened=False, dec=c_dec))
+                    break
+                elif c_dec.action_type != "EXCURSION":
+                    intervened = False
+                else:
+                    active_cfg = replace(
+                        active_cfg,
+                        alpha=c_dec.adaptive_alpha,
+                        beta=c_dec.adaptive_beta,
+                        token_scope=c_dec.token_scope,
+                    )
+            elif method == "E2":
                 policy = AdaptiveExcursionPolicy(policy_config)
                 budget_rem = max(1, (total_steps - t) * len(branches))
+                t_pol0 = time.perf_counter()
                 pol_decision = policy.decide(
                     adapter=adapter,
                     state_a=state_a,
@@ -283,6 +384,8 @@ def run_scheduled_trajectory(
                     base_beta=excursion_config.beta,
                     seed=seed,
                 )
+                ctrl_calls += 1
+                ctrl_overhead_ms += (time.perf_counter() - t_pol0) * 1000.0
                 donor_idx = pol_decision.donor_index
                 if pol_decision.action != "visit":
                     intervened = False
@@ -301,9 +404,12 @@ def run_scheduled_trajectory(
 
             if not intervened:
                 branches = [adapter.transition(b) for b in branches]
-                step_snapshots.append(_snapshot(t + 1, branches, intervened=False, dec=pol_decision))
+                snap_now = _snapshot(t + 1, branches, intervened=False, dec=pol_decision)
+                step_snapshots.append(snap_now)
+                prev_margin_a = snap_now.branch_margin.get("A", prev_margin_a)
                 continue
 
+            pre_mar_a = step_snapshots[-1].branch_margin.get("A", 0.0) if step_snapshots else 0.0
             selected_donor = donors[donor_idx]
             if method == "M0":
                 next_a, next_donor, exc_telemetry = execute_direct_state_mixing_step(
@@ -338,7 +444,7 @@ def run_scheduled_trajectory(
                 next_a, next_donor, exc_telemetry = execute_random_direction_excursion_step(
                     adapter, state_a, selected_donor, active_cfg, seed=seed
                 )
-            else:  # E1, E2
+            else:  # E1, E2, E3_*, D_*, E1_*
                 next_a, next_donor, exc_telemetry = execute_excursion_step(
                     adapter, state_a, selected_donor, active_cfg
                 )
@@ -350,12 +456,19 @@ def run_scheduled_trajectory(
                 else:
                     new_branches.append(adapter.transition(d_state))
             branches = new_branches
-            step_snapshots.append(
-                _snapshot(t + 1, branches, intervened=True, telem=exc_telemetry, dec=pol_decision)
+            snap_now = _snapshot(
+                t + 1, branches, intervened=True, telem=exc_telemetry, dec=pol_decision
             )
+            step_snapshots.append(snap_now)
+            prev_exc_count += 1
+            post_mar_a = snap_now.branch_margin.get("A", pre_mar_a)
+            prev_exc_margin_delta = post_mar_a - pre_mar_a
+            prev_margin_a = post_mar_a
         else:
             branches = [adapter.transition(b) for b in branches]
-            step_snapshots.append(_snapshot(t + 1, branches))
+            snap_now = _snapshot(t + 1, branches)
+            step_snapshots.append(snap_now)
+            prev_margin_a = snap_now.branch_margin.get("A", prev_margin_a)
 
     branch_states = {b.branch_id: b for b in branches}
     branch_logits = {b.branch_id: adapter.readout_logits(b) for b in branches}
@@ -391,6 +504,9 @@ def run_scheduled_trajectory(
         step_snapshots=step_snapshots,
         excursion_telemetry=exc_telemetry,
         policy_decision=pol_decision,
+        controller_calls=ctrl_calls,
+        controller_overhead_ms=round(ctrl_overhead_ms, 4),
+        exited_early_step=exited_step,
         pca_coords=pca_coords,
         pca_explained_variance=pca_evr,
     )
