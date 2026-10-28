@@ -58,7 +58,11 @@ uv sync
 # 6. Aggregate paired statistics and Pareto frontier into reports/final_results.json
 .venv/bin/python -m tebdil.cli analyze --runs results/ --output reports/
 
-# 7. Launch TEBDIL Observatory UI
+# 7. Launch Interactive Academic Landing Page UI (http://127.0.0.1:8080)
+.venv/bin/python scripts/build_landing_data.py
+.venv/bin/python -m tebdil.cli serve-site --host 127.0.0.1 --port 8080
+
+# 8. Launch Streamlit Observatory UI
 .venv/bin/streamlit run ui/app.py
 ```
 

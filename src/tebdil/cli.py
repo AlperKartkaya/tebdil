@@ -224,6 +224,23 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve_site(args: argparse.Namespace) -> int:
+    from functools import partial
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+    site_dir = _repo_root() / "site"
+    handler = partial(SimpleHTTPRequestHandler, directory=str(site_dir))
+    server = ThreadingHTTPServer((args.host, int(args.port)), handler)
+    print(f"Serving TEBDIL landing page at http://{args.host}:{args.port}")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tebdil", description="TEBDIL CLI")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -244,6 +261,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_ana.add_argument("--runs", default="results/")
     p_ana.add_argument("--output", default="reports/")
     p_ana.set_defaults(func=cmd_analyze)
+
+    p_site = sub.add_parser("serve-site", help="Serve the interactive academic landing page UI")
+    p_site.add_argument("--host", default="127.0.0.1")
+    p_site.add_argument("--port", type=int, default=8080)
+    p_site.set_defaults(func=cmd_serve_site)
 
     return parser
 
