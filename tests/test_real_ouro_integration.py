@@ -2,6 +2,7 @@
 
 from dataclasses import asdict
 import json
+import os
 from pathlib import Path
 import pytest
 import torch
@@ -19,7 +20,7 @@ from tebdil.models.ouro_adapter import OuroRecurrentAdapter, PINNED_OURO_THINKIN
 
 
 @pytest.mark.real_model
-def test_real_ouro_checkpoint_excursion_and_negative_controls():
+def test_real_ouro_checkpoint_excursion_and_negative_controls(tmp_path: Path):
     """Verify Phase 1 requirements on the actual ByteDance/Ouro-1.4B-Thinking checkpoint."""
     repo_id = "ByteDance/Ouro-1.4B-Thinking"
     tokenizer = AutoTokenizer.from_pretrained(
@@ -108,9 +109,12 @@ def test_real_ouro_checkpoint_excursion_and_negative_controls():
     e1_logits = adapter.readout_logits(na_e1_step4)
     cmp_e1_vs_base = compare_logits(base_logits, e1_logits)
 
-    # Write Phase 1 verification evidence artifact
-    repo_root = Path(__file__).resolve().parents[1]
-    ev_path = repo_root / "artifacts" / "evidence" / "phase1_excursion_verification.json"
+    # Write Phase 1 verification evidence artifact (to tmp_path unless canonical write requested)
+    if os.environ.get("TEBDIL_WRITE_CANONICAL_EVIDENCE") == "1":
+        repo_root = Path(__file__).resolve().parents[1]
+        ev_path = repo_root / "artifacts" / "evidence" / "phase1_excursion_verification.json"
+    else:
+        ev_path = tmp_path / "phase1_excursion_verification.json"
     ev_path.parent.mkdir(parents=True, exist_ok=True)
     ev_payload = {
         "model_id": repo_id,

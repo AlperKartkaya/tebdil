@@ -7,7 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 import time
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 import torch
 from torch import Tensor
 import yaml
@@ -123,6 +123,199 @@ def load_adapter_and_tokenizer(
     return adapter, tokenizer, repo, revision
 
 
+def _sync_device(device: torch.device) -> None:
+    """Synchronize accelerator device before/after wall-clock timing measurements."""
+    try:
+        if device.type == "mps" and hasattr(torch, "mps") and torch.backends.mps.is_available():
+            torch.mps.synchronize()
+        elif device.type == "cuda" and torch.cuda.is_available():
+            torch.cuda.synchronize()
+    except Exception:
+        pass
+
+
+def _get_memory_mb(device: torch.device) -> float:
+    """Return current allocated accelerator memory (or process RSS fallback) in MB."""
+    try:
+        if device.type == "mps" and hasattr(torch, "mps") and hasattr(torch.mps, "current_allocated_memory"):
+            return round(float(torch.mps.current_allocated_memory()) / (1024.0 * 1024.0), 2)
+        if device.type == "cuda" and torch.cuda.is_available():
+            return round(float(torch.cuda.max_memory_allocated(device)) / (1024.0 * 1024.0), 2)
+    except Exception:
+        pass
+    import psutil
+
+    return round(float(psutil.Process().memory_info().rss) / (1024.0 * 1024.0), 2)
+
+
+def _resolve_decision_summary(
+    method: str,
+    sched_res: TrajectoryScheduleResult,
+    excursion_config: ExcursionConfig,
+) -> Dict[str, Any]:
+    """Extract canonical decision fields without falsely labeling S0/S1/P0/P1 as EXCURSION."""
+    telem = sched_res.excursion_telemetry
+    pol_dec = sched_res.policy_decision
+    if method in ("S0", "S1"):
+        return {
+            "action_type": "CONTINUE",
+            "action_id": "CONTINUE",
+            "policy_action": "none",
+            "policy_reason": "single_branch_baseline",
+            "donor_index": 0,
+            "selected_donor": "none",
+            "effective_alpha": 0.0,
+            "effective_beta": 0.0,
+            "chosen_depth": int(sched_res.recurrent_steps),
+            "predicted_advantage": 0.0,
+            "action_scores": {},
+            "rejected_actions": {},
+            "token_scope": "none",
+        }
+    if method in ("P0", "P1"):
+        return {
+            "action_type": "CONTINUE",
+            "action_id": "CONTINUE",
+            "policy_action": "parallel_selection",
+            "policy_reason": "independent_branches",
+            "donor_index": 0,
+            "selected_donor": "none",
+            "effective_alpha": 0.0,
+            "effective_beta": 0.0,
+            "chosen_depth": int(sched_res.recurrent_steps),
+            "predicted_advantage": 0.0,
+            "action_scores": {},
+            "rejected_actions": {},
+            "token_scope": excursion_config.token_scope,
+        }
+    if pol_dec is not None:
+        act_type = getattr(
+            pol_dec,
+            "action_type",
+            "EXCURSION"
+            if pol_dec.action == "visit"
+            else ("EXIT" if pol_dec.action == "exit" else "CONTINUE"),
+        )
+        act_id = getattr(pol_dec, "action_id", pol_dec.action)
+        donor_idx = int(getattr(pol_dec, "donor_index", 0))
+        if telem is not None:
+            sel_donor = telem.donor_branch_id
+            eff_a = float(telem.effective_alpha)
+            eff_b = float(telem.beta)
+        elif act_type == "EXCURSION":
+            sel_donor = getattr(pol_dec, "selected_donor", "B" if donor_idx == 0 else "C")
+            eff_a = float(getattr(pol_dec, "effective_alpha", getattr(pol_dec, "adaptive_alpha", excursion_config.alpha)))
+            eff_b = float(getattr(pol_dec, "effective_beta", getattr(pol_dec, "adaptive_beta", excursion_config.beta)))
+        else:
+            sel_donor = "none"
+            eff_a = 0.0
+            eff_b = 0.0
+        chosen_depth = int(
+            getattr(
+                pol_dec,
+                "chosen_depth",
+                sched_res.exited_early_step
+                if sched_res.exited_early_step is not None
+                else excursion_config.visit_step,
+            )
+        )
+        return {
+            "action_type": act_type,
+            "action_id": act_id,
+            "policy_action": pol_dec.action,
+            "policy_reason": pol_dec.reason,
+            "donor_index": donor_idx,
+            "selected_donor": sel_donor,
+            "effective_alpha": round(eff_a, 4),
+            "effective_beta": round(eff_b, 4),
+            "chosen_depth": chosen_depth,
+            "predicted_advantage": float(getattr(pol_dec, "predicted_advantage", 0.0)),
+            "action_scores": dict(getattr(pol_dec, "action_scores", {}) or {}),
+            "rejected_actions": dict(getattr(pol_dec, "rejected_actions", {}) or {}),
+            "token_scope": getattr(pol_dec, "token_scope", excursion_config.token_scope),
+        }
+    # Fixed-schedule intervention methods (E1, M0, M1, R0, C0, E0, E1_*)
+    sel_donor = telem.donor_branch_id if telem is not None else "B"
+    eff_a = float(telem.effective_alpha) if telem is not None else float(excursion_config.alpha)
+    eff_b = float(telem.beta) if telem is not None else float(excursion_config.beta)
+    return {
+        "action_type": "EXCURSION",
+        "action_id": f"FIXED_{method}",
+        "policy_action": "always",
+        "policy_reason": "fixed_schedule",
+        "donor_index": 0,
+        "selected_donor": sel_donor,
+        "effective_alpha": round(eff_a, 4),
+        "effective_beta": round(eff_b, 4),
+        "chosen_depth": int(excursion_config.visit_step),
+        "predicted_advantage": 0.0,
+        "action_scores": {},
+        "rejected_actions": {},
+        "token_scope": excursion_config.token_scope,
+    }
+
+
+def _build_token_ledger_entry(
+    token_index: int,
+    token_id: int,
+    decoded_token: str,
+    sched_res: TrajectoryScheduleResult,
+    method: str,
+    excursion_config: ExcursionConfig,
+) -> Dict[str, Any]:
+    """Construct an exact per-token call and decision ledger entry."""
+    dec_info = _resolve_decision_summary(method, sched_res, excursion_config)
+    total_c = int(sched_res.recurrent_block_calls)
+    b_cnt = int(sched_res.branch_count)
+    f_steps = int(sched_res.fork_after_step)
+    if b_cnt <= 1 or method in ("S0", "S1"):
+        shared_c = total_c
+        primary_post_c = 0
+        donor_c = 0
+        visit_c = 0
+        cont_c = 0
+    else:
+        shared_c = f_steps
+        post_fork_snaps = max(0, len(sched_res.step_snapshots) - (1 if f_steps > 0 else 0))
+        if sched_res.exited_early_step is not None and post_fork_snaps == 0:
+            post_fork_snaps = max(0, int(sched_res.exited_early_step) - f_steps)
+        base_branched = shared_c + post_fork_snaps * b_cnt
+        visit_c = max(0, total_c - base_branched)
+        donor_c = post_fork_snaps * max(0, b_cnt - 1)
+        primary_post_c = max(0, total_c - shared_c - donor_c - visit_c)
+        if dec_info["action_type"] == "EXCURSION":
+            v_depth = int(dec_info["chosen_depth"])
+            steps_up_to_exc = max(0, v_depth - f_steps + 1)
+            cont_c = max(0, primary_post_c - steps_up_to_exc)
+        else:
+            cont_c = 0
+
+    return {
+        "token_index": int(token_index),
+        "token_id": int(token_id),
+        "decoded_token": str(decoded_token),
+        "recurrent_block_calls": total_c,
+        "shared_calls": int(shared_c),
+        "primary_branch_calls": int(primary_post_c),
+        "donor_calls": int(donor_c),
+        "visit_calls": int(visit_c),
+        "continuation_calls": int(cont_c),
+        "chosen_depth": int(dec_info["chosen_depth"]),
+        "exited_early_step": sched_res.exited_early_step,
+        "controller_action_type": dec_info["action_type"],
+        "controller_action_id": dec_info["action_id"],
+        "policy_action": dec_info["policy_action"],
+        "policy_reason": dec_info["policy_reason"],
+        "selected_donor": dec_info["selected_donor"],
+        "effective_alpha": dec_info["effective_alpha"],
+        "effective_beta": dec_info["effective_beta"],
+        "predicted_advantage": round(float(dec_info["predicted_advantage"]), 6),
+        "action_scores": dec_info["action_scores"],
+        "rejected_actions": dec_info["rejected_actions"],
+        "step_snapshots": [asdict(s) for s in sched_res.step_snapshots],
+    }
+
+
 def _decode_method_on_problem(
     adapter: RecurrentAdapter,
     tokenizer: Any,
@@ -140,13 +333,18 @@ def _decode_method_on_problem(
     max_output_tokens: int = 2,
     extra_steps_for_s1: int = 3,
     select_branch_b: bool = False,
+    select_branch_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run a single method on a single problem and decode its short continuation."""
     device = getattr(adapter, "device", torch.device("cpu"))
+    _sync_device(device)
+    t_wall_start = time.perf_counter()
     prompt_ids = tokenizer.encode(problem.prompt, return_tensors="pt").to(device)
     gold_token_ids = tokenizer.encode(problem.gold_answer, add_special_tokens=False)
     if not gold_token_ids:
         gold_token_ids = [0]
+
+    target_branch = select_branch_id or ("B" if select_branch_b else None)
 
     # Step 0: Prefill trajectory
     sched_0: TrajectoryScheduleResult = run_scheduled_trajectory(
@@ -166,8 +364,8 @@ def _decode_method_on_problem(
         record_pca=True,
     )
 
-    if select_branch_b and "B" in sched_0.branch_logits:
-        step0_logits = sched_0.branch_logits["B"]
+    if target_branch and target_branch in sched_0.branch_logits:
+        step0_logits = sched_0.branch_logits[target_branch]
     else:
         step0_logits = sched_0.primary_logits
 
@@ -175,19 +373,27 @@ def _decode_method_on_problem(
     ent_0, margin_0 = compute_last_token_uncertainty(step0_logits)
     tok_0 = int(step0_logits[:, -1, :].argmax(dim=-1).item())
     generated_tokens = [tok_0]
+    first_decoded = tokenizer.decode([tok_0])
+
+    token_ledger: List[Dict[str, Any]] = [
+        _build_token_ledger_entry(0, tok_0, first_decoded, sched_0, method, excursion_config)
+    ]
+    step_k_logits_by_prefix: Dict[Tuple[int, ...], Tensor] = {}
 
     total_calls = sched_0.recurrent_block_calls
-    total_wall_ms = sched_0.wall_time_ms
     total_ctrl_calls = sched_0.controller_calls
     total_ctrl_ms = sched_0.controller_overhead_ms
     margins = [margin_0]
 
     # Determine whether a second continuation token is needed
-    first_decoded = tokenizer.decode([tok_0])
     needs_more = (
         max_output_tokens > 1
         and "\n" not in first_decoded
-        and problem.template_id not in ("logic_bool_xor_not_v1", "logic_bool_or_xor_test")
+        and problem.template_id not in (
+            "logic_bool_xor_not_v1",
+            "logic_bool_or_xor_test",
+            "logic_mux_branch_fresh",
+        )
     )
 
     if needs_more:
@@ -213,16 +419,20 @@ def _decode_method_on_problem(
                 record_pca=False,
             )
             logits_k = (
-                sched_k.branch_logits["B"]
-                if (select_branch_b and "B" in sched_k.branch_logits)
+                sched_k.branch_logits[target_branch]
+                if (target_branch and target_branch in sched_k.branch_logits)
                 else sched_k.primary_logits
             )
+            step_k_logits_by_prefix[tuple(generated_tokens)] = logits_k
             _, mar_k = compute_last_token_uncertainty(logits_k)
             margins.append(mar_k)
             tok_k = int(logits_k[:, -1, :].argmax(dim=-1).item())
+            tok_k_str = tokenizer.decode([tok_k])
+            token_ledger.append(
+                _build_token_ledger_entry(tok_step, tok_k, tok_k_str, sched_k, method, excursion_config)
+            )
             generated_tokens.append(tok_k)
             total_calls += sched_k.recurrent_block_calls
-            total_wall_ms += sched_k.wall_time_ms
             total_ctrl_calls += sched_k.controller_calls
             total_ctrl_ms += sched_k.controller_overhead_ms
             dec_k = tokenizer.decode(generated_tokens)
@@ -232,6 +442,56 @@ def _decode_method_on_problem(
                 [cur_ids, torch.tensor([[tok_k]], dtype=torch.long, device=device)],
                 dim=1,
             )
+
+    _sync_device(device)
+    total_wall_ms = (time.perf_counter() - t_wall_start) * 1000.0
+    peak_mem_mb = _get_memory_mb(device)
+
+    # Compute teacher-forced sequence_gold_logprob across all gold answer tokens
+    # Any teacher-forced scoring calls (when greedy token != gold prefix) are tracked separately
+    # in `scoring_recurrent_calls` and NOT added to inference `recurrent_block_calls`.
+    gold_token_lps: List[float] = [first_gold_lp]
+    scoring_calls = 0
+    if len(gold_token_ids) > 1:
+        for g_idx in range(1, min(len(gold_token_ids), max_output_tokens)):
+            prefix_tuple = tuple(gold_token_ids[:g_idx])
+            if prefix_tuple in step_k_logits_by_prefix:
+                g_logits = step_k_logits_by_prefix[prefix_tuple]
+            else:
+                calls_pre_score = adapter.recurrent_block_calls
+                tf_ids = torch.cat(
+                    [
+                        prompt_ids,
+                        torch.tensor([list(prefix_tuple)], dtype=torch.long, device=device),
+                    ],
+                    dim=1,
+                )
+                sched_tf = run_scheduled_trajectory(
+                    adapter=adapter,
+                    input_ids=tf_ids,
+                    method=method,
+                    recurrent_steps=recurrent_steps,
+                    fork_after_step=fork_after_step,
+                    branch_count=branch_count,
+                    perturbation_method=perturbation_method,
+                    perturbation_relative_norm=perturbation_relative_norm,
+                    excursion_config=excursion_config,
+                    policy_config=policy_config,
+                    controller_checkpoint=controller_checkpoint,
+                    seed=seed + g_idx * 131,
+                    extra_steps_for_s1=extra_steps_for_s1,
+                    record_pca=False,
+                )
+                scoring_calls += int(adapter.recurrent_block_calls - calls_pre_score)
+                g_logits = (
+                    sched_tf.branch_logits[target_branch]
+                    if (target_branch and target_branch in sched_tf.branch_logits)
+                    else sched_tf.primary_logits
+                )
+            gold_token_lps.append(compute_token_logprob(g_logits, gold_token_ids[g_idx]))
+
+    sequence_gold_lp = float(sum(gold_token_lps))
+    mean_gold_token_lp = float(sum(gold_token_lps) / len(gold_token_lps))
 
     decoded_text = tokenizer.decode(generated_tokens).strip()
     val_outcome = validate_problem_response(problem, decoded_text)
@@ -245,13 +505,7 @@ def _decode_method_on_problem(
 
     telem = sched_0.excursion_telemetry
     pol_dec = sched_0.policy_decision
-    act_type = getattr(pol_dec, "action_type", "EXCURSION" if (pol_dec and pol_dec.action == "visit") else ("CONTINUE" if pol_dec else "EXCURSION"))
-    act_id = getattr(pol_dec, "action_id", pol_dec.action if pol_dec else "always")
-    pred_adv = float(getattr(pol_dec, "predicted_advantage", 0.0))
-    act_scores = getattr(pol_dec, "action_scores", {})
-    eff_alpha = float(getattr(pol_dec, "adaptive_alpha", excursion_config.alpha)) if pol_dec else excursion_config.alpha
-    eff_beta = float(getattr(pol_dec, "adaptive_beta", excursion_config.beta)) if pol_dec else excursion_config.beta
-    donor_idx = int(getattr(pol_dec, "donor_index", 0)) if pol_dec else 0
+    dec_summary = _resolve_decision_summary(method, sched_0, excursion_config)
 
     return {
         "problem_id": problem.problem_id,
@@ -269,22 +523,32 @@ def _decode_method_on_problem(
         "is_correct": val_outcome.is_valid,
         "validation_reason": val_outcome.reason,
         "gold_logprob": round(first_gold_lp, 6),
+        "first_token_gold_logprob": round(first_gold_lp, 6),
+        "sequence_gold_logprob": round(sequence_gold_lp, 6),
+        "mean_token_gold_logprob": round(mean_gold_token_lp, 6),
+        "gold_token_logprobs": [round(x, 6) for x in gold_token_lps],
         "first_token_entropy": round(ent_0, 6),
         "first_token_margin": round(margin_0, 6),
         "mean_sequence_margin": round(float(sum(margins) / len(margins)), 6),
         "recurrent_block_calls": total_calls,
+        "scoring_recurrent_calls": scoring_calls,
         "controller_calls": total_ctrl_calls,
         "controller_overhead_ms": round(total_ctrl_ms, 4),
         "exited_early_step": sched_0.exited_early_step,
+        "chosen_depth": dec_summary["chosen_depth"],
         "estimated_flops": estimated_flops,
         "wall_time_ms": round(total_wall_ms, 3),
-        "alpha": eff_alpha,
-        "beta": eff_beta,
-        "visit_step": excursion_config.visit_step,
-        "token_scope": getattr(pol_dec, "token_scope", excursion_config.token_scope) if pol_dec else excursion_config.token_scope,
+        "peak_memory_mb": peak_mem_mb,
+        "alpha": dec_summary["effective_alpha"],
+        "beta": dec_summary["effective_beta"],
+        "visit_step": dec_summary["chosen_depth"] if dec_summary["action_type"] == "EXCURSION" else excursion_config.visit_step,
+        "token_scope": dec_summary["token_scope"],
         "perturbation_relative_norm": perturbation_relative_norm,
         "curvature_frob": round(telem.curvature_frob, 6) if telem is not None else 0.0,
         "curvature_relative": round(telem.curvature_relative_to_update_a, 6) if telem is not None else 0.0,
+        "returned_shift_vs_normal_frob": round(getattr(telem, "returned_shift_vs_normal_frob", 0.0), 6)
+        if telem is not None
+        else 0.0,
         "branch_distance_frob": round(telem.branch_distance_frob, 6) if telem is not None else 0.0,
         "branch_relative_distance": round(telem.branch_relative_distance, 6) if telem is not None else 0.0,
         "branch_cosine_similarity": round(telem.branch_cosine_similarity, 6) if telem is not None else 1.0,
@@ -295,17 +559,19 @@ def _decode_method_on_problem(
         if telem is not None
         else (round(sched_0.step_snapshots[-1].branch_rms.get("A", 0.0), 6) if sched_0.step_snapshots else 0.0),
         "post_finite": bool(telem.post_finite) if telem is not None else True,
-        "policy_action": pol_dec.action if pol_dec is not None else "always",
-        "policy_reason": pol_dec.reason if pol_dec is not None else "fixed_schedule",
-        "controller_action_type": act_type,
-        "controller_action_id": act_id,
-        "controller_donor_index": donor_idx,
-        "selected_donor": telem.donor_branch_id if telem is not None else ("B" if donor_idx == 0 else "C"),
+        "policy_action": dec_summary["policy_action"],
+        "policy_reason": dec_summary["policy_reason"],
+        "controller_action_type": dec_summary["action_type"],
+        "controller_action_id": dec_summary["action_id"],
+        "controller_donor_index": dec_summary["donor_index"],
+        "selected_donor": dec_summary["selected_donor"],
         "early_exit_step": sched_0.exited_early_step,
-        "controller_predicted_advantage": round(pred_adv, 6),
-        "controller_advantage": round(pred_adv, 6),
-        "controller_action_scores": act_scores,
+        "controller_predicted_advantage": round(dec_summary["predicted_advantage"], 6),
+        "controller_advantage": round(dec_summary["predicted_advantage"], 6),
+        "controller_action_scores": dec_summary["action_scores"],
+        "controller_rejected_actions": dec_summary["rejected_actions"],
         "controller_state_features": getattr(pol_dec, "state_features", None) if pol_dec is not None else None,
+        "token_ledger": token_ledger,
         "step_snapshots": [asdict(s) for s in sched_0.step_snapshots],
         "pca_coords": sched_0.pca_coords,
         "pca_explained_variance": sched_0.pca_explained_variance,
@@ -339,20 +605,28 @@ def run_experiment_from_config(
     eval_cfg = raw_cfg.get("evaluation", {})
     ctrl_raw = raw_cfg.get("controller", {})
     pol_raw = raw_cfg.get("policy", {})
-    ctrl_ckpt: Optional[LearnedControllerCheckpoint] = None
-    mlp_ckpt: Optional[LearnedControllerCheckpoint] = None
-    if ctrl_raw.get("checkpoint_path"):
-        cp = Path(str(ctrl_raw["checkpoint_path"]))
+    def _load_ckpt_opt(key_name: str, default_rel: str) -> Optional[LearnedControllerCheckpoint]:
+        rel_val = ctrl_raw.get(key_name, default_rel)
+        if not rel_val:
+            return None
+        cp = Path(str(rel_val))
         if not cp.is_absolute():
             cp = repo_root / cp
         if cp.exists():
-            ctrl_ckpt = LearnedControllerCheckpoint.load(cp)
-    if ctrl_raw.get("mlp_checkpoint_path"):
-        mcp = Path(str(ctrl_raw["mlp_checkpoint_path"]))
-        if not mcp.is_absolute():
-            mcp = repo_root / mcp
-        if mcp.exists():
-            mlp_ckpt = LearnedControllerCheckpoint.load(mcp)
+            return LearnedControllerCheckpoint.load(cp)
+        return None
+
+    ctrl_ckpt = _load_ckpt_opt("checkpoint_path", "")
+    mlp_ckpt = _load_ckpt_opt("mlp_checkpoint_path", "artifacts/controllers/tebdil_mlp_v1.json")
+    mlp_ungated_ckpt = _load_ckpt_opt(
+        "mlp_ungated_checkpoint_path", "artifacts/controllers/tebdil_mlp_ungated_v1.json"
+    )
+    mlp_unshaped_ckpt = _load_ckpt_opt(
+        "mlp_unshaped_checkpoint_path", "artifacts/controllers/tebdil_mlp_unshaped_v1.json"
+    )
+    mlp_t2_1donor_ckpt = _load_ckpt_opt(
+        "mlp_t2_1donor_checkpoint_path", "artifacts/controllers/tebdil_mlp_t2_1donor_v1.json"
+    )
 
     if adapter_override is not None:
         adapter, tokenizer, model_id, model_rev = adapter_override
@@ -364,6 +638,8 @@ def run_experiment_from_config(
     branch_count = int(branch_cfg.get("count", 2))
     pert_method = str(branch_cfg.get("perturbation", "normalized_gaussian"))
     pert_norm = float(branch_cfg.get("perturbation_relative_norm", 0.02))
+    raw_elig = interv_cfg.get("eligible_visit_steps", [])
+    elig_tuple = tuple(int(s) for s in raw_elig) if raw_elig else ()
 
     base_exc_cfg = ExcursionConfig(
         alpha=float(interv_cfg.get("alpha", 0.5)),
@@ -373,6 +649,8 @@ def run_experiment_from_config(
         token_scope=str(interv_cfg.get("token_scope", "full")),
         donor_strategy=str(interv_cfg.get("donor_strategy", "fixed")),
         fallback_if_unstable=str(interv_cfg.get("fallback_if_unstable", "skip_intervention")),
+        coordinate_topk_fraction=float(interv_cfg.get("coordinate_topk_fraction", 1.0)),
+        eligible_visit_steps=elig_tuple,
     )
     policy_cfg = AdaptivePolicyConfig(
         min_relative_divergence=float(pol_raw.get("min_relative_divergence", 0.002)),
@@ -385,6 +663,7 @@ def run_experiment_from_config(
 
     seeds: List[int] = exec_cfg.get("seeds", [int(exec_cfg.get("seed", 42))])
     max_output_tokens = int(exec_cfg.get("max_output_tokens", 2))
+    extra_s1 = int(interv_cfg.get("extra_steps_for_s1", 3))
     task_family = str(eval_cfg.get("task_family", "arithmetic"))
     split = str(eval_cfg.get("split", "pilot"))
     num_problems = int(eval_cfg.get("num_problems", 20))
@@ -446,18 +725,54 @@ def run_experiment_from_config(
     if shared_eval_cache is None:
         shared_eval_cache = {}
 
-    def _cache_key(prob_id: str, m_name: str, sd: int) -> str:
-        return (
-            f"{model_id}:{model_rev}:{prob_id}:{m_name}:{sd}:{recurrent_steps}:"
-            f"{fork_after_step}:{branch_count}:{pert_method}:{pert_norm}:"
-            f"{base_exc_cfg.alpha}:{base_exc_cfg.beta}:{base_exc_cfg.max_relative_norm}:"
-            f"{base_exc_cfg.visit_step}:{base_exc_cfg.token_scope}:{max_output_tokens}"
-        )
+    def _select_ckpt_for_method(m_name: str) -> Optional[LearnedControllerCheckpoint]:
+        if m_name == "E3_mlp":
+            return mlp_ckpt or ctrl_ckpt
+        if m_name == "E3_mlp_ungated":
+            return mlp_ungated_ckpt or mlp_ckpt or ctrl_ckpt
+        if m_name == "E3_mlp_unshaped":
+            return mlp_unshaped_ckpt or mlp_ckpt or ctrl_ckpt
+        if m_name == "E3_t2_1donor":
+            return mlp_t2_1donor_ckpt or mlp_ckpt or ctrl_ckpt
+        return ctrl_ckpt
+
+    def _cache_key(prob: TaskProblem, m_name: str, sd: int) -> str:
+        active_ck = _select_ckpt_for_method(m_name)
+        ck_sig = "none"
+        if active_ck is not None:
+            t_meta = active_ck.training_metadata or {}
+            ck_sig = (
+                f"{active_ck.controller_id}:{t_meta.get('final_param_hash', '')}:"
+                f"{active_ck.exit_min_advantage}:{active_ck.excursion_min_advantage}:"
+                f"{active_ck.use_heuristic_gates}:{active_ck.utility_version}"
+            )
+        prompt_h = hashlib.sha256(prob.prompt.encode("utf-8")).hexdigest()[:16]
+        eff_payload = {
+            "model_id": model_id,
+            "model_rev": model_rev,
+            "prob_id": prob.problem_id,
+            "prompt_hash": prompt_h,
+            "method": m_name,
+            "seed": sd,
+            "recurrent_steps": recurrent_steps,
+            "fork_after_step": fork_after_step,
+            "branch_count": 1 if m_name == "S0" else (2 if m_name == "E3_t2_1donor" else branch_count),
+            "pert_method": "none" if m_name in ("S0", "S1") else pert_method,
+            "pert_norm": 0.0 if m_name in ("S0", "S1") else pert_norm,
+            "excursion_cfg": asdict(base_exc_cfg),
+            "policy_cfg": asdict(policy_cfg),
+            "max_output_tokens": max_output_tokens,
+            "extra_steps_for_s1": extra_s1 if m_name == "S1" else 0,
+            "ckpt_sig": ck_sig,
+        }
+        return hashlib.sha256(
+            json.dumps(eff_payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
 
     for seed in seeds:
         for prob in problems:
             # 1. Always evaluate S0 baseline first for paired reference
-            s0_key = _cache_key(prob.problem_id, "S0", seed)
+            s0_key = _cache_key(prob, "S0", seed)
             if s0_key in shared_eval_cache:
                 s0_cached = shared_eval_cache[s0_key]
                 s0_res = dict(s0_cached["res"])
@@ -481,8 +796,8 @@ def run_experiment_from_config(
                 s0_logits = s0_res.pop("_step0_logits")
                 shared_eval_cache[s0_key] = {"res": dict(s0_res), "logits": s0_logits}
 
-            # 2. Evaluate independent donor branch B once per (problem, seed)
-            b_key = _cache_key(prob.problem_id, "_B_INDEP", seed)
+            # 2. Evaluate independent donor branch B (and C if branch_count >= 3) once per (problem, seed)
+            b_key = _cache_key(prob, "_B_INDEP", seed)
             if b_key in shared_eval_cache:
                 b_cached = shared_eval_cache[b_key]
                 b_res = dict(b_cached["res"])
@@ -503,78 +818,124 @@ def run_experiment_from_config(
                     policy_config=policy_cfg,
                     max_output_tokens=max_output_tokens,
                     select_branch_b=True,
+                    select_branch_id="B",
                 )
                 b_logits = b_res.pop("_step0_logits")
                 shared_eval_cache[b_key] = {"res": dict(b_res), "logits": b_logits}
 
+            c_res = None
+            c_logits = None
+            if branch_count >= 3:
+                c_key = _cache_key(prob, "_C_INDEP", seed)
+                if c_key in shared_eval_cache:
+                    c_cached = shared_eval_cache[c_key]
+                    c_res = dict(c_cached["res"])
+                    c_logits = c_cached["logits"]
+                else:
+                    c_res = _decode_method_on_problem(
+                        adapter=adapter,
+                        tokenizer=tokenizer,
+                        problem=prob,
+                        method="P1",
+                        seed=seed,
+                        recurrent_steps=recurrent_steps,
+                        fork_after_step=fork_after_step,
+                        branch_count=branch_count,
+                        perturbation_method=pert_method,
+                        perturbation_relative_norm=pert_norm,
+                        excursion_config=base_exc_cfg,
+                        policy_config=policy_cfg,
+                        max_output_tokens=max_output_tokens,
+                        select_branch_id="C",
+                    )
+                    c_logits = c_res.pop("_step0_logits")
+                    shared_eval_cache[c_key] = {"res": dict(c_res), "logits": c_logits}
+
             base_a_correct = bool(s0_res["is_correct"])
             donor_b_correct = bool(b_res["is_correct"])
+            donor_c_correct = bool(c_res["is_correct"]) if c_res is not None else False
+            any_donor_correct = donor_b_correct or donor_c_correct
             base_a_lp = float(s0_res["gold_logprob"])
+            base_a_seq_lp = float(s0_res.get("sequence_gold_logprob", base_a_lp))
 
             for method in canonical_methods:
                 if method == "S0":
                     rec = dict(s0_res)
                     rec["base_a_correct"] = base_a_correct
-                    rec["donor_b_correct"] = donor_b_correct
+                    rec["donor_b_correct"] = any_donor_correct
                     rec["donor_b_answer"] = b_res["extracted_answer"]
+                    rec["donor_c_answer"] = c_res["extracted_answer"] if c_res is not None else None
                     rec["delta_gold_logprob"] = 0.0
+                    rec["delta_sequence_gold_logprob"] = 0.0
                     rec["jsd_vs_s0"] = 0.0
                     all_records.append(rec)
                     continue
 
                 if method == "P0":
-                    # Label-free parallel selection between independent A and independent B
-                    choose_b = b_res["mean_sequence_margin"] > s0_res["mean_sequence_margin"]
-                    chosen = dict(b_res if choose_b else s0_res)
+                    # Label-free parallel selection across independent branches (A, B, and C if present)
+                    cand_branches = [("A", s0_res, s0_logits), ("B", b_res, b_logits)]
+                    if c_res is not None and c_logits is not None:
+                        cand_branches.append(("C", c_res, c_logits))
+                    best_b_id, best_b_res, best_b_logits = max(
+                        cand_branches, key=lambda item: float(item[1]["mean_sequence_margin"])
+                    )
+                    chosen = dict(best_b_res)
                     chosen["method"] = "P0"
+                    chosen["selected_donor"] = best_b_id
                     chosen["recurrent_block_calls"] = b_res["recurrent_block_calls"]
                     chosen["estimated_flops"] = b_res["estimated_flops"]
                     chosen["wall_time_ms"] = b_res["wall_time_ms"]
                     chosen["base_a_correct"] = base_a_correct
-                    chosen["donor_b_correct"] = donor_b_correct
+                    chosen["donor_b_correct"] = any_donor_correct
                     chosen["donor_b_answer"] = b_res["extracted_answer"]
+                    chosen["donor_c_answer"] = c_res["extracted_answer"] if c_res is not None else None
                     chosen["delta_gold_logprob"] = round(float(chosen["gold_logprob"]) - base_a_lp, 6)
-                    cmp_b = compare_logits(s0_logits, b_logits if choose_b else s0_logits)
+                    chosen["delta_sequence_gold_logprob"] = round(
+                        float(chosen.get("sequence_gold_logprob", chosen["gold_logprob"])) - base_a_seq_lp, 6
+                    )
+                    cmp_b = compare_logits(s0_logits, best_b_logits)
                     chosen["jsd_vs_s0"] = round(cmp_b.js_divergence, 6)
                     all_records.append(chosen)
                     continue
 
                 if method == "P1":
-                    # Oracle best-of-2 upper bound (analysis only)
-                    choose_b = (not base_a_correct) and donor_b_correct
-                    chosen = dict(b_res if choose_b else s0_res)
+                    # Oracle best-of-N upper bound (analysis only)
+                    if base_a_correct:
+                        best_b_id, best_b_res, best_b_logits = ("A", s0_res, s0_logits)
+                    elif donor_b_correct:
+                        best_b_id, best_b_res, best_b_logits = ("B", b_res, b_logits)
+                    elif c_res is not None and c_logits is not None and donor_c_correct:
+                        best_b_id, best_b_res, best_b_logits = ("C", c_res, c_logits)
+                    else:
+                        best_b_id, best_b_res, best_b_logits = ("A", s0_res, s0_logits)
+                    chosen = dict(best_b_res)
                     chosen["method"] = "P1"
+                    chosen["selected_donor"] = best_b_id
                     chosen["recurrent_block_calls"] = b_res["recurrent_block_calls"]
                     chosen["estimated_flops"] = b_res["estimated_flops"]
                     chosen["wall_time_ms"] = b_res["wall_time_ms"]
                     chosen["base_a_correct"] = base_a_correct
-                    chosen["donor_b_correct"] = donor_b_correct
+                    chosen["donor_b_correct"] = any_donor_correct
                     chosen["donor_b_answer"] = b_res["extracted_answer"]
+                    chosen["donor_c_answer"] = c_res["extracted_answer"] if c_res is not None else None
                     chosen["delta_gold_logprob"] = round(float(chosen["gold_logprob"]) - base_a_lp, 6)
-                    cmp_b = compare_logits(s0_logits, b_logits if choose_b else s0_logits)
+                    chosen["delta_sequence_gold_logprob"] = round(
+                        float(chosen.get("sequence_gold_logprob", chosen["gold_logprob"])) - base_a_seq_lp, 6
+                    )
+                    cmp_b = compare_logits(s0_logits, best_b_logits)
                     chosen["jsd_vs_s0"] = round(cmp_b.js_divergence, 6)
                     all_records.append(chosen)
                     continue
 
-                m_key = _cache_key(prob.problem_id, method, seed)
+                m_key = _cache_key(prob, method, seed)
                 if m_key in shared_eval_cache:
                     m_cached = shared_eval_cache[m_key]
                     m_res = dict(m_cached["res"])
                     m_logits = m_cached["logits"]
-                elif method == "E1_no_curv" and _cache_key(prob.problem_id, "M1", seed) in shared_eval_cache:
-                    # E1_no_curv is identical in state to M1, with E1's recurrent call count
-                    m1_cached = shared_eval_cache[_cache_key(prob.problem_id, "M1", seed)]
-                    m_res = dict(m1_cached["res"])
-                    m_res["method"] = "E1_no_curv"
-                    n_toks = max(1, int(round(m_res["recurrent_block_calls"] / 7.0)))
-                    m_res["recurrent_block_calls"] = 8 * n_toks
-                    m_logits = m1_cached["logits"]
-                    shared_eval_cache[m_key] = {"res": dict(m_res), "logits": m_logits}
                 elif method == "D_oracle":
                     # Diagnostic Oracle Donor Selection (analytical upper bound only)
-                    # Evaluates D_nearest and D_farthest (which visit donor 0 or donor 1) and selects rescuing donor if any
-                    d_near_key = _cache_key(prob.problem_id, "D_nearest", seed)
-                    d_far_key = _cache_key(prob.problem_id, "D_farthest", seed)
+                    d_near_key = _cache_key(prob, "D_nearest", seed)
+                    d_far_key = _cache_key(prob, "D_farthest", seed)
                     for d_m, d_k in (("D_nearest", d_near_key), ("D_farthest", d_far_key)):
                         if d_k not in shared_eval_cache:
                             tmp_res = _decode_method_on_problem(
@@ -592,7 +953,7 @@ def run_experiment_from_config(
                                 policy_config=policy_cfg,
                                 controller_checkpoint=ctrl_ckpt,
                                 max_output_tokens=max_output_tokens,
-                                extra_steps_for_s1=int(interv_cfg.get("extra_steps_for_s1", 3)),
+                                extra_steps_for_s1=extra_s1,
                             )
                             tmp_logits = tmp_res.pop("_step0_logits")
                             shared_eval_cache[d_k] = {"res": dict(tmp_res), "logits": tmp_logits}
@@ -607,7 +968,7 @@ def run_experiment_from_config(
                     m_res["policy_reason"] = "diagnostic_oracle_donor_upper_bound"
                     m_logits = chosen_c["logits"]
                 else:
-                    active_ckpt = mlp_ckpt if (method == "E3_mlp" and mlp_ckpt is not None) else ctrl_ckpt
+                    active_ckpt = _select_ckpt_for_method(method)
                     m_res = _decode_method_on_problem(
                         adapter=adapter,
                         tokenizer=tokenizer,
@@ -623,24 +984,31 @@ def run_experiment_from_config(
                         policy_config=policy_cfg,
                         controller_checkpoint=active_ckpt,
                         max_output_tokens=max_output_tokens,
-                        extra_steps_for_s1=int(interv_cfg.get("extra_steps_for_s1", 3)),
+                        extra_steps_for_s1=extra_s1,
                     )
                     m_logits = m_res.pop("_step0_logits")
                     shared_eval_cache[m_key] = {"res": dict(m_res), "logits": m_logits}
 
                 cmp_m = compare_logits(s0_logits, m_logits)
                 m_res["base_a_correct"] = base_a_correct
-                m_res["donor_b_correct"] = donor_b_correct
+                m_res["donor_b_correct"] = any_donor_correct
                 m_res["donor_b_answer"] = b_res["extracted_answer"]
+                m_res["donor_c_answer"] = c_res["extracted_answer"] if c_res is not None else None
                 m_res["delta_gold_logprob"] = round(float(m_res["gold_logprob"]) - base_a_lp, 6)
+                m_res["delta_sequence_gold_logprob"] = round(
+                    float(m_res.get("sequence_gold_logprob", m_res["gold_logprob"])) - base_a_seq_lp, 6
+                )
                 m_res["jsd_vs_s0"] = round(cmp_m.js_divergence, 6)
                 all_records.append(m_res)
 
     write_trace_records(all_records, out_dir / "traces.jsonl")
 
+    total_scoring_calls = int(sum(int(r.get("scoring_recurrent_calls", 0)) for r in all_records))
     manifest.tokenizer_revision = model_rev
     manifest.controller_checkpoint = str(ctrl_raw.get("checkpoint_path", "none"))
-    manifest.recurrent_forward_calls = int(adapter.recurrent_block_calls - calls_exp_start)
+    manifest.recurrent_forward_calls = max(
+        0, int(adapter.recurrent_block_calls - calls_exp_start - total_scoring_calls)
+    )
     manifest.controller_calls = int(sum(int(r.get("controller_calls", 0)) for r in all_records))
     manifest.runtime_seconds = round(time.perf_counter() - t_exp_start, 3)
     save_run_manifest(manifest, out_dir / "manifest.yaml")

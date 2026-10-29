@@ -246,7 +246,7 @@ class OuroRecurrentAdapter:
             hidden=inputs_embeds.detach().clone(),
             context=ctx,
             gate_history=(),
-            hidden_history=(),
+            hidden_history=(inputs_embeds.detach().clone(),),
         )
 
     @torch.no_grad()
@@ -296,14 +296,19 @@ class OuroRecurrentAdapter:
         )
 
     @torch.no_grad()
+    def compute_gate(self, hidden_states: Tensor) -> Tensor:
+        """Compute Ouro early_exit_gate on an arbitrary hidden state tensor."""
+        return self.model.model.early_exit_gate(hidden_states)
+
+    @torch.no_grad()
     def readout_logits(self, state: BranchState) -> Tensor:
         """Project state to vocabulary logits according to configured readout_mode."""
         if self.readout_mode == "last_step" or not state.gate_history:
             return self.model.lm_head(state.hidden)
 
-        # Native gate readout matching OuroForCausalLM.forward
+        # Native gate readout matching OuroForCausalLM.forward (align post-step hidden states with gate_history)
         gate_list = list(state.gate_history)
-        hidden_states_list = list(state.hidden_history)
+        hidden_states_list = list(state.hidden_history[-len(gate_list) :])
         exit_threshold = self.model.early_exit_threshold
         if exit_threshold is None or len(gate_list) != len(hidden_states_list):
             return self.model.lm_head(state.hidden)

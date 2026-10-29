@@ -13,6 +13,7 @@ _SPLIT_SEED_OFFSETS = {
     "pilot": 5000,
     "validation": 10000,
     "test": 20000,
+    "fresh_test": 40000,
 }
 
 
@@ -105,6 +106,89 @@ def generate_arithmetic_problems(
                         gold_answer=str(ans),
                         candidate_answers=tuple(dict.fromkeys(distractors)),
                         metadata={"operands": [a, b, c, m], "op": "(a*b+c)%m"},
+                    )
+                )
+        elif split == "fresh_test":
+            # Fresh unseen test templates (never used during development or controller calibration)
+            kind = idx % 3
+            if kind == 0:
+                # Fresh Template F1: Exact quotient plus quadratic offset ((a * b) // a + c * d - e)
+                q = rng.randint(4, 12)
+                m = rng.randint(3, 8)
+                c = rng.randint(3, 9)
+                d = rng.randint(2, 6)
+                e = rng.randint(3, 11)
+                dividend = q * m
+                ans = q + (c * d) - e
+                distractors = (str(ans), str(q + c * d), str(dividend + c * d - e), str(ans + 2))
+                prompt = (
+                    f"Determine the integer result of ({dividend} / {m}) + ({c} * {d}) - {e}. "
+                    f"Output only the integer.\nAnswer: "
+                )
+                problems.append(
+                    TaskProblem(
+                        problem_id=pid,
+                        family="arithmetic",
+                        split=split,
+                        template_id="arith_quotient_offset_fresh",
+                        difficulty="medium",
+                        prompt=prompt,
+                        gold_answer=str(ans),
+                        candidate_answers=tuple(dict.fromkeys(distractors)),
+                        metadata={"operands": [dividend, m, c, d, e], "op": "(dividend/m)+(c*d)-e"},
+                    )
+                )
+            elif kind == 1:
+                # Fresh Template F2: Two-stage coupled substitution u = a + b, v = c * u - d
+                a = rng.randint(3, 9)
+                b = rng.randint(2, 8)
+                c = rng.randint(3, 6)
+                d = rng.randint(4, 15)
+                u_val = a + b
+                ans = c * u_val - d
+                distractors = (str(ans), str(c * a + b - d), str(c * u_val + d), str(ans - c))
+                prompt = (
+                    f"Let u = {a} + {b} and v = {c} * u - {d}. What is the integer value of v? "
+                    f"Output only the integer.\nAnswer: "
+                )
+                problems.append(
+                    TaskProblem(
+                        problem_id=pid,
+                        family="arithmetic",
+                        split=split,
+                        template_id="arith_two_var_system_fresh",
+                        difficulty="medium",
+                        prompt=prompt,
+                        gold_answer=str(ans),
+                        candidate_answers=tuple(dict.fromkeys(distractors)),
+                        metadata={"operands": [a, b, c, d], "op": "c*(a+b)-d"},
+                    )
+                )
+            else:
+                # Fresh Template F3: Nested difference of scaled sums a*(b + c) - d*(e + f)
+                a = rng.randint(4, 8)
+                b = rng.randint(3, 7)
+                c = rng.randint(2, 6)
+                d = rng.randint(2, 3)
+                e = rng.randint(2, 4)
+                f = rng.randint(1, 3)
+                ans = a * (b + c) - d * (e + f)
+                distractors = (str(ans), str(a * b + c - d * e + f), str(a * (b + c)), str(ans + d))
+                prompt = (
+                    f"Compute {a} * ({b} + {c}) - {d} * ({e} + {f}). "
+                    f"Output only the final integer.\nAnswer: "
+                )
+                problems.append(
+                    TaskProblem(
+                        problem_id=pid,
+                        family="arithmetic",
+                        split=split,
+                        template_id="arith_nested_diff_fresh",
+                        difficulty="hard",
+                        prompt=prompt,
+                        gold_answer=str(ans),
+                        candidate_answers=tuple(dict.fromkeys(distractors)),
+                        metadata={"operands": [a, b, c, d, e, f], "op": "a*(b+c)-d*(e+f)"},
                     )
                 )
         else:

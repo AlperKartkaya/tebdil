@@ -39,6 +39,7 @@ methods:
   - E1_norm_tight
   - E1_last_token
   - E1_subspace
+  - E1_coord_top50
   - E1_gated
   - E1_multi_visit
   - E3_ridge
@@ -51,7 +52,7 @@ execution:
   save_full_activations: false
 evaluation:
   task_family: all
-  split: test
+  split: validation
   num_problems: 18
   record_compute: true
   record_logits: true

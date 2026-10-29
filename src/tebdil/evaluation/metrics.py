@@ -106,6 +106,15 @@ class MethodPairedSummary:
     unnecessary_relocation_rate: float = 0.0
     mean_controller_overhead_ms: float = 0.0
     mean_controller_calls: float = 0.0
+    num_unique_problems: int = 0
+    cluster_ci_95_low: float = 0.0
+    cluster_ci_95_high: float = 0.0
+    cluster_mcnemar_p_value: float = 1.0
+    mean_sequence_gold_logprob: float = 0.0
+    mean_delta_sequence_gold_logprob: float = 0.0
+    call_delta_vs_s0_pct: float = 0.0
+    call_delta_vs_e1_pct: float = 0.0
+    mean_peak_memory_mb: float = 0.0
 
 
 def summarize_paired_records(
@@ -113,10 +122,16 @@ def summarize_paired_records(
     records: Sequence[Dict[str, Any]],
     baseline_records: Optional[Sequence[Dict[str, Any]]] = None,
     donor_records: Optional[Sequence[Dict[str, Any]]] = None,
+    e1_records: Optional[Sequence[Dict[str, Any]]] = None,
     bootstrap_fn: Optional[Any] = None,
     mcnemar_fn: Optional[Any] = None,
 ) -> MethodPairedSummary:
-    """Compute paired scientific metrics for `method` relative to `baseline_records` (S0)."""
+    """Compute paired scientific metrics for `method` relative to `baseline_records` (S0) and `e1_records` (E1)."""
+    from tebdil.evaluation.bootstrap import (
+        cluster_paired_bootstrap_ci,
+        mcnemar_cluster_exact_test,
+    )
+
     n = len(records)
     if n == 0:
         return MethodPairedSummary(
@@ -154,12 +169,19 @@ def summarize_paired_records(
             key = f"{r['problem_id']}:{r['seed']}"
             base_map[key] = r
 
+    e1_map: Dict[str, Dict[str, Any]] = {}
+    if e1_records is not None:
+        for r in e1_records:
+            key = f"{r['problem_id']}:{r['seed']}"
+            e1_map[key] = r
+
     donor_map: Dict[str, bool] = {}
     if donor_records is not None:
         for r in donor_records:
             key = f"{r['problem_id']}:{r['seed']}"
             donor_map[key] = bool(r.get("donor_b_correct", r.get("is_correct", False)))
 
+    cluster_ids: List[str] = []
     m_corr: List[int] = []
     b_corr: List[int] = []
     rescued = 0
@@ -171,12 +193,17 @@ def summarize_paired_records(
 
     gold_lps: List[float] = []
     delta_lps: List[float] = []
+    seq_gold_lps: List[float] = []
+    delta_seq_lps: List[float] = []
     jsds: List[float] = []
     curvs: List[float] = []
     rel_curvs: List[float] = []
     calls_list: List[float] = []
+    base_calls_list: List[float] = []
+    e1_calls_list: List[float] = []
     flops_list: List[float] = []
     wall_list: List[float] = []
+    mem_list: List[float] = []
     ctrl_ms_list: List[float] = []
     ctrl_calls_list: List[float] = []
     instabilities = 0
@@ -186,8 +213,11 @@ def summarize_paired_records(
     unnecessary_exc_count = 0
 
     for rec in records:
-        key = f"{rec['problem_id']}:{rec['seed']}"
+        pid = str(rec.get("problem_id", "unknown"))
+        cluster_ids.append(pid)
+        key = f"{pid}:{rec['seed']}"
         base_rec = base_map.get(key, rec)
+        e1_rec = e1_map.get(key)
         is_c = int(bool(rec.get("is_correct", False)))
         is_b = int(bool(base_rec.get("base_a_correct", base_rec.get("is_correct", False))))
         is_donor_c = bool(
@@ -213,16 +243,26 @@ def summarize_paired_records(
             if is_c == 0:
                 degraded += 1
 
-        lp = float(rec.get("gold_logprob", 0.0))
-        base_lp = float(base_rec.get("gold_logprob", lp))
+        lp = float(rec.get("first_token_gold_logprob", rec.get("gold_logprob", 0.0)))
+        base_lp = float(base_rec.get("first_token_gold_logprob", base_rec.get("gold_logprob", lp)))
+        seq_lp = float(rec.get("sequence_gold_logprob", lp))
+        base_seq_lp = float(base_rec.get("sequence_gold_logprob", base_lp))
         gold_lps.append(lp)
         delta_lps.append(lp - base_lp)
+        seq_gold_lps.append(seq_lp)
+        delta_seq_lps.append(seq_lp - base_seq_lp)
         jsds.append(float(rec.get("jsd_vs_s0", 0.0)))
         curvs.append(float(rec.get("curvature_frob", 0.0)))
         rel_curvs.append(float(rec.get("curvature_relative", 0.0)))
-        calls_list.append(float(rec.get("recurrent_block_calls", 0)))
+        c_val = float(rec.get("recurrent_block_calls", 0))
+        b_c_val = float(base_rec.get("recurrent_block_calls", c_val))
+        calls_list.append(c_val)
+        base_calls_list.append(b_c_val)
+        if e1_rec is not None:
+            e1_calls_list.append(float(e1_rec.get("recurrent_block_calls", c_val)))
         flops_list.append(float(rec.get("estimated_flops", 0.0)))
         wall_list.append(float(rec.get("wall_time_ms", 0.0)))
+        mem_list.append(float(rec.get("peak_memory_mb", 0.0)))
         ctrl_ms_list.append(float(rec.get("controller_overhead_ms", 0.0)))
         ctrl_calls_list.append(float(rec.get("controller_calls", 0)))
         if not bool(rec.get("post_finite", True)) or bool(rec.get("skipped_unstable", False)):
@@ -248,10 +288,30 @@ def summarize_paired_records(
     else:
         ci_low, ci_high = diff, diff
 
+    _, c_ci_low, c_ci_high = cluster_paired_bootstrap_ci(cluster_ids, b_corr, m_corr)
+
     if mcnemar_fn is not None:
         p_val = mcnemar_fn(b_corr, m_corr)
     else:
         p_val = 1.0
+    c_p_val = mcnemar_cluster_exact_test(cluster_ids, b_corr, m_corr)
+
+    mean_calls = float(np.mean(calls_list))
+    mean_base_calls = float(np.mean(base_calls_list)) if base_calls_list else mean_calls
+    call_delta_s0_pct = (
+        round(100.0 * (mean_calls - mean_base_calls) / max(1e-9, mean_base_calls), 2)
+        if mean_base_calls > 0
+        else 0.0
+    )
+    if e1_calls_list:
+        mean_e1_calls = float(np.mean(e1_calls_list))
+        call_delta_e1_pct = (
+            round(100.0 * (mean_calls - mean_e1_calls) / max(1e-9, mean_e1_calls), 2)
+            if mean_e1_calls > 0
+            else 0.0
+        )
+    else:
+        call_delta_e1_pct = 0.0
 
     return MethodPairedSummary(
         method=method,
@@ -276,7 +336,7 @@ def summarize_paired_records(
         mean_jsd_vs_baseline=float(np.mean(jsds)),
         mean_curvature_frob=float(np.mean(curvs)),
         mean_relative_curvature=float(np.mean(rel_curvs)),
-        mean_recurrent_calls=float(np.mean(calls_list)),
+        mean_recurrent_calls=mean_calls,
         mean_estimated_flops=float(np.mean(flops_list)),
         mean_wall_time_ms=float(np.mean(wall_list)),
         instability_count=instabilities,
@@ -288,4 +348,13 @@ def summarize_paired_records(
         else 0.0,
         mean_controller_overhead_ms=round(float(np.mean(ctrl_ms_list)), 4),
         mean_controller_calls=round(float(np.mean(ctrl_calls_list)), 2),
+        num_unique_problems=len(set(cluster_ids)),
+        cluster_ci_95_low=c_ci_low,
+        cluster_ci_95_high=c_ci_high,
+        cluster_mcnemar_p_value=c_p_val,
+        mean_sequence_gold_logprob=float(np.mean(seq_gold_lps)),
+        mean_delta_sequence_gold_logprob=float(np.mean(delta_seq_lps)),
+        call_delta_vs_s0_pct=call_delta_s0_pct,
+        call_delta_vs_e1_pct=call_delta_e1_pct,
+        mean_peak_memory_mb=round(float(np.mean(mem_list)), 2),
     )

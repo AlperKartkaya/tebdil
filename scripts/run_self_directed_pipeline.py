@@ -1,272 +1,127 @@
-"""Execute Phases 3–8 for Self-Directed Latent Relocation using real ByteDance/Ouro-1.4B-Thinking."""
+"""End-to-end execution script for TEBDIL self-directed latent relocation phases (Phases 3-10)."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
-import sys
 import time
 from typing import Any, Dict, List
-import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT / "src") not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT / "src"))
-
-from tebdil.analysis.compute_frontier import compute_pareto_frontier
-from tebdil.analysis.curvature import analyze_curvature
-from tebdil.analysis.rescue import compute_rescue_matrix
-from tebdil.audit import check_no_label_leakage_in_runtime_modules, check_train_test_template_disjointness
-from tebdil.controller import (
-    LearnedControllerCheckpoint,
+from tebdil.audit import audit_run, generate_real_tensor_bundle
+from tebdil.controller.counterfactual import (
     collect_counterfactual_dataset,
-    compute_action_utility,
     train_learned_controller,
+    verify_counterfactual_outcomes_unmodified,
 )
-from tebdil.core.policies import AdaptivePolicyConfig
-from tebdil.core.state import ExcursionConfig
-from tebdil.evaluation.metrics import compare_logits
-from tebdil.evaluation.runner import (
-    _decode_method_on_problem,
-    load_adapter_and_tokenizer,
-)
-from tebdil.evaluation.trace import read_trace_records, write_trace_records
-from tebdil.tasks import generate_task_suite
+from tebdil.evaluation.runner import load_adapter_and_tokenizer, run_experiment_from_config
 
 
-def _refresh_counterfactual_utilities(cf_path: Path) -> Dict[str, Any]:
-    data = json.loads(cf_path.read_text(encoding="utf-8"))
-    for rec in data["records"]:
-        sf = rec["state_features"]
-        cont = rec["actions"]["CONTINUE"]
-        if rec["problem_id"] == "graph_validation_002" and "EXCURSION_d0_a0.65_b0.65_full" in rec["actions"]:
-            rec["actions"]["EXCURSION_d0_a0.65_b0.65_full"]["extracted_answer"] = "14"
-            rec["actions"]["EXCURSION_d0_a0.65_b0.65_full"]["decoded_text"] = "14"
-            rec["actions"]["EXCURSION_d0_a0.65_b0.65_full"]["is_correct"] = True
-            rec["any_excursion_rescued"] = True
-        if float(sf.get("margin_a", 0.0)) >= 0.72 and "EXIT" in rec["actions"]:
-            ex_a = rec["actions"]["EXIT"]
-            ex_a["decoded_text"] = cont["decoded_text"]
-            ex_a["extracted_answer"] = cont["extracted_answer"]
-            ex_a["is_correct"] = cont["is_correct"]
-            ex_a["recurrent_block_calls"] = max(3, int(cont["recurrent_block_calls"]) - 4)
-            ex_a["delta_calls_vs_continue"] = ex_a["recurrent_block_calls"] - int(cont["recurrent_block_calls"])
-            rec["exit_preserves_correctness"] = True
-        for aid, a in rec["actions"].items():
-            tr, cn, u, adv = compute_action_utility(
-                is_correct=bool(a["is_correct"]),
-                gold_logprob=float(a["gold_logprob"]),
-                continue_is_correct=bool(cont["is_correct"]),
-                continue_gold_logprob=float(cont["gold_logprob"]),
-                recurrent_calls=int(a["recurrent_block_calls"]),
-                continue_calls=int(cont["recurrent_block_calls"]),
-                action_type=str(a["action_type"]),
-                margin_a=float(sf["margin_a"]),
-                entropy_a=float(sf["entropy_a"]),
-                alpha=float(a["alpha"]),
-            )
-            a["task_reward"] = tr
-            a["compute_cost_normalized"] = cn
-            a["utility"] = u
-            a["advantage_vs_continue"] = adv
-        best_id = max(rec["actions"].keys(), key=lambda k: rec["actions"][k]["utility"])
-        rec["best_action_id"] = best_id
-        rec["best_action_type"] = rec["actions"][best_id]["action_type"]
-        prefs = []
-        for k1, o1 in rec["actions"].items():
-            for k2, o2 in rec["actions"].items():
-                if o1["utility"] - o2["utility"] > 0.02:
-                    prefs.append(
-                        {
-                            "preferred": k1,
-                            "rejected": k2,
-                            "utility_margin": round(o1["utility"] - o2["utility"], 6),
-                        }
-                    )
-        rec["pairwise_preferences"] = prefs
-    cf_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-    return data
+def _write_checksums_manifest(repo_root: Path) -> Path:
+    """Write SHA-256 manifest for all canonical results/ and artifacts/ files."""
+    targets: List[Path] = []
+    for sub in ("artifacts/counterfactuals", "artifacts/controllers", "artifacts/evidence", "results"):
+        base = repo_root / sub
+        if base.exists():
+            for p in sorted(base.rglob("*")):
+                if p.is_file() and p.name != "checksums.sha256":
+                    targets.append(p)
+    lines: List[str] = []
+    for p in targets:
+        rel = p.relative_to(repo_root).as_posix()
+        digest = hashlib.sha256(p.read_bytes()).hexdigest()
+        lines.append(f"{digest}  {rel}")
+    out_path = repo_root / "artifacts" / "checksums.sha256"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return out_path
 
 
-def _extract_snap_features(rec: Dict[str, Any]) -> Any:
-    if rec.get("controller_state_features"):
-        return rec["controller_state_features"]
-    for s in rec.get("step_snapshots", []):
-        pd = s.get("policy_decision")
-        if isinstance(pd, dict) and pd.get("state_features"):
-            return pd["state_features"]
-    return None
+def _restrict_t2_1donor(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Keep visit_step=2 states and drop donor-C (d1) actions; outcome fields stay untouched."""
+    out: List[Dict[str, Any]] = []
+    for rec in records:
+        if int(rec.get("visit_step", 2)) != 2:
+            continue
+        acts = {k: v for k, v in rec["actions"].items() if int(v.get("donor_index", 0)) == 0}
+        prefs = [
+            p for p in rec.get("pairwise_preferences", []) if p["preferred"] in acts and p["rejected"] in acts
+        ]
+        out.append({**rec, "actions": acts, "pairwise_preferences": prefs})
+    return out
 
 
-def _normalize_trace_fields(rec: Dict[str, Any]) -> Dict[str, Any]:
-    rec.setdefault("selected_donor", "B" if int(rec.get("controller_donor_index", 0)) == 0 else "C")
-    rec.setdefault("early_exit_step", rec.get("exited_early_step"))
-    rec.setdefault("controller_advantage", float(rec.get("controller_predicted_advantage", 0.0)))
-    rec["controller_state_features"] = _extract_snap_features(rec)
-    return rec
-
-
-def _update_run_methods(
-    run_id: str,
-    config_path: Path,
-    adapter: Any,
-    tokenizer: Any,
-    ridge_ckpt: LearnedControllerCheckpoint,
-    mlp_ckpt: LearnedControllerCheckpoint,
-    methods_to_rerun: List[str],
-    problem_filter_for_method: Dict[str, List[str]] | None = None,
-) -> Dict[str, Any]:
-    run_dir = REPO_ROOT / "results" / run_id
-    traces_path = run_dir / "traces.jsonl"
-    summary_path = run_dir / "summary.json"
-    raw_cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-
-    existing_records = read_trace_records(traces_path)
-    by_key: Dict[tuple[str, str, int], Dict[str, Any]] = {}
-    for r in existing_records:
-        by_key[(str(r["problem_id"]), str(r["method"]), int(r["seed"]))] = _normalize_trace_fields(r)
-
-    branch_cfg = raw_cfg.get("branches", {})
-    interv_cfg = raw_cfg.get("intervention", {})
-    pol_raw = raw_cfg.get("policy", {})
-    eval_cfg = raw_cfg.get("evaluation", {})
-    exec_cfg = raw_cfg.get("execution", {})
-
-    recurrent_steps = int(raw_cfg.get("model", {}).get("recurrent_steps", 4))
-    fork_after_step = int(branch_cfg.get("fork_after_step", 1))
-    branch_count = int(branch_cfg.get("count", 2))
-    pert_method = str(branch_cfg.get("perturbation", "normalized_gaussian"))
-    pert_norm = float(branch_cfg.get("perturbation_relative_norm", 0.25))
-    max_output_tokens = int(exec_cfg.get("max_output_tokens", 2))
-    seeds = [int(s) for s in exec_cfg.get("seeds", [exec_cfg.get("seed", 42)])]
-
-    base_exc_cfg = ExcursionConfig(
-        alpha=float(interv_cfg.get("alpha", 0.65)),
-        beta=float(interv_cfg.get("beta", 0.65)),
-        max_relative_norm=float(interv_cfg.get("max_relative_norm", 0.35)),
-        visit_step=int(interv_cfg.get("visit_step", 2)),
-        token_scope=str(interv_cfg.get("token_scope", "full")),
-        fallback_if_unstable=str(interv_cfg.get("fallback_if_unstable", "skip_intervention")),
-    )
-    policy_cfg = AdaptivePolicyConfig(
-        min_relative_divergence=float(pol_raw.get("min_relative_divergence", 0.002)),
-        max_relative_divergence=float(pol_raw.get("max_relative_divergence", 0.85)),
-        min_entropy_trigger=float(pol_raw.get("min_entropy_trigger", 1.20)),
-        max_margin_trigger=float(pol_raw.get("max_margin_trigger", 0.70)),
-        stagnation_ratio_threshold=float(pol_raw.get("stagnation_ratio_threshold", 0.85)),
-    )
-
-    problems = generate_task_suite(
-        family=str(eval_cfg.get("task_family", "all")),
-        split=str(eval_cfg.get("split", "validation")),
-        num_problems=int(eval_cfg.get("num_problems", 18)),
-        seed=seeds[0],
-    )
-
-    for seed in seeds:
-        for prob in problems:
-            s0_rec = by_key[(prob.problem_id, "S0", seed)]
-            p0_rec = by_key.get((prob.problem_id, "P0", seed))
-
-            for method in methods_to_rerun:
-                if problem_filter_for_method and method in problem_filter_for_method:
-                    if prob.problem_id not in problem_filter_for_method[method]:
-                        continue
-                if method == "D_oracle":
-                    near_r = by_key[(prob.problem_id, "D_nearest", seed)]
-                    far_r = by_key[(prob.problem_id, "D_farthest", seed)]
-                    pick_far = (not near_r["is_correct"]) and (
-                        far_r["is_correct"] or far_r["gold_logprob"] > near_r["gold_logprob"]
-                    )
-                    chosen_r = dict(far_r if pick_far else near_r)
-                    chosen_r["method"] = "D_oracle"
-                    chosen_r["policy_reason"] = "diagnostic_oracle_donor_upper_bound"
-                    by_key[(prob.problem_id, "D_oracle", seed)] = _normalize_trace_fields(chosen_r)
-                    continue
-
-                active_ckpt = mlp_ckpt if method == "E3_mlp" else ridge_ckpt
-                m_res = _decode_method_on_problem(
-                    adapter=adapter,
-                    tokenizer=tokenizer,
-                    problem=prob,
-                    method=method,
-                    seed=seed,
-                    recurrent_steps=recurrent_steps,
-                    fork_after_step=fork_after_step,
-                    branch_count=branch_count,
-                    perturbation_method=pert_method,
-                    perturbation_relative_norm=pert_norm,
-                    excursion_config=base_exc_cfg,
-                    policy_config=policy_cfg,
-                    controller_checkpoint=active_ckpt,
-                    max_output_tokens=max_output_tokens,
-                    extra_steps_for_s1=int(interv_cfg.get("extra_steps_for_s1", 3)),
-                )
-                m_res.pop("_step0_logits", None)
-                m_res["baseline_correct"] = s0_rec["is_correct"]
-                m_res["baseline_answer"] = s0_rec["extracted_answer"]
-                m_res["baseline_gold_logprob"] = s0_rec["gold_logprob"]
-                m_res["delta_gold_logprob"] = round(m_res["gold_logprob"] - s0_rec["gold_logprob"], 6)
-                m_res["donor_b_correct"] = p0_rec["is_correct"] if p0_rec else s0_rec.get("donor_b_correct", False)
-                m_res["donor_b_answer"] = p0_rec["extracted_answer"] if p0_rec else s0_rec.get("donor_b_answer", "")
-                m_res["jsd_vs_baseline"] = s0_rec.get("jsd_vs_baseline", 0.0)
-                m_res["top5_overlap_vs_baseline"] = s0_rec.get("top5_overlap_vs_baseline", 1.0)
-                by_key[(prob.problem_id, method, seed)] = _normalize_trace_fields(m_res)
-
-    # Preserve original ordering of records
-    ordered_methods = [str(m) for m in raw_cfg.get("methods", [])]
-    if "S0" not in ordered_methods:
-        ordered_methods.insert(0, "S0")
-    new_records: List[Dict[str, Any]] = []
-    for seed in seeds:
-        for prob in problems:
-            for m in ordered_methods:
-                k = (prob.problem_id, m, seed)
-                if k in by_key:
-                    new_records.append(by_key[k])
-
-    write_trace_records(new_records, traces_path)
-    summary = json.loads(summary_path.read_text(encoding="utf-8"))
-    summary["num_total_records"] = len(new_records)
-    summary["rescue_matrix"] = compute_rescue_matrix(new_records, baseline_method="S0")
-    summary["curvature_analysis"] = analyze_curvature(new_records)
-    summary["pareto_frontier"] = compute_pareto_frontier(summary["rescue_matrix"]["methods"])
-    summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
-    return summary
-
-
-def main() -> int:
+def main() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
     t0 = time.perf_counter()
-    model_cfg = {
-        "repo": "ByteDance/Ouro-1.4B-Thinking",
-        "revision": "3aaa2224253a92ca45cf2e3d427c360e1ef9c93d",
-        "precision": "bf16",
-        "recurrent_steps": 4,
-        "readout_mode": "last_step",
-        "local_files_only": True,
-    }
-    print("[1/5] Loading ByteDance/Ouro-1.4B-Thinking on device...")
-    adapter_tuple = load_adapter_and_tokenizer(model_cfg)
-    adapter, tokenizer, model_id, model_rev = adapter_tuple
-    print(f"Loaded {model_id} ({model_rev[:12]}) on {adapter.device}")
 
-    cf_dir = REPO_ROOT / "artifacts" / "counterfactuals"
-    cf_dir.mkdir(parents=True, exist_ok=True)
+    print("[1/7] Loading real ByteDance/Ouro-1.4B-Thinking checkpoint...")
+    adapter_tuple = load_adapter_and_tokenizer(
+        {
+            "repo": "ByteDance/Ouro-1.4B-Thinking",
+            "revision": "3aaa2224253a92ca45cf2e3d427c360e1ef9c93d",
+            "precision": "bf16",
+            "recurrent_steps": 4,
+            "readout_mode": "last_step",
+            "local_files_only": True,
+        }
+    )
+    adapter, tokenizer, model_id, model_rev = adapter_tuple
+    print(f"      Loaded {model_id} @ {model_rev} on {adapter.device}")
+
+    print("[2/7] Generating real-model hidden-state tensor bundle for equation verification...")
+    ev_dir = repo_root / "artifacts" / "evidence"
+    bundle_meta = generate_real_tensor_bundle(adapter, tokenizer, ev_dir)
+    print(
+        f"      Saved real_tensor_bundle.pt (sha256={bundle_meta['pt_file_sha256'][:12]}..., "
+        f"curvature_frob={bundle_meta['curvature_frob']:.4f})"
+    )
+
+    cf_dir = repo_root / "artifacts" / "counterfactuals"
     train_cf_path = cf_dir / "train_counterfactuals.json"
     val_cf_path = cf_dir / "val_counterfactuals.json"
 
-    print("[2/5] Preparing Phase 3 counterfactual trajectories on 'train' and 'validation' splits...")
+    regenerate_cf = True
     if train_cf_path.exists() and val_cf_path.exists():
-        train_cf = _refresh_counterfactual_utilities(train_cf_path)
-        val_cf = _refresh_counterfactual_utilities(val_cf_path)
-    else:
+        tr_tmp = json.loads(train_cf_path.read_text(encoding="utf-8"))
+        va_tmp = json.loads(val_cf_path.read_text(encoding="utf-8"))
+        ok_tr, _ = verify_counterfactual_outcomes_unmodified(tr_tmp.get("records", []))
+        ok_va, _ = verify_counterfactual_outcomes_unmodified(va_tmp.get("records", []))
+        if (
+            ok_tr
+            and ok_va
+            and tr_tmp.get("branch_count") == 3
+            and tr_tmp.get("visit_steps") == [2, 3]
+            and va_tmp.get("branch_count") == 3
+            and va_tmp.get("visit_steps") == [2, 3]
+        ):
+            regenerate_cf = False
+            train_cf = tr_tmp
+            val_cf = va_tmp
+            print(
+                f"[3/7] Verified existing unmodified counterfactual datasets: "
+                f"train={len(train_cf['records'])} states, val={len(val_cf['records'])} states"
+            )
+
+    if regenerate_cf:
+        print(
+            "[3/7] Collecting raw counterfactual datasets on train (24 problems x steps {2,3}, 2 donors) "
+            "and validation (12 problems x steps {2,3}, 2 donors)..."
+        )
         train_cf = collect_counterfactual_dataset(
             adapter=adapter,
             tokenizer=tokenizer,
             split="train",
             task_family="all",
-            num_problems=18,
-            seeds=(42, 1042),
+            num_problems=24,
+            seeds=(42,),
+            recurrent_steps=4,
+            fork_after_step=1,
+            visit_steps=(2, 3),
+            branch_count=3,
+            perturbation_relative_norm=0.25,
+            alpha_beta_grid=((0.65, 0.65), (0.35, 0.50), (0.85, 0.85)),
+            token_scopes=("full",),
             output_path=train_cf_path,
         )
         val_cf = collect_counterfactual_dataset(
@@ -274,38 +129,32 @@ def main() -> int:
             tokenizer=tokenizer,
             split="validation",
             task_family="all",
-            num_problems=18,
+            num_problems=12,
             seeds=(42,),
+            recurrent_steps=4,
+            fork_after_step=1,
+            visit_steps=(2, 3),
+            branch_count=3,
+            perturbation_relative_norm=0.25,
+            alpha_beta_grid=((0.65, 0.65), (0.35, 0.50), (0.85, 0.85)),
+            token_scopes=("full",),
             output_path=val_cf_path,
         )
+        print(
+            f"      Collected {train_cf['num_states']} train states and {val_cf['num_states']} validation states."
+        )
 
-    split_check = check_train_test_template_disjointness()
-    leakage_check = check_no_label_leakage_in_runtime_modules()
-    manifest_payload = {
-        "model_id": model_id,
-        "model_revision": model_rev,
-        "train_states": train_cf["num_states"],
-        "val_states": val_cf["num_states"],
-        "train_calls": train_cf["total_recurrent_calls"],
-        "val_calls": val_cf["total_recurrent_calls"],
-        "train_rescues_available": sum(1 for r in train_cf["records"] if r["any_excursion_rescued"]),
-        "val_rescues_available": sum(1 for r in val_cf["records"] if r["any_excursion_rescued"]),
-        "train_exit_preserves_count": sum(1 for r in train_cf["records"] if r["exit_preserves_correctness"]),
-        "split_disjointness": split_check,
-        "runtime_leakage_check": leakage_check,
-    }
-    (cf_dir / "split_manifest.json").write_text(json.dumps(manifest_payload, indent=2), encoding="utf-8")
-
-    print("[3/5] Training Phase 4 Self-Directed Controllers (Ridge & 2-layer MLP)...")
-    ctrl_dir = REPO_ROOT / "artifacts" / "controllers"
-    ctrl_dir.mkdir(parents=True, exist_ok=True)
-
+    print("[4/7] Training self-directed controllers strictly on train and calibrating on validation...")
+    ctrl_dir = repo_root / "artifacts" / "controllers"
     ridge_ckpt = train_learned_controller(
         train_records=train_cf["records"],
         val_records=val_cf["records"],
         model_type="ridge",
         controller_id="tebdil_ridge_v1",
         l2_reg=1.5,
+        use_heuristic_gates=True,
+        use_shaped_utility=True,
+        seed=42,
     )
     ridge_ckpt.save(ctrl_dir / "tebdil_ridge_v1.json")
 
@@ -314,66 +163,170 @@ def main() -> int:
         val_records=val_cf["records"],
         model_type="mlp",
         controller_id="tebdil_mlp_v1",
+        l2_reg=1.0,
         mlp_hidden_dim=16,
         mlp_epochs=300,
         mlp_lr=0.015,
+        use_heuristic_gates=True,
+        use_shaped_utility=True,
+        seed=42,
     )
     mlp_ckpt.save(ctrl_dir / "tebdil_mlp_v1.json")
-    print("Ridge calibration:", json.dumps(ridge_ckpt.training_metadata["calibration_summary"]))
-    print("MLP calibration:", json.dumps(mlp_ckpt.training_metadata["calibration_summary"]))
 
-    print("[4/5] Updating Phase 5 (3-branch donor selection) & Phase 6 (selective transfer)...")
-    sum_p5 = _update_run_methods(
-        run_id="phase5_donor",
-        config_path=REPO_ROOT / "configs" / "phase5_donor.yaml",
-        adapter=adapter,
-        tokenizer=tokenizer,
-        ridge_ckpt=ridge_ckpt,
-        mlp_ckpt=mlp_ckpt,
-        methods_to_rerun=[],
+    mlp_ungated_ckpt = train_learned_controller(
+        train_records=train_cf["records"],
+        val_records=val_cf["records"],
+        model_type="mlp",
+        controller_id="tebdil_mlp_ungated_v1",
+        l2_reg=1.0,
+        mlp_hidden_dim=16,
+        mlp_epochs=300,
+        mlp_lr=0.015,
+        use_heuristic_gates=False,
+        use_shaped_utility=True,
+        seed=42,
     )
-    sum_p6 = _update_run_methods(
-        run_id="phase6_selective",
-        config_path=REPO_ROOT / "configs" / "phase6_selective.yaml",
-        adapter=adapter,
-        tokenizer=tokenizer,
-        ridge_ckpt=ridge_ckpt,
-        mlp_ckpt=mlp_ckpt,
-        methods_to_rerun=["E1", "E3_ridge"],
-        problem_filter_for_method={"E1": ["graph_validation_002"]},
+    mlp_ungated_ckpt.save(ctrl_dir / "tebdil_mlp_ungated_v1.json")
+
+    mlp_unshaped_ckpt = train_learned_controller(
+        train_records=train_cf["records"],
+        val_records=val_cf["records"],
+        model_type="mlp",
+        controller_id="tebdil_mlp_unshaped_v1",
+        l2_reg=1.0,
+        mlp_hidden_dim=16,
+        mlp_epochs=300,
+        mlp_lr=0.015,
+        use_heuristic_gates=True,
+        use_shaped_utility=False,
+        seed=42,
+    )
+    mlp_unshaped_ckpt.save(ctrl_dir / "tebdil_mlp_unshaped_v1.json")
+
+    # E3_t2_1donor ablation: same data restricted to visit_step=2 and donor B (d0) only.
+    # Branch B is seeded identically for branch_count 2 and 3, so these outcomes are exact.
+    t2_train = _restrict_t2_1donor(train_cf["records"])
+    t2_val = _restrict_t2_1donor(val_cf["records"])
+    mlp_t2_ckpt = train_learned_controller(
+        train_records=t2_train,
+        val_records=t2_val,
+        model_type="mlp",
+        controller_id="tebdil_mlp_t2_1donor_v1",
+        l2_reg=1.0,
+        mlp_hidden_dim=16,
+        mlp_epochs=300,
+        mlp_lr=0.015,
+        use_heuristic_gates=True,
+        use_shaped_utility=True,
+        seed=42,
+    )
+    mlp_t2_ckpt.training_metadata["derived_from"] = (
+        "train/val counterfactuals filtered to visit_step=2 and donor_index=0"
+    )
+    mlp_t2_ckpt.save(ctrl_dir / "tebdil_mlp_t2_1donor_v1.json")
+
+    for ck in (ridge_ckpt, mlp_ckpt, mlp_ungated_ckpt, mlp_unshaped_ckpt, mlp_t2_ckpt):
+        print(
+            f"      {ck.controller_id}: train_mse={ck.training_metadata['train_mse']:.4f}, "
+            f"val_mse={ck.training_metadata['val_mse']:.4f}, "
+            f"rank_acc={ck.training_metadata['pairwise_ranking_accuracy']:.3f}, "
+            f"exit_th={ck.exit_min_advantage:.4f}, exc_th={ck.excursion_min_advantage:.4f}, "
+            f"val_actions={ck.training_metadata['calibration_summary']['action_counts']}"
+        )
+
+    shared_cache: Dict[str, Dict[str, Any]] = {}
+
+    print("[5/7] Running Phase 5 (Donor Selection on validation) & Phase 6 (Selective Update on validation)...")
+    s5 = run_experiment_from_config(
+        config_path=repo_root / "configs" / "phase5_donor.yaml",
+        repo_root=repo_root,
+        adapter_override=adapter_tuple,
+        shared_eval_cache=shared_cache,
+    )
+    print(
+        f"      Phase 5 done ({s5['manifest']['runtime_seconds']}s): "
+        + ", ".join(
+            f"{m}={v['accuracy']*100:.1f}%({v['mean_recurrent_calls']:.1f}c)"
+            for m, v in s5["rescue_matrix"]["methods"].items()
+        )
     )
 
-    print("[5/5] Updating Phase 7 & 8 Held-Out Controller Evaluation (n=36 across 2 seeds)...")
-    sum_p7 = _update_run_methods(
+    s6 = run_experiment_from_config(
+        config_path=repo_root / "configs" / "phase6_selective.yaml",
+        repo_root=repo_root,
+        adapter_override=adapter_tuple,
+        shared_eval_cache=shared_cache,
+    )
+    print(
+        f"      Phase 6 done ({s6['manifest']['runtime_seconds']}s): "
+        + ", ".join(
+            f"{m}={v['accuracy']*100:.1f}%({v['mean_recurrent_calls']:.1f}c)"
+            for m, v in s6["rescue_matrix"]["methods"].items()
+        )
+    )
+
+    print("[6/7] Running Phase 7/8 Exploratory Test & Confirmatory Fresh-Test Benchmarks (3 seeds x 18 problems)...")
+    s78 = run_experiment_from_config(
+        config_path=repo_root / "configs" / "phase7_8_controller.yaml",
+        repo_root=repo_root,
+        adapter_override=adapter_tuple,
+        shared_eval_cache=shared_cache,
+    )
+    print(f"      Phase 7/8 (exploratory test) done ({s78['manifest']['runtime_seconds']}s):")
+    for m, v in s78["rescue_matrix"]["methods"].items():
+        print(
+            f"        {m:16s} | acc={v['accuracy']*100:5.1f}% | diff={v['paired_accuracy_diff']*100:+5.1f}% "
+            f"| rescue={v['rescued_count']}/{v['base_wrong_count']} | deg={v['degraded_count']}/{v['base_correct_count']} "
+            f"| calls={v['mean_recurrent_calls']:5.2f} (vs S0 {v['call_delta_vs_s0_pct']:+.1f}%, vs E1 {v['call_delta_vs_e1_pct']:+.1f}%) "
+            f"| exc={v['excursion_frequency']*100:4.1f}% | exit={v['exit_frequency']*100:4.1f}%"
+        )
+
+    s_fresh = run_experiment_from_config(
+        config_path=repo_root / "configs" / "phase7_8_fresh_test.yaml",
+        repo_root=repo_root,
+        adapter_override=adapter_tuple,
+        shared_eval_cache=shared_cache,
+    )
+    print(f"      Phase 7/8 (confirmatory fresh_test) done ({s_fresh['manifest']['runtime_seconds']}s):")
+    for m, v in s_fresh["rescue_matrix"]["methods"].items():
+        print(
+            f"        {m:16s} | acc={v['accuracy']*100:5.1f}% | diff={v['paired_accuracy_diff']*100:+5.1f}% "
+            f"| rescue={v['rescued_count']}/{v['base_wrong_count']} | deg={v['degraded_count']}/{v['base_correct_count']} "
+            f"| calls={v['mean_recurrent_calls']:5.2f} (vs S0 {v['call_delta_vs_s0_pct']:+.1f}%, vs E1 {v['call_delta_vs_e1_pct']:+.1f}%) "
+            f"| exc={v['excursion_frequency']*100:4.1f}% | exit={v['exit_frequency']*100:4.1f}%"
+        )
+
+    print("[7/7] Running cryptographic + real-model replay audits and writing checksums...")
+    audit_rep = audit_run(
         run_id="phase7_8_controller_test",
-        config_path=REPO_ROOT / "configs" / "phase7_8_controller.yaml",
-        adapter=adapter,
-        tokenizer=tokenizer,
-        ridge_ckpt=ridge_ckpt,
-        mlp_ckpt=mlp_ckpt,
-        methods_to_rerun=["E1", "E2", "H_budget", "E3_no_exit", "E3_ridge", "E3_mlp"],
-        problem_filter_for_method={
-            "E1": ["graph_test_005"],
-            "E2": ["graph_test_005"],
-            "H_budget": ["graph_test_005"],
-        },
+        repo_root=repo_root,
+        replay_problem_id="arith_test_003",
+        require_real_replay=True,
     )
+    audit_path = ev_dir / "audit_phase7_8_report.json"
+    audit_path.write_text(json.dumps(audit_rep, indent=2), encoding="utf-8")
 
-    total_s = time.perf_counter() - t0
-    print(f"All phases completed in {total_s:.1f}s.")
-    for label, s in (("Phase 5 Donor", sum_p5), ("Phase 6 Selective", sum_p6), ("Phase 7/8 Controller Test", sum_p7)):
-        print(f"\n=== {label} ({s['run_id']}) ===")
-        for m, stats in s["rescue_matrix"]["methods"].items():
-            print(
-                f"  {m:15s}: acc={stats['accuracy']:.4f} (diff={stats['paired_accuracy_diff']:+.4f}), "
-                f"rescue={stats['rescued_count']}/{stats['base_wrong_count']}, "
-                f"degrade={stats['degraded_count']}/{stats['base_correct_count']}, "
-                f"calls={stats['mean_recurrent_calls']:.2f}, "
-                f"exc_freq={stats.get('excursion_frequency', 0.0):.2f}, "
-                f"exit_freq={stats.get('exit_frequency', 0.0):.2f}"
-            )
-    return 0
+    audit_fresh = audit_run(
+        run_id="phase7_8_fresh_test",
+        repo_root=repo_root,
+        replay_problem_id="arith_fresh_test_001",
+        require_real_replay=True,
+    )
+    audit_fresh_path = ev_dir / "audit_fresh_test_report.json"
+    audit_fresh_path.write_text(json.dumps(audit_fresh, indent=2), encoding="utf-8")
+
+    chk_path = _write_checksums_manifest(repo_root)
+    print(
+        f"      Audit exploratory all_passed={audit_rep['all_passed']} "
+        f"(replayed={audit_rep['checks']['9_deterministic_replay'].get('num_cases_replayed', 0)} cases)"
+    )
+    print(
+        f"      Audit fresh_test all_passed={audit_fresh['all_passed']} "
+        f"(replayed={audit_fresh['checks']['9_deterministic_replay'].get('num_cases_replayed', 0)} cases)"
+    )
+    print(f"      Wrote checksum manifest to {chk_path.relative_to(repo_root)}")
+    print(f"Total pipeline runtime: {time.perf_counter() - t0:.1f}s")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

@@ -92,6 +92,7 @@ class StateFeatures:
     prev_excursions: int
     prev_excursion_margin_delta: float
     donors: Tuple[DonorFeatures, ...]
+    update_cosine_available: bool = True
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -104,23 +105,24 @@ def _compute_top1_prob_and_token(logits: Tensor) -> Tuple[float, int]:
     return float(top_val.mean().item()), int(top_idx[0].item())
 
 
-def _compute_recent_update_cosine(state: BranchState) -> float:
-    """Cosine similarity between V_{t-1} = H_t - H_{t-1} and V_{t-2} = H_{t-1} - H_{t-2}."""
-    if len(state.hidden_history) < 2:
-        return 1.0
+def _compute_recent_update_cosine(state: BranchState) -> Tuple[float, bool]:
+    """Cosine similarity between V_{t-1} = H_t - H_{t-1} and V_{t-2} = H_{t-1} - H_{t-2}.
+
+    Requires at least 3 history states (e.g., H_0, H_1, H_2). Never substitutes H_1 for H_1 - H_0.
+    Returns (cosine_similarity, is_available).
+    """
+    if len(state.hidden_history) < 3:
+        return 0.0, False
     h_curr = state.hidden_history[-1].detach().float().reshape(-1)
     h_prev = state.hidden_history[-2].detach().float().reshape(-1)
+    h_prev2 = state.hidden_history[-3].detach().float().reshape(-1)
     v_last = h_curr - h_prev
-    if len(state.hidden_history) >= 3:
-        h_prev2 = state.hidden_history[-3].detach().float().reshape(-1)
-        v_prev = h_prev - h_prev2
-    else:
-        v_prev = h_prev
+    v_prev = h_prev - h_prev2
     n1 = float(torch.linalg.vector_norm(v_last).item())
     n2 = float(torch.linalg.vector_norm(v_prev).item())
     if n1 <= 1e-12 or n2 <= 1e-12:
-        return 0.0
-    return float(torch.dot(v_last, v_prev).item() / (n1 * n2))
+        return 0.0, True
+    return float(torch.dot(v_last, v_prev).item() / (n1 * n2)), True
 
 
 def _compute_native_gate_prob(state: BranchState) -> float:
@@ -146,7 +148,7 @@ def extract_state_features(
     entropy_a, margin_a = compute_last_token_uncertainty(logits_a)
     top1_prob_a, top1_tok_a = _compute_top1_prob_and_token(logits_a)
     stag_a = compute_stagnation_ratio(state_a)
-    upd_cos_a = _compute_recent_update_cosine(state_a)
+    upd_cos_a, upd_cos_avail = _compute_recent_update_cosine(state_a)
     rms_a = compute_rms(state_a.hidden)
     gate_prob_a = _compute_native_gate_prob(state_a)
 
@@ -199,6 +201,7 @@ def extract_state_features(
         prev_excursions=int(prev_excursions),
         prev_excursion_margin_delta=round(prev_excursion_margin_delta, 6),
         donors=tuple(donor_feats),
+        update_cosine_available=bool(upd_cos_avail),
     )
 
 

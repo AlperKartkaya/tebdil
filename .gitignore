@@ -25,9 +25,10 @@ wheels/
 .coverage
 htmlcov/
 results/
-!results/.gitkeep
 *.safetensors
 *.bin
 *.pt
+artifacts/
+!artifacts/evidence/real_tensor_bundle.pt
 *.pth
 .DS_Store

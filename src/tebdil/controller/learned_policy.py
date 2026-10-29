@@ -46,6 +46,12 @@ class ControllerDecision:
     action_scores: Dict[str, float] = field(default_factory=dict)
     controller_overhead_ms: float = 0.0
     state_features: Optional[Dict[str, Any]] = None
+    chosen_depth: int = 2
+    selected_donor: str = "none"
+    effective_alpha: float = 0.0
+    effective_beta: float = 0.0
+    rejected_actions: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    use_heuristic_gates: bool = True
 
 
 @dataclass
@@ -66,6 +72,8 @@ class LearnedControllerCheckpoint:
     )
     token_scopes: List[str] = field(default_factory=lambda: ["full"])
     allow_exit: bool = True
+    use_heuristic_gates: bool = True
+    utility_version: str = "v2_shaped"
     excursion_min_advantage: float = 0.0
     exit_min_advantage: float = 0.0
     max_excursions_per_trajectory: int = 1
@@ -78,7 +86,9 @@ class LearnedControllerCheckpoint:
     @classmethod
     def load(cls, path: Path) -> "LearnedControllerCheckpoint":
         data = json.loads(path.read_text(encoding="utf-8"))
-        return cls(**data)
+        valid_keys = set(cls.__dataclass_fields__.keys())
+        filtered = {k: v for k, v in data.items() if k in valid_keys}
+        return cls(**filtered)
 
     def predict_raw_score(self, feat_vec: Sequence[float]) -> float:
         x = np.asarray(feat_vec, dtype=np.float64)
@@ -116,6 +126,7 @@ class SelfDirectedController:
         budget_exit_max_entropy: float = 0.65,
         max_excursions: int = 1,
         allow_exit: bool = True,
+        use_heuristic_gates: Optional[bool] = None,
     ):
         self.mode = mode
         if checkpoint is None and checkpoint_path is not None and checkpoint_path.exists():
@@ -130,6 +141,12 @@ class SelfDirectedController:
         self.budget_exit_max_entropy = budget_exit_max_entropy
         self.max_excursions = max_excursions
         self.allow_exit = allow_exit
+        if use_heuristic_gates is None:
+            self.use_heuristic_gates = (
+                bool(checkpoint.use_heuristic_gates) if checkpoint is not None else True
+            )
+        else:
+            self.use_heuristic_gates = bool(use_heuristic_gates)
         self._controller_calls = 0
 
     @property
@@ -176,6 +193,11 @@ class SelfDirectedController:
                 adaptive_beta=base_beta,
                 token_scope=base_scope,
                 controller_overhead_ms=round(dt, 4),
+                chosen_depth=int(state_a.recurrent_step),
+                selected_donor="none",
+                effective_alpha=0.0,
+                effective_beta=0.0,
+                use_heuristic_gates=self.use_heuristic_gates,
             )
 
         sf: StateFeatures = extract_state_features(
@@ -210,6 +232,7 @@ class SelfDirectedController:
             reason: str,
             adv: float = 0.0,
             scores: Optional[Dict[str, float]] = None,
+            rejected: Optional[Dict[str, Dict[str, Any]]] = None,
         ) -> ControllerDecision:
             dt_ms = (time.perf_counter() - t0) * 1000.0
             d_idx = act.donor_index if (0 <= act.donor_index < len(sf.donors)) else 0
@@ -219,6 +242,18 @@ class SelfDirectedController:
                 if act.action_type == "EXCURSION"
                 else ("exit" if act.action_type == "EXIT" else "no_visit")
             )
+            if act.action_type == "EXCURSION":
+                sel_donor = (
+                    donors[d_idx].branch_id
+                    if (0 <= d_idx < len(donors))
+                    else f"D{d_idx}"
+                )
+                eff_a = float(act.alpha)
+                eff_b = float(act.beta)
+            else:
+                sel_donor = "none"
+                eff_a = 0.0
+                eff_b = 0.0
             return ControllerDecision(
                 action_type=act.action_type,
                 action_id=act.action_id,
@@ -238,6 +273,12 @@ class SelfDirectedController:
                 action_scores={k: round(v, 5) for k, v in (scores or {}).items()},
                 controller_overhead_ms=round(dt_ms, 4),
                 state_features=sf.to_dict(),
+                chosen_depth=int(state_a.recurrent_step),
+                selected_donor=sel_donor,
+                effective_alpha=round(eff_a, 4),
+                effective_beta=round(eff_b, 4),
+                rejected_actions=rejected or {},
+                use_heuristic_gates=self.use_heuristic_gates,
             )
 
         # 1. Simple deterministic / stochastic baseline modes
@@ -276,9 +317,53 @@ class SelfDirectedController:
                     )
             gen = torch.Generator(device="cpu").manual_seed(int(seed + state_a.recurrent_step * 97))
             pick = int(torch.randint(0, len(cands), (1,), generator=gen).item())
-            return _make_decision(cands[pick], "baseline_random_choice")
+            chosen = cands[pick]
+            rej = {
+                c.action_id: {"score": None, "status": "not_sampled_uniform"}
+                for c in cands
+                if c.action_id != chosen.action_id
+            }
+            return _make_decision(chosen, "baseline_random_choice", rejected=rej)
 
-        # 2. Heuristic baselines: E2 and Compute-Budgeted Heuristic (H_budget)
+        # 2. Gate-only ablation baseline (P1.1): applies exact E3 heuristic gates without learning
+        if self.mode == "gate_only":
+            if self.allow_exit and sf.margin_a >= 0.72:
+                return _make_decision(
+                    make_exit_action(),
+                    "gate_only_margin_exit",
+                    adv=sf.margin_a - 0.72,
+                    rejected={"CONTINUE": {"score": 0.0, "status": "lower_priority_than_exit_gate"}},
+                )
+            uncertain_a = (sf.margin_a <= self.e2_max_margin_trigger) and (
+                sf.entropy_a >= self.e2_min_entropy_trigger
+            )
+            if uncertain_a and valid_donor_indices and prev_excursions < self.max_excursions and budget_remaining >= 1:
+                act = make_excursion_action(
+                    donor_index=valid_donor_indices[0],
+                    alpha=base_alpha,
+                    beta=base_beta,
+                    token_scope=base_scope,
+                    max_relative_norm=max_relative_norm,
+                )
+                return _make_decision(
+                    act,
+                    "gate_only_uncertainty_excursion",
+                    adv=self.e2_max_margin_trigger - sf.margin_a,
+                    rejected={
+                        "CONTINUE": {"score": 0.0, "status": "uncertainty_gate_triggered"},
+                        "EXIT": {"score": None, "status": "gated_out_margin_below_0.72"},
+                    },
+                )
+            return _make_decision(
+                make_continue_action(),
+                "gate_only_continue",
+                rejected={
+                    "EXIT": {"score": None, "status": "gated_out_margin_below_0.72"},
+                    "EXCURSION": {"score": None, "status": "gated_out_not_uncertain_or_no_budget"},
+                },
+            )
+
+        # 3. Heuristic baselines: E2 and Compute-Budgeted Heuristic (H_budget)
         if self.mode in ("e2_heuristic", "budgeted_heuristic"):
             if (
                 self.mode == "budgeted_heuristic"
@@ -315,7 +400,7 @@ class SelfDirectedController:
                 return _make_decision(act, f"{self.mode}_triggered_uncertainty")
             return _make_decision(make_continue_action(), f"{self.mode}_continue_normal")
 
-        # 3. Phase 5 Donor-Selection Policies (random, nearest, farthest, confidence)
+        # 4. Phase 5 Donor-Selection Policies (random, nearest, farthest, confidence)
         if self.mode in ("donor_random", "donor_nearest", "donor_farthest", "donor_confidence"):
             if not valid_donor_indices or prev_excursions >= self.max_excursions or budget_remaining < 1:
                 return _make_decision(make_continue_action(), "no_valid_donors")
@@ -346,7 +431,7 @@ class SelfDirectedController:
             )
             return _make_decision(act, f"selected_{self.mode}_d{chosen_d}")
 
-        # 4. Learned Self-Directed Controller (learned_ridge, learned_mlp, donor_learned)
+        # 5. Learned Self-Directed Controller (learned_ridge, learned_mlp, donor_learned)
         if self.checkpoint is None:
             raise ValueError(f"SelfDirectedController in mode '{self.mode}' requires a loaded checkpoint.")
 
@@ -379,33 +464,41 @@ class SelfDirectedController:
                     best_d_score = s_val
                     best_d_act = cand_d
             assert best_d_act is not None
+            rej_d = {
+                aid: {"score": round(sc, 5), "status": "suboptimal_predicted_advantage"}
+                for aid, sc in d_scores.items()
+                if aid != best_d_act.action_id
+            }
             return _make_decision(
                 best_d_act,
                 reason=f"selected_donor_learned_d{best_d_act.donor_index}",
                 adv=best_d_score,
                 scores=d_scores,
+                rejected=rej_d,
             )
 
         ab_grid = [tuple(pair) for pair in self.checkpoint.alpha_beta_grid]
         scopes = list(self.checkpoint.token_scopes) if self.checkpoint.token_scopes else [base_scope]
-        allow_exit_flag = (
-            self.allow_exit
-            and self.checkpoint.allow_exit
-            and (sf.margin_a >= 0.72)
-        )
-        allow_exc_flag = (sf.margin_a <= self.e2_max_margin_trigger) and (
-            sf.entropy_a >= self.e2_min_entropy_trigger
-        )
+        can_exit_base = bool(self.allow_exit and self.checkpoint.allow_exit)
+        if self.use_heuristic_gates:
+            allow_exit_flag = can_exit_base and (sf.margin_a >= 0.72)
+            allow_exc_flag = (sf.margin_a <= self.e2_max_margin_trigger) and (
+                sf.entropy_a >= self.e2_min_entropy_trigger
+            )
+        else:
+            allow_exit_flag = can_exit_base
+            allow_exc_flag = True
 
         candidate_actions = build_discrete_action_space(
             num_donors=len(donors),
             alpha_beta_grid=ab_grid,
             token_scopes=scopes,
             max_relative_norm=max_relative_norm,
-            allow_exit=allow_exit_flag,
+            allow_exit=can_exit_base,
         )
 
         scores: Dict[str, float] = {"CONTINUE": 0.0}
+        rejected_actions: Dict[str, Dict[str, Any]] = {}
         best_action: ControllerAction = cont_action
         best_adv: float = 0.0
 
@@ -416,6 +509,10 @@ class SelfDirectedController:
                 continue
             if cand.action_type == "EXIT":
                 if not allow_exit_flag:
+                    rejected_actions[cand.action_id] = {
+                        "score": None,
+                        "status": "gated_out_margin_below_0.72" if can_exit_base else "exit_disabled",
+                    }
                     continue
                 vec = featurize_state_action(sf, cand)
                 raw_adv = self.checkpoint.predict_raw_score(vec) - base_q
@@ -425,12 +522,23 @@ class SelfDirectedController:
                     best_adv = adj_adv
                     best_action = cand
             elif cand.action_type == "EXCURSION":
-                if (
-                    not allow_exc_flag
-                    or cand.donor_index not in valid_donor_indices
-                    or prev_excursions >= max_exc
-                    or budget_remaining < 1
-                ):
+                if cand.donor_index not in valid_donor_indices:
+                    rejected_actions[cand.action_id] = {
+                        "score": None,
+                        "status": "invalid_or_divergent_donor",
+                    }
+                    continue
+                if prev_excursions >= max_exc or budget_remaining < 1:
+                    rejected_actions[cand.action_id] = {
+                        "score": None,
+                        "status": "excursion_budget_exhausted",
+                    }
+                    continue
+                if not allow_exc_flag:
+                    rejected_actions[cand.action_id] = {
+                        "score": None,
+                        "status": "gated_out_not_uncertain",
+                    }
                     continue
                 vec = featurize_state_action(sf, cand)
                 raw_adv = self.checkpoint.predict_raw_score(vec) - base_q
@@ -440,5 +548,19 @@ class SelfDirectedController:
                     best_adv = adj_adv
                     best_action = cand
 
-        reason = f"learned_{self.checkpoint.model_type}_selected_{best_action.action_id}"
-        return _make_decision(best_action, reason=reason, adv=best_adv, scores=scores)
+        for aid, sc in scores.items():
+            if aid != best_action.action_id:
+                rejected_actions[aid] = {
+                    "score": round(sc, 5),
+                    "status": "suboptimal_predicted_advantage",
+                }
+
+        gate_tag = "gated" if self.use_heuristic_gates else "ungated"
+        reason = f"learned_{self.checkpoint.model_type}_{gate_tag}_selected_{best_action.action_id}"
+        return _make_decision(
+            best_action,
+            reason=reason,
+            adv=best_adv,
+            scores=scores,
+            rejected=rejected_actions,
+        )

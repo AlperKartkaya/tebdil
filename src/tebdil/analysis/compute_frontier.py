@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 
 def compute_pareto_frontier(method_summaries: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
     """Identify Pareto-efficient non-oracle methods trading off recurrent calls vs accuracy."""
+    s0_calls = float(method_summaries.get("S0", {}).get("mean_recurrent_calls", 4.0))
     points: List[Dict[str, Any]] = []
     for method, stats in method_summaries.items():
         is_oracle = method in ("P1", "E_oracle", "D_oracle")
@@ -20,12 +21,14 @@ def compute_pareto_frontier(method_summaries: Dict[str, Dict[str, Any]]) -> Dict
                 "method": method,
                 "is_oracle": is_oracle,
                 "mean_recurrent_calls": round(calls, 3),
+                "call_delta_vs_s0_pct": float(stats.get("call_delta_vs_s0_pct", 0.0)),
+                "call_delta_vs_e1_pct": float(stats.get("call_delta_vs_e1_pct", 0.0)),
                 "mean_estimated_flops": flops,
                 "mean_wall_time_ms": round(wall, 2),
                 "accuracy": round(acc, 4),
                 "paired_accuracy_diff": round(net_diff, 4),
-                "gain_per_extra_call": round(net_diff / max(1.0, calls - 4.0), 5)
-                if calls > 4.0
+                "gain_per_extra_call": round(net_diff / max(1.0, calls - s0_calls), 5)
+                if calls > s0_calls
                 else 0.0,
             }
         )

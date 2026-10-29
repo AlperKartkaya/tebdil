@@ -14,6 +14,7 @@ _SPLIT_SEED_OFFSETS = {
     "pilot": 7000,
     "validation": 14000,
     "test": 24000,
+    "fresh_test": 44000,
 }
 
 
@@ -55,7 +56,58 @@ def generate_graph_problems(
 
     for idx in range(num_problems):
         pid = f"graph_{split}_{idx:03d}"
-        if split != "test":
+        if split == "fresh_test":
+            # 6-node layered DAG (0 -> {1,2} -> {3,4} -> 5) for fresh unseen test split
+            w01 = rng.randint(2, 7)
+            w02 = rng.randint(3, 9)
+            w13 = rng.randint(2, 8)
+            w14 = rng.randint(5, 12)
+            w23 = rng.randint(1, 6)
+            w24 = rng.randint(3, 9)
+            w35 = rng.randint(3, 9)
+            w45 = rng.randint(2, 7)
+            edges = [
+                (0, 1, w01),
+                (0, 2, w02),
+                (1, 3, w13),
+                (1, 4, w14),
+                (2, 3, w23),
+                (2, 4, w24),
+                (3, 5, w35),
+                (4, 5, w45),
+            ]
+            ans = dijkstra_shortest_path(6, edges, 0, 5)
+            alt_costs = [
+                w01 + w13 + w35,
+                w01 + w14 + w45,
+                w02 + w23 + w35,
+                w02 + w24 + w45,
+                ans + 2,
+            ]
+            distractors = [str(ans)]
+            for c in alt_costs:
+                if str(c) not in distractors:
+                    distractors.append(str(c))
+            edge_desc = "; ".join(f"({u}->{v}, w={w})" for u, v, w in edges)
+            prompt = (
+                f"In a 6-node directed acyclic network with weighted edges {edge_desc}, "
+                f"compute the minimum total weight from node 0 to node 5. "
+                f"Output only the integer weight.\nAnswer: "
+            )
+            problems.append(
+                TaskProblem(
+                    problem_id=pid,
+                    family="graph",
+                    split=split,
+                    template_id="graph_6node_layered_fresh",
+                    difficulty="hard",
+                    prompt=prompt,
+                    gold_answer=str(ans),
+                    candidate_answers=tuple(distractors[:4]),
+                    metadata={"num_nodes": 6, "edges": edges, "source": 0, "target": 5},
+                )
+            )
+        elif split != "test":
             # 4-node DAG (0 -> 1, 2 -> 3) with competing 2-hop vs 3-hop paths
             w01 = rng.randint(2, 9)
             w13 = rng.randint(5, 14)

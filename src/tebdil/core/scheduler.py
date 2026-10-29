@@ -163,6 +163,28 @@ def run_scheduled_trajectory(
     if policy_config is None:
         policy_config = AdaptivePolicyConfig()
 
+    single_donor_methods = {
+        "M0",
+        "M1",
+        "R0",
+        "C0",
+        "E0",
+        "E1",
+        "E1_no_curv",
+        "E1_rand_curv",
+        "E1_last_token",
+        "E1_norm_tight",
+        "E1_subspace",
+        "E1_coord_top50",
+        "E1_gated",
+        "E1_multi_visit",
+        "E2",
+        "EXIT_2",
+        "E3_t2_1donor",
+    }
+    if method in single_donor_methods:
+        branch_count = 2
+
     base_steps = recurrent_steps if recurrent_steps is not None else adapter.total_steps
     total_steps = base_steps + extra_steps_for_s1 if method == "S1" else base_steps
 
@@ -280,9 +302,13 @@ def run_scheduled_trajectory(
         "EXIT_2": "fixed_exit",
         "RAND_CTRL": "random_controller",
         "H_budget": "budgeted_heuristic",
+        "G_gate_only": "gate_only",
         "E3_learned": "learned_ridge",
         "E3_ridge": "learned_ridge",
         "E3_mlp": "learned_mlp",
+        "E3_mlp_ungated": "learned_mlp",
+        "E3_mlp_unshaped": "learned_mlp",
+        "E3_t2_1donor": "learned_mlp",
         "E3_no_exit": "learned_ridge",
         "D_random": "donor_random",
         "D_nearest": "donor_nearest",
@@ -298,14 +324,32 @@ def run_scheduled_trajectory(
     if step_snapshots and "A" in step_snapshots[-1].branch_margin:
         prev_margin_a = step_snapshots[-1].branch_margin["A"]
 
+    multi_step_ctrl_methods = {
+        "RAND_CTRL",
+        "H_budget",
+        "G_gate_only",
+        "E3_learned",
+        "E3_ridge",
+        "E3_mlp",
+        "E3_mlp_ungated",
+        "E3_mlp_unshaped",
+        "E3_no_exit",
+    }
+    if method in multi_step_ctrl_methods and excursion_config.eligible_visit_steps:
+        eligible_steps = tuple(int(s) for s in excursion_config.eligible_visit_steps)
+    elif method == "E1_multi_visit":
+        eligible_steps = (excursion_config.visit_step, excursion_config.visit_step + 1)
+    else:
+        eligible_steps = (excursion_config.visit_step,)
+
     # Advance branches through remaining steps (actual_fork .. total_steps - 1)
     for t in range(actual_fork, total_steps):
-        is_visit_step = (t == excursion_config.visit_step) or (
-            method == "E1_multi_visit" and t in (excursion_config.visit_step, excursion_config.visit_step + 1)
+        is_visit_step = (t in eligible_steps) and (
+            method == "E1_multi_visit" or prev_exc_count == 0
         )
         if is_visit_step and method not in ("P0", "P1"):
             state_a = branches[0]
-            donors = branches[1:]
+            donors = branches[1:2] if method == "E3_t2_1donor" else branches[1:]
             donor_idx = 0
             intervened = True
             active_cfg = excursion_config
@@ -316,13 +360,23 @@ def run_scheduled_trajectory(
                 active_cfg = replace(excursion_config, max_relative_norm=0.10)
             elif method == "E1_subspace":
                 active_cfg = replace(excursion_config, subspace_fraction=0.50)
+            elif method == "E1_coord_top50":
+                active_cfg = replace(excursion_config, coordinate_topk_fraction=0.50)
             elif method == "E1_gated":
                 active_cfg = replace(excursion_config, gate_modulated=True)
 
             if method in ctrl_mode_map:
                 from tebdil.controller.learned_policy import SelfDirectedController
 
-                allow_exit_flag = method not in ("E3_no_exit", "D_random", "D_nearest", "D_farthest", "D_confidence", "D_learned")
+                allow_exit_flag = method not in (
+                    "E3_no_exit",
+                    "D_random",
+                    "D_nearest",
+                    "D_farthest",
+                    "D_confidence",
+                    "D_learned",
+                )
+                use_gates_override = False if method == "E3_mlp_ungated" else None
                 sd_ctrl = SelfDirectedController(
                     mode=ctrl_mode_map[method],
                     checkpoint=controller_checkpoint,
@@ -332,6 +386,7 @@ def run_scheduled_trajectory(
                     e2_max_margin_trigger=policy_config.max_margin_trigger,
                     e2_min_entropy_trigger=policy_config.min_entropy_trigger,
                     allow_exit=allow_exit_flag,
+                    use_heuristic_gates=use_gates_override,
                 )
                 budget_rem = max(1, (total_steps - t) * len(branches))
                 c_dec = sd_ctrl.decide(
@@ -370,6 +425,7 @@ def run_scheduled_trajectory(
                         alpha=c_dec.adaptive_alpha,
                         beta=c_dec.adaptive_beta,
                         token_scope=c_dec.token_scope,
+                        visit_step=t,
                     )
             elif method == "E2":
                 policy = AdaptiveExcursionPolicy(policy_config)
@@ -394,6 +450,7 @@ def run_scheduled_trajectory(
                         excursion_config,
                         alpha=pol_decision.adaptive_alpha,
                         beta=pol_decision.adaptive_beta,
+                        visit_step=t,
                     )
             elif excursion_config.donor_strategy == "random" and len(donors) > 1:
                 gen = torch.Generator(device="cpu").manual_seed(int(seed + t))
@@ -449,8 +506,17 @@ def run_scheduled_trajectory(
                     adapter, state_a, selected_donor, active_cfg
                 )
 
+            if record_pca and exc_telemetry is not None:
+                a_eff = float(exc_telemetry.effective_alpha)
+                v_vec = (
+                    (1.0 - a_eff) * state_a.hidden[:, -1, :].detach().float()
+                    + a_eff * selected_donor.hidden[:, -1, :].detach().float()
+                ).cpu().numpy().reshape(-1)
+                branch_vec_history.setdefault("VISIT", []).append(v_vec)
+
+            all_other_donors = branches[1:]
             new_branches = [next_a]
-            for idx, d_state in enumerate(donors):
+            for idx, d_state in enumerate(all_other_donors):
                 if idx == donor_idx:
                     new_branches.append(next_donor)
                 else:

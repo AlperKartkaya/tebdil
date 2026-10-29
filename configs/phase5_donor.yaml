@@ -50,7 +50,7 @@ execution:
   save_full_activations: false
 evaluation:
   task_family: all
-  split: test
+  split: validation
   num_problems: 18
   record_compute: true
   record_logits: true

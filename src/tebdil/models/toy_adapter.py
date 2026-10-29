@@ -159,7 +159,7 @@ class ToyRecurrentAdapter:
             hidden=h0.detach().clone(),
             context=ctx,
             gate_history=(),
-            hidden_history=(),
+            hidden_history=(h0.detach().clone(),),
         )
 
     @torch.no_grad()

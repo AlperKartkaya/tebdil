@@ -10,13 +10,14 @@ model:
   readout_mode: last_step
   local_files_only: true
 branches:
-  count: 2
+  count: 3
   fork_after_step: 1
   perturbation: normalized_gaussian
   perturbation_relative_norm: 0.25
 intervention:
   method: E3_ridge
   visit_step: 2
+  eligible_visit_steps: [2, 3]
   alpha: 0.65
   beta: 0.65
   token_scope: full
@@ -33,6 +34,9 @@ policy:
 controller:
   checkpoint_path: artifacts/controllers/tebdil_ridge_v1.json
   mlp_checkpoint_path: artifacts/controllers/tebdil_mlp_v1.json
+  mlp_ungated_checkpoint_path: artifacts/controllers/tebdil_mlp_ungated_v1.json
+  mlp_unshaped_checkpoint_path: artifacts/controllers/tebdil_mlp_unshaped_v1.json
+  mlp_t2_1donor_checkpoint_path: artifacts/controllers/tebdil_mlp_t2_1donor_v1.json
 methods:
   - S0
   - S1
@@ -45,12 +49,16 @@ methods:
   - E1
   - E2
   - H_budget
+  - G_gate_only
+  - E3_t2_1donor
   - E3_no_exit
   - E3_ridge
   - E3_mlp
+  - E3_mlp_ungated
+  - E3_mlp_unshaped
 execution:
   seed: 42
-  seeds: [42, 1042]
+  seeds: [42, 1042, 2042]
   decoding: greedy
   max_input_tokens: 96
   max_output_tokens: 2

@@ -50,6 +50,8 @@ class ExcursionTelemetry:
     applied_update_hash: str = ""
     post_receiving_state_hash: str = ""
     applied_update_frob: float = 0.0
+    returned_shift_vs_normal_frob: float = 0.0
+    coordinate_topk_fraction: float = 1.0
 
 
 def compute_branch_similarity(a_hidden: Tensor, b_hidden: Tensor) -> tuple[float, float, float]:
@@ -233,12 +235,17 @@ def execute_excursion_step(
         effective_v_visit = v_visit
 
     delta_v = (effective_v_visit - v_a) * scope_mask
-    if 0.0 < config.subspace_fraction < 1.0:
+    eff_topk_frac = (
+        config.coordinate_topk_fraction
+        if config.coordinate_topk_fraction < 1.0
+        else config.subspace_fraction
+    )
+    if 0.0 < eff_topk_frac < 1.0:
         d_dim = delta_v.shape[-1]
-        k_keep = max(1, int(round(d_dim * config.subspace_fraction)))
+        k_keep = max(1, int(round(d_dim * eff_topk_frac)))
         topk_vals = torch.topk(delta_v.abs(), k=k_keep, dim=-1).values
         thresh = topk_vals[..., -1:]
-        subspace_mask = (delta_v.abs() >= thresh).to(dtype= torch.float32)
+        subspace_mask = (delta_v.abs() >= thresh).to(dtype=torch.float32)
         delta_v = delta_v * subspace_mask
 
     gate_scale: Tensor | float = 1.0
@@ -246,7 +253,7 @@ def execute_excursion_step(
         g_prob = torch.sigmoid(next_a_normal.gate_history[-1].detach().float())
         gate_scale = 1.0 - 0.5 * g_prob
 
-    if config.subspace_fraction >= 1.0 and not config.gate_modulated:
+    if eff_topk_frac >= 1.0 and not config.gate_modulated:
         combined_update = (1.0 - config.beta) * v_a + config.beta * (
             v_a * (1.0 - scope_mask) + effective_v_visit * scope_mask
         )
@@ -265,15 +272,25 @@ def execute_excursion_step(
             post_rms = compute_rms(h_a_prime)
             skipped_unstable = True
 
+    if skipped_unstable or not next_a_normal.gate_history:
+        next_gate_history = next_a_normal.gate_history
+    elif hasattr(adapter, "compute_gate"):
+        recomputed_gate = adapter.compute_gate(h_a_prime)
+        next_gate_history = next_a_normal.gate_history[:-1] + (recomputed_gate,)
+    else:
+        next_gate_history = next_a_normal.gate_history
+
     next_a = BranchState(
         branch_id=state_a.branch_id,
         recurrent_step=next_a_normal.recurrent_step,
         hidden=h_a_prime,
         context=next_a_normal.context,
-        gate_history=next_a_normal.gate_history[:-1] + (next_visit.gate_history[-1],)
-        if next_a_normal.gate_history and next_visit.gate_history
-        else next_a_normal.gate_history,
+        gate_history=next_gate_history,
         hidden_history=state_a.hidden_history + (h_a_prime,),
+    )
+
+    shift_vs_normal = float(
+        torch.linalg.vector_norm(h_a_prime.detach().float() - f_a_f).item()
     )
 
     telemetry = ExcursionTelemetry(
@@ -306,5 +323,7 @@ def execute_excursion_step(
         applied_update_hash=hash_tensor(combined_update),
         post_receiving_state_hash=hash_tensor(h_a_prime),
         applied_update_frob=float(torch.linalg.vector_norm(combined_update).item()),
+        returned_shift_vs_normal_frob=shift_vs_normal,
+        coordinate_topk_fraction=eff_topk_frac,
     )
     return next_a, next_b, telemetry

@@ -10,7 +10,7 @@ import torch
 from torch import Tensor
 
 
-def hash_tensor(tensor: Optional[Tensor]) -> str:
+def hash_tensor(tensor: Optional[Tensor], length: int = 16) -> str:
     """Compute a deterministic SHA-256 hex digest of tensor shape, dtype, and bytes."""
     if tensor is None:
         return "none"
@@ -20,7 +20,7 @@ def hash_tensor(tensor: Optional[Tensor]) -> str:
     else:
         raw = cpu_t.numpy().tobytes()
     meta = f"{tuple(cpu_t.shape)}:{cpu_t.dtype}:".encode("utf-8")
-    return hashlib.sha256(meta + raw).hexdigest()[:16]
+    return hashlib.sha256(meta + raw).hexdigest()[:length]
 
 
 @dataclass(frozen=True)
@@ -65,7 +65,9 @@ class ExcursionConfig:
     fallback_if_unstable: str = "skip_intervention"
     rms_Instability_threshold: float = 50.0
     subspace_fraction: float = 1.0
+    coordinate_topk_fraction: float = 1.0
     gate_modulated: bool = False
+    eligible_visit_steps: Tuple[int, ...] = ()
 
 
 def check_tensor_finite(tensor: Tensor, name: str = "hidden") -> bool:
