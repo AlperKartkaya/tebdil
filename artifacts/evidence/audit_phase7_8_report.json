@@ -1,0 +1,107 @@
+{
+  "run_id": "phase7_8_controller_test",
+  "all_passed": true,
+  "num_records": 504,
+  "checks": {
+    "1_checkpoint_provenance": {
+      "passed": true,
+      "model_id": "ByteDance/Ouro-1.4B-Thinking",
+      "model_revision": "3aaa2224253a92ca45cf2e3d427c360e1ef9c93d",
+      "weights_size_bytes": 2869336434,
+      "forward_equivalence_verified": true
+    },
+    "2_model_architecture": {
+      "passed": true,
+      "manifest_model_id": "ByteDance/Ouro-1.4B-Thinking",
+      "manifest_revision": "3aaa2224253a92ca45cf2e3d427c360e1ef9c93d",
+      "recurrent_steps": 4
+    },
+    "3_genuine_recurrent_execution": {
+      "passed": true,
+      "valid_records": "504/504"
+    },
+    "4_real_hidden_state_capture": {
+      "passed": true,
+      "valid_snapshots": "504/504"
+    },
+    "5_shared_weights": {
+      "passed": true
+    },
+    "6_branch_isolation": {
+      "passed": true
+    },
+    "7_visited_state_computation": {
+      "passed": true,
+      "executed_excursions": 73,
+      "nonzero_curvature_count": 73
+    },
+    "8_noop_intervention_equivalence": {
+      "passed": true
+    },
+    "9_deterministic_replay": {
+      "passed": true,
+      "mode": "real_model_execution_replay",
+      "problem_id": "arith_test_003",
+      "s0_match": true,
+      "intervention_match": true,
+      "intervention_details": {
+        "method": "S1",
+        "recorded_answer": "42",
+        "replayed_answer": "42",
+        "recorded_gold_logprob": -0.266956,
+        "replayed_gold_logprob": -0.266956,
+        "recorded_calls": 14,
+        "replayed_calls": 14
+      }
+    },
+    "10_no_ground_truth_leakage": {
+      "passed": true,
+      "modules_checked": [
+        "state.py",
+        "perturbations.py",
+        "branching.py",
+        "excursions.py",
+        "controls.py",
+        "policies.py",
+        "scheduler.py",
+        "action_space.py",
+        "features.py",
+        "learned_policy.py"
+      ],
+      "violations": []
+    },
+    "11_train_test_split_separation": {
+      "passed": true,
+      "train_templates": [
+        "arith_affine_cascade_v1",
+        "arith_linear_eq_v1",
+        "arith_mod_product_v1",
+        "graph_4node_diamond_v1",
+        "logic_2sat_unique_v1",
+        "logic_bool_xor_not_v1"
+      ],
+      "validation_templates": [
+        "arith_affine_cascade_v1",
+        "arith_linear_eq_v1",
+        "arith_mod_product_v1",
+        "graph_4node_diamond_v1",
+        "logic_2sat_unique_v1",
+        "logic_bool_xor_not_v1"
+      ],
+      "test_templates": [
+        "arith_diff_of_products_test",
+        "arith_linear_sub_test",
+        "arith_weighted_comb_test",
+        "graph_5node_test",
+        "logic_2sat_unique_test",
+        "logic_bool_or_xor_test"
+      ],
+      "overlap_train_test": [],
+      "overlap_val_test": [],
+      "prompt_overlap_with_test": 0
+    },
+    "12_honest_compute_accounting": {
+      "passed": true
+    }
+  }
+}

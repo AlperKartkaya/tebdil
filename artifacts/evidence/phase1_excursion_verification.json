@@ -46,17 +46,17 @@
     "visit_state_hash": "339d84e11dfa41f8",
     "normal_update_hash": "9c4c9eec91239bd2",
     "visit_update_hash": "c3770a89a9f7ccff",
-    "applied_update_hash": "f67d39822859dd06",
-    "post_receiving_state_hash": "d85457d856eb0878",
-    "applied_update_frob": 128.0393524169922
+    "applied_update_hash": "e2491353133cf213",
+    "post_receiving_state_hash": "e8a4893e1b021c36",
+    "applied_update_frob": 128.03933715820312
   },
   "donor_b_undisturbed_exact_match": true,
   "step4_continuation_vs_baseline": {
-    "max_abs_diff": 0.90625,
-    "mean_abs_diff": 0.12908950448036194,
-    "relative_diff": 0.07095600255920162,
-    "kl_p_q": 0.0008330279961228371,
-    "js_divergence": 0.00021127587388036773,
+    "max_abs_diff": 0.9375,
+    "mean_abs_diff": 0.1296495497226715,
+    "relative_diff": 0.07129689302748475,
+    "kl_p_q": 0.0008639773586764932,
+    "js_divergence": 0.00021903517335886136,
     "top1_match": true,
     "topk_overlap": 1.0
   },

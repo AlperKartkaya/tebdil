@@ -1,0 +1,63 @@
+project: TEBDIL
+phase: 7
+run_id: phase7_8_controller_test
+model:
+  repo: ByteDance/Ouro-1.4B-Thinking
+  revision: 3aaa2224253a92ca45cf2e3d427c360e1ef9c93d
+  precision: bf16
+  recurrent_steps: 4
+  use_cache: false
+  readout_mode: last_step
+  local_files_only: true
+branches:
+  count: 2
+  fork_after_step: 1
+  perturbation: normalized_gaussian
+  perturbation_relative_norm: 0.25
+intervention:
+  method: E3_ridge
+  visit_step: 2
+  alpha: 0.65
+  beta: 0.65
+  token_scope: full
+  max_relative_norm: 0.35
+  extra_steps_for_s1: 3
+  fallback_if_unstable: skip_intervention
+policy:
+  min_relative_divergence: 0.05
+  max_relative_divergence: 0.85
+  min_entropy_trigger: 1.20
+  max_margin_trigger: 0.70
+  stagnation_ratio_threshold: 0.85
+  donor_selection: confidence_gain
+controller:
+  checkpoint_path: artifacts/controllers/tebdil_ridge_v1.json
+  mlp_checkpoint_path: artifacts/controllers/tebdil_mlp_v1.json
+methods:
+  - S0
+  - S1
+  - EXIT_2
+  - RAND_CTRL
+  - P0
+  - P1
+  - M0
+  - M1
+  - E1
+  - E2
+  - H_budget
+  - E3_no_exit
+  - E3_ridge
+  - E3_mlp
+execution:
+  seed: 42
+  seeds: [42, 1042]
+  decoding: greedy
+  max_input_tokens: 96
+  max_output_tokens: 2
+  save_full_activations: false
+evaluation:
+  task_family: all
+  split: test
+  num_problems: 18
+  record_compute: true
+  record_logits: true

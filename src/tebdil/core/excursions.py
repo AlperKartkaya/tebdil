@@ -246,7 +246,12 @@ def execute_excursion_step(
         g_prob = torch.sigmoid(next_a_normal.gate_history[-1].detach().float())
         gate_scale = 1.0 - 0.5 * g_prob
 
-    combined_update = v_a + config.beta * gate_scale * delta_v
+    if config.subspace_fraction >= 1.0 and not config.gate_modulated:
+        combined_update = (1.0 - config.beta) * v_a + config.beta * (
+            v_a * (1.0 - scope_mask) + effective_v_visit * scope_mask
+        )
+    else:
+        combined_update = v_a + config.beta * gate_scale * delta_v
     h_a_prime = (h_a_f + combined_update).to(dtype=state_a.hidden.dtype)
 
     is_finite = check_tensor_finite(h_a_prime)

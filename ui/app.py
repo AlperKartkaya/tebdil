@@ -26,6 +26,7 @@ def load_available_runs() -> List[str]:
     return runs
 
 
+@st.cache_data(ttl="5m", max_entries=20)
 def load_run_data(run_id: str) -> tuple[Dict[str, Any], List[Dict[str, Any]]]:
     run_dir = RESULTS_DIR / run_id
     summary_path = run_dir / "summary.json"
@@ -41,27 +42,29 @@ def load_run_data(run_id: str) -> tuple[Dict[str, Any], List[Dict[str, Any]]]:
 
 def main() -> None:
     st.set_page_config(
-        page_title="TEBDIL Observatory",
+        page_title="TEBDIL observatory",
         layout="wide",
     )
-    st.title("TEBDIL Observatory — Cooperative Latent Excursions in LoopLMs")
+    st.title("TEBDIL observatory — Self-directed latent relocation in LoopLMs")
     st.caption(
-        "Empirical trace inspector for recurrent hidden-state trajectories, excursion curvature C_t, "
-        "rescue/degradation trade-offs, and matched-compute Pareto frontiers. All metrics are loaded directly "
-        "from verified experiment artifacts in `results/`."
+        "Empirical trace inspector for recurrent hidden-state trajectories, learned meta-controller decisions "
+        "(CONTINUE / EXCURSION / EXIT), excursion curvature C_t, donor selection, and matched-compute Pareto frontiers. "
+        "All metrics are loaded directly from verified experiment artifacts in `results/`."
     )
 
     runs = load_available_runs()
     if not runs:
-        st.warning("No completed experiment runs found in `results/`. Run `python -m tebdil.cli run --config configs/phase1_smoke.yaml` first.")
+        st.warning(
+            "No completed experiment runs found in `results/`. Run `python -m tebdil.cli run --config configs/phase1_smoke.yaml` first.",
+            title="Missing artifacts",
+        )
         return
 
-    # Left panel: Run, problem, seed, and method selection
     col_left, col_center, col_right = st.columns([1.1, 1.8, 1.3])
 
     with col_left:
-        st.subheader("1. Problem & Branch Selector")
-        selected_run = st.selectbox("Experiment Run (`run_id`)", runs, index=len(runs) - 1)
+        st.subheader("1. Problem and branch selector")
+        selected_run = st.selectbox("Experiment run (`run_id`)", runs, index=len(runs) - 1)
         summary, records = load_run_data(selected_run)
 
         manifest = summary.get("manifest", {})
@@ -83,8 +86,12 @@ def main() -> None:
             if int(r["seed"]) == selected_seed
         }
         available_methods = list(instance_recs.keys())
-        default_idx = available_methods.index("E1") if "E1" in available_methods else 0
-        selected_method = st.selectbox("Intervention Method", available_methods, index=default_idx)
+        default_idx = (
+            available_methods.index("E3_ridge")
+            if "E3_ridge" in available_methods
+            else (available_methods.index("E1") if "E1" in available_methods else 0)
+        )
+        selected_method = st.selectbox("Intervention / controller method", available_methods, index=default_idx)
 
         rec = instance_recs[selected_method]
         s0_rec = instance_recs.get("S0", rec)
@@ -92,27 +99,28 @@ def main() -> None:
         st.markdown("#### Prompt")
         st.code(rec.get("prompt", ""), language="text")
         st.markdown(
-            f"- **Gold Answer:** `{rec.get('gold_answer')}`\n"
-            f"- **Baseline A (`S0`) Output:** `{s0_rec.get('extracted_answer')}` "
+            f"- **Gold answer:** `{rec.get('gold_answer')}`\n"
+            f"- **Baseline A (`S0`) output:** `{s0_rec.get('extracted_answer')}` "
             f"({'VALID' if s0_rec.get('is_correct') else 'WRONG'})\n"
-            f"- **Donor B Output:** `{rec.get('donor_b_answer', 'N/A')}` "
+            f"- **Donor B output:** `{rec.get('donor_b_answer', 'N/A')}` "
             f"({'VALID' if rec.get('donor_b_correct') else 'WRONG'})\n"
-            f"- **`{selected_method}` Output:** `{rec.get('extracted_answer')}` "
+            f"- **Donor C output:** `{rec.get('donor_c_answer', 'N/A')}` "
+            f"({'VALID' if rec.get('donor_c_correct') else 'WRONG'})\n"
+            f"- **`{selected_method}` output:** `{rec.get('extracted_answer')}` "
             f"({'VALID' if rec.get('is_correct') else 'WRONG'})"
         )
 
         if not s0_rec.get("is_correct") and rec.get("is_correct"):
-            st.success("Outcome: RESCUED (A wrong -> A' correct)")
+            st.success("A wrong -> A' correct", title="Outcome: RESCUED")
         elif s0_rec.get("is_correct") and not rec.get("is_correct"):
-            st.error("Outcome: DEGRADED (A correct -> A' wrong)")
+            st.error("A correct -> A' wrong", title="Outcome: DEGRADED")
         elif rec.get("is_correct"):
-            st.info("Outcome: RETAINED CORRECT (A correct -> A' correct)")
+            st.info("A correct -> A' correct", title="Outcome: RETAINED CORRECT")
         else:
-            st.warning("Outcome: UNRESCUED (A wrong -> A' wrong)")
+            st.warning("A wrong -> A' wrong", title="Outcome: UNRESCUED")
 
-    # Center panel: Stepwise full-dimensional metrics + 2D PCA projection with explicit caveat
     with col_center:
-        st.subheader("2. Latent Trajectory & Stepwise Dynamics")
+        st.subheader("2. Latent trajectory and stepwise dynamics")
         snaps = rec.get("step_snapshots", [])
         if snaps:
             step_rows = []
@@ -148,14 +156,14 @@ def main() -> None:
                 )
             )
             fig_div.update_layout(
-                title="Full-Dimensional Branch Distance & Intermediate Entropy by Step",
+                title="Full-dimensional branch distance and intermediate entropy by step",
                 xaxis_title="Recurrent Step t",
                 yaxis_title="Frobenius Distance ||H_B - H_A||_F",
                 yaxis2=dict(title="Entropy (nats)", overlaying="y", side="right"),
                 height=300,
                 margin=dict(l=20, r=20, t=40, b=20),
             )
-            st.plotly_chart(fig_div, use_container_width=True)
+            st.plotly_chart(fig_div, width="stretch")
 
         pca_coords = rec.get("pca_coords", {})
         evr = rec.get("pca_explained_variance", [0.0, 0.0])
@@ -178,36 +186,68 @@ def main() -> None:
             ev1 = evr[0] * 100.0 if len(evr) > 0 else 0.0
             ev2 = evr[1] * 100.0 if len(evr) > 1 else 0.0
             fig_pca.update_layout(
-                title=f"2D PCA Projection of Last-Token States (PC1: {ev1:.1f}%, PC2: {ev2:.1f}%)",
+                title=f"2D PCA projection of last-token states (PC1: {ev1:.1f}%, PC2: {ev2:.1f}%)",
                 xaxis_title=f"PC1 ({ev1:.1f}% var)",
                 yaxis_title=f"PC2 ({ev2:.1f}% var)",
                 height=320,
                 margin=dict(l=20, r=20, t=40, b=20),
             )
-            st.plotly_chart(fig_pca, use_container_width=True)
+            st.plotly_chart(fig_pca, width="stretch")
             st.caption(
-                f"**Methodological Note:** 2D linear PCA captures {ev1 + ev2:.1f}% of variance across the "
+                f"**Methodological note:** 2D linear PCA captures {ev1 + ev2:.1f}% of variance across the "
                 "plotted points. Visual proximity in 2D does NOT prove full-dimensional attractor basin membership; "
                 "rely on exact Frobenius norms and curvature metrics in the right panel."
             )
 
-    # Right panel: Intervention telemetry, curvature C_t, and run-wide Pareto comparison
     with col_right:
-        st.subheader("3. Excursion & Curvature Telemetry")
-        st.metric("Curvature Residual ||C_t||_F", f"{rec.get('curvature_frob', 0.0):.4f}")
-        st.metric("Relative Nonlinearity ||C_t|| / ||V_A||", f"{rec.get('curvature_relative', 0.0):.4f}")
-        st.metric("Gold Answer Log-Prob (Delta vs S0)", f"{rec.get('gold_logprob', 0.0):.3f}", f"{rec.get('delta_gold_logprob', 0.0):+.3f}")
-        st.metric("Recurrent Calls / Wall Time", f"{rec.get('recurrent_block_calls', 0)} calls", f"{rec.get('wall_time_ms', 0.0):.0f} ms")
+        st.subheader("3. Controller and excursion telemetry")
+        with st.container(border=True):
+            st.markdown("##### Self-directed controller decision")
+            st.markdown(
+                f"- **Selected action:** `{rec.get('controller_action_type', 'CONTINUE')}` (`{rec.get('policy_action')}`)\n"
+                f"- **Decision reason:** `{rec.get('policy_reason')}`\n"
+                f"- **Selected donor:** `{rec.get('selected_donor', 'B')}` · **Early exit step:** `{rec.get('early_exit_step')}`\n"
+                f"- **Predicted advantage:** `{rec.get('controller_advantage', 0.0):+.4f}` · "
+                f"**Overhead:** `{rec.get('controller_overhead_ms', 0.0):.2f} ms`"
+            )
+            action_scores = rec.get("controller_action_scores", {})
+            if action_scores:
+                df_scores = pd.DataFrame(
+                    [
+                        {"Action": k, "Predicted Advantage": round(float(v), 4)}
+                        for k, v in sorted(action_scores.items(), key=lambda x: x[1], reverse=True)
+                    ]
+                )
+                st.dataframe(df_scores, hide_index=True)
+
+            state_feats = rec.get("controller_state_features", {})
+            if state_feats:
+                with st.expander("Observed label-free state features (z_t)"):
+                    st.json(state_feats)
+
+        st.metric("Curvature residual ||C_t||_F", f"{rec.get('curvature_frob', 0.0):.4f}")
+        st.metric("Relative nonlinearity ||C_t|| / ||V_A||", f"{rec.get('curvature_relative', 0.0):.4f}")
+        st.metric(
+            "Gold answer log-prob (delta vs S0)",
+            f"{rec.get('gold_logprob', 0.0):.3f}",
+            f"{rec.get('delta_gold_logprob', 0.0):+.3f}",
+        )
+        st.metric(
+            "Recurrent calls / wall time",
+            f"{rec.get('recurrent_block_calls', 0)} calls",
+            f"{rec.get('wall_time_ms', 0.0):.0f} ms",
+        )
 
         st.markdown(
             f"- **Parameters:** `alpha={rec.get('alpha')}`, `beta={rec.get('beta')}`, `visit_step={rec.get('visit_step')}`\n"
-            f"- **Scope:** `{rec.get('token_scope')}` · **Trust Clipping:** `{rec.get('clipped')}`\n"
-            f"- **Post-Step RMS:** `{rec.get('post_rms_a', 0.0):.4f}` · **Finite:** `{rec.get('post_finite')}`\n"
-            f"- **Policy Action:** `{rec.get('policy_action')}` (`{rec.get('policy_reason')}`)"
+            f"- **Scope:** `{rec.get('token_scope')}` · **Subspace:** `{rec.get('subspace_fraction', 1.0)}` · "
+            f"**Gate modulated:** `{rec.get('gate_modulated', False)}`\n"
+            f"- **Trust clipping:** `{rec.get('clipped')}` · **Post-step RMS:** `{rec.get('post_rms_a', 0.0):.4f}` · "
+            f"**Finite:** `{rec.get('post_finite')}`"
         )
 
     st.divider()
-    st.subheader("4. Run-Wide Rescue, Degradation, and Matched-Compute Comparison")
+    st.subheader("4. Run-wide rescue, degradation, and matched-compute comparison")
     methods_summary = summary.get("rescue_matrix", {}).get("methods", {})
     if methods_summary:
         table_rows = []
@@ -222,11 +262,13 @@ def main() -> None:
                     "Rescue Rate": f"{m_data['rescue_rate']:.3f} ({m_data['rescued_count']}/{m_data['base_wrong_count']})",
                     "Degradation Rate": f"{m_data['degradation_rate']:.3f} ({m_data['degraded_count']}/{m_data['base_correct_count']})",
                     "Oracle Rescue": f"{m_data['oracle_rescue_rate']:.3f} ({m_data['oracle_rescued_count']}/{m_data['oracle_eligible_count']})",
+                    "Excursion Rate": round(m_data.get("excursion_rate", 0.0), 3),
+                    "Early Exit Rate": round(m_data.get("early_exit_rate", 0.0), 3),
                     "Mean ||C_t||_F": round(m_data["mean_curvature_frob"], 4),
                     "Mean Calls": round(m_data["mean_recurrent_calls"], 2),
                 }
             )
-        st.dataframe(pd.DataFrame(table_rows), use_container_width=True)
+        st.dataframe(pd.DataFrame(table_rows), hide_index=True)
 
         pareto_pts = summary.get("pareto_frontier", {}).get("points", [])
         if pareto_pts:
@@ -237,14 +279,14 @@ def main() -> None:
                 y="accuracy",
                 color="is_oracle",
                 text="method",
-                title="Accuracy vs Recurrent Block Evaluations (Compute Frontier)",
+                title="Accuracy vs recurrent block evaluations (compute frontier)",
                 labels={
                     "mean_recurrent_calls": "Mean Recurrent Core Calls per Problem",
                     "accuracy": "Task Accuracy (Formal Validator)",
                 },
             )
             fig_par.update_traces(textposition="top center", marker=dict(size=11))
-            st.plotly_chart(fig_par, use_container_width=True)
+            st.plotly_chart(fig_par, width="stretch")
 
 
 if __name__ == "__main__":

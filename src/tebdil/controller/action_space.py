@@ -66,8 +66,8 @@ def make_excursion_action(
 def build_discrete_action_space(
     num_donors: int = 1,
     alpha_beta_grid: Sequence[Tuple[float, float]] = (
-        (0.35, 0.50),
         (0.65, 0.65),
+        (0.35, 0.50),
         (0.85, 0.85),
     ),
     token_scopes: Sequence[str] = ("full",),

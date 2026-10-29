@@ -278,7 +278,7 @@ def featurize_state_action(
         is_exc * rel_dist,
         is_exc * alpha,
         is_exc * beta,
-        is_exc * alpha * beta * rel_dist,
+        is_exc * max(0.0, 1.0 - 1.5 * abs(alpha - 0.65) - 1.5 * abs(beta - 0.65)),
         is_exc * is_last_tok,
         is_exc * prev_exc,
     ]

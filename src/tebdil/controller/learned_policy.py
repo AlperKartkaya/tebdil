@@ -62,7 +62,7 @@ class LearnedControllerCheckpoint:
     mlp_w2: List[float] = field(default_factory=list)
     mlp_b2: float = 0.0
     alpha_beta_grid: List[List[float]] = field(
-        default_factory=lambda: [[0.35, 0.50], [0.65, 0.65], [0.85, 0.85]]
+        default_factory=lambda: [[0.65, 0.65], [0.35, 0.50], [0.85, 0.85]]
     )
     token_scopes: List[str] = field(default_factory=lambda: ["full"])
     allow_exit: bool = True
@@ -350,12 +350,51 @@ class SelfDirectedController:
         if self.checkpoint is None:
             raise ValueError(f"SelfDirectedController in mode '{self.mode}' requires a loaded checkpoint.")
 
+        cont_action = make_continue_action()
+        cont_vec = featurize_state_action(sf, cont_action)
+        base_q = self.checkpoint.predict_raw_score(cont_vec)
+
+        if self.mode == "donor_learned":
+            if not valid_donor_indices or prev_excursions >= self.max_excursions or budget_remaining < 1:
+                return _make_decision(cont_action, "no_valid_donors")
+            uncertain_a = (sf.margin_a <= self.e2_max_margin_trigger) and (
+                sf.entropy_a >= self.e2_min_entropy_trigger
+            )
+            if not uncertain_a:
+                return _make_decision(cont_action, "donor_learned_confident_no_visit")
+            d_scores: Dict[str, float] = {}
+            best_d_act: Optional[ControllerAction] = None
+            best_d_score = -1e9
+            for d_idx in valid_donor_indices:
+                cand_d = make_excursion_action(
+                    donor_index=d_idx,
+                    alpha=base_alpha,
+                    beta=base_beta,
+                    token_scope=base_scope,
+                    max_relative_norm=max_relative_norm,
+                )
+                s_val = self.checkpoint.predict_raw_score(featurize_state_action(sf, cand_d)) - base_q
+                d_scores[cand_d.action_id] = s_val
+                if s_val > best_d_score:
+                    best_d_score = s_val
+                    best_d_act = cand_d
+            assert best_d_act is not None
+            return _make_decision(
+                best_d_act,
+                reason=f"selected_donor_learned_d{best_d_act.donor_index}",
+                adv=best_d_score,
+                scores=d_scores,
+            )
+
         ab_grid = [tuple(pair) for pair in self.checkpoint.alpha_beta_grid]
         scopes = list(self.checkpoint.token_scopes) if self.checkpoint.token_scopes else [base_scope]
         allow_exit_flag = (
             self.allow_exit
             and self.checkpoint.allow_exit
-            and (self.mode != "donor_learned")
+            and (sf.margin_a >= 0.72)
+        )
+        allow_exc_flag = (sf.margin_a <= self.e2_max_margin_trigger) and (
+            sf.entropy_a >= self.e2_min_entropy_trigger
         )
 
         candidate_actions = build_discrete_action_space(
@@ -365,10 +404,6 @@ class SelfDirectedController:
             max_relative_norm=max_relative_norm,
             allow_exit=allow_exit_flag,
         )
-
-        cont_action = make_continue_action()
-        cont_vec = featurize_state_action(sf, cont_action)
-        base_q = self.checkpoint.predict_raw_score(cont_vec)
 
         scores: Dict[str, float] = {"CONTINUE": 0.0}
         best_action: ControllerAction = cont_action
@@ -391,7 +426,8 @@ class SelfDirectedController:
                     best_action = cand
             elif cand.action_type == "EXCURSION":
                 if (
-                    cand.donor_index not in valid_donor_indices
+                    not allow_exc_flag
+                    or cand.donor_index not in valid_donor_indices
                     or prev_excursions >= max_exc
                     or budget_remaining < 1
                 ):

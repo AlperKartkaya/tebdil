@@ -69,10 +69,14 @@ def compute_action_utility(
     logprob_weight: float = 0.30,
     degradation_penalty: float = 0.50,
     ref_calls: float = 7.0,
+    margin_a: float = 0.50,
+    entropy_a: float = 1.50,
+    alpha: float = 0.65,
 ) -> Tuple[float, float, float, float]:
     """Compute (task_reward, compute_cost_norm, utility, advantage_vs_continue).
 
-    Uses verifiable task accuracy, gold log-probability change, and exact recurrent call cost.
+    Uses verifiable task accuracy, gold log-probability change, state convergence/uncertainty,
+    and exact recurrent call cost.
     """
     acc_val = 1.0 if is_correct else 0.0
     cont_acc = 1.0 if continue_is_correct else 0.0
@@ -81,10 +85,27 @@ def compute_action_utility(
 
     # Penalize any degradation where CONTINUE was right and intervention became wrong
     deg_pen = degradation_penalty if (continue_is_correct and not is_correct) else 0.0
-    # Penalize early EXIT if logprob drops noticeably on uncertain states even when argmax ties
-    exit_lp_pen = 0.20 * abs(min(0.0, delta_lp)) if action_type == "EXIT" else 0.0
 
-    task_reward = acc_val + logprob_weight * shaped_lp - deg_pen - exit_lp_pen
+    state_shaping = 0.0
+    if action_type == "EXIT":
+        if margin_a < 0.72:
+            exit_lp_pen = 0.20 * abs(min(0.0, delta_lp))
+            state_shaping -= 0.45 * (0.72 - margin_a) + exit_lp_pen
+        else:
+            # Converged top-1 token at step 2: do not penalize step-2 vs step-4 logit sharpening
+            if is_correct == continue_is_correct:
+                shaped_lp = max(0.0, shaped_lp)
+            state_shaping += 0.12 * min(2.0, margin_a)
+    elif action_type == "EXCURSION":
+        if margin_a > 0.70 or entropy_a < 1.20:
+            state_shaping -= 0.25
+        else:
+            step_pref = max(0.0, 1.0 - 2.5 * abs(alpha - 0.65))
+            state_shaping += 0.18 * step_pref
+            if (not continue_is_correct) and is_correct:
+                state_shaping += 0.35
+
+    task_reward = acc_val + logprob_weight * shaped_lp - deg_pen + state_shaping
     cont_task_reward = cont_acc
 
     cost_norm = float(recurrent_calls) / max(1.0, ref_calls)
@@ -106,12 +127,22 @@ def _decode_continuation_from_step0_logits(
     recurrent_steps: int,
     max_output_tokens: int = 2,
     early_exit_step: Optional[int] = None,
-) -> Tuple[str, int]:
+    excursion_config: Optional[ExcursionConfig] = None,
+    donor_index: int = 0,
+    fork_after_step: int = 1,
+    branch_count: int = 2,
+    perturbation_method: str = "normalized_gaussian",
+    perturbation_relative_norm: float = 0.25,
+    seed: int = 42,
+    gold_token_ids: Optional[Sequence[int]] = None,
+) -> Tuple[str, int, float]:
     """Decode continuation tokens starting from step0_logits and account for all recurrent calls."""
     device = getattr(adapter, "device", torch.device("cpu"))
     tok_0 = int(step0_logits[:, -1, :].argmax(dim=-1).item())
     generated_tokens = [tok_0]
     total_calls = int(step0_calls)
+    g_ids = list(gold_token_ids) if gold_token_ids else [tok_0]
+    lp_list = [compute_token_logprob(step0_logits, g_ids[0])]
 
     first_decoded = tokenizer.decode([tok_0])
     needs_more = (
@@ -125,15 +156,64 @@ def _decode_continuation_from_step0_logits(
             [prompt_ids, torch.tensor([[tok_0]], dtype=torch.long, device=device)],
             dim=1,
         )
-        steps_to_run = early_exit_step if early_exit_step is not None else recurrent_steps
-        steps_to_run = max(1, min(steps_to_run, recurrent_steps))
-        for _ in range(1, max_output_tokens):
-            c_before = adapter.recurrent_block_calls
-            st = adapter.initialize(cur_ids)
-            for _ in range(steps_to_run):
-                st = adapter.transition(st)
-            logits_k = adapter.readout_logits(st)
-            total_calls += adapter.recurrent_block_calls - c_before
+        actual_fork = max(0, min(fork_after_step, recurrent_steps - 1))
+        for tok_step in range(1, max_output_tokens):
+            root_k = adapter.initialize(cur_ids)
+            shared_k = root_k.clone(new_branch_id="A")
+            for _ in range(actual_fork):
+                shared_k = adapter.transition(shared_k)
+
+            branches_k, _ = fork_branches(
+                base_state=shared_k,
+                count=branch_count,
+                perturbation_method=perturbation_method,
+                relative_norm=perturbation_relative_norm,
+                seed=seed + tok_step * 131,
+                token_scope="full",
+            )
+            visit_step = (
+                excursion_config.visit_step
+                if excursion_config is not None
+                else (early_exit_step if early_exit_step is not None else 2)
+            )
+            steps_before = max(0, visit_step - actual_fork)
+            for _ in range(steps_before):
+                branches_k = [adapter.transition(b) for b in branches_k]
+
+            st_a_k = branches_k[0]
+            logits_visit_k = adapter.readout_logits(st_a_k)
+            ent_k, mar_k = compute_last_token_uncertainty(logits_visit_k)
+
+            if early_exit_step is not None and mar_k >= 0.72:
+                logits_k = logits_visit_k
+                total_calls += actual_fork + steps_before * branch_count
+            elif (
+                excursion_config is not None
+                and mar_k <= 0.70
+                and ent_k >= 1.20
+                and len(branches_k) > 1
+            ):
+                d_idx = min(max(0, donor_index), len(branches_k) - 2)
+                next_a_k, _, _ = execute_excursion_step(
+                    adapter=adapter,
+                    state_a=st_a_k,
+                    state_b=branches_k[1 + d_idx],
+                    config=excursion_config,
+                )
+                rem_k = max(0, recurrent_steps - visit_step - 1)
+                for _ in range(rem_k):
+                    next_a_k = adapter.transition(next_a_k)
+                logits_k = adapter.readout_logits(next_a_k)
+                total_calls += actual_fork + (recurrent_steps - actual_fork) * branch_count + 1
+            else:
+                st_fin_k = st_a_k
+                for _ in range(max(0, recurrent_steps - visit_step)):
+                    st_fin_k = adapter.transition(st_fin_k)
+                logits_k = adapter.readout_logits(st_fin_k)
+                total_calls += actual_fork + (recurrent_steps - actual_fork) * branch_count
+
+            if tok_step < len(g_ids):
+                lp_list.append(compute_token_logprob(logits_k, g_ids[tok_step]))
             tok_k = int(logits_k[:, -1, :].argmax(dim=-1).item())
             generated_tokens.append(tok_k)
             if "\n" in tokenizer.decode(generated_tokens):
@@ -144,7 +224,8 @@ def _decode_continuation_from_step0_logits(
             )
 
     decoded_text = tokenizer.decode(generated_tokens).strip()
-    return decoded_text, total_calls
+    mean_lp = float(sum(lp_list) / len(lp_list))
+    return decoded_text, total_calls, mean_lp
 
 
 def evaluate_counterfactual_state(
@@ -159,8 +240,8 @@ def evaluate_counterfactual_state(
     perturbation_method: str = "normalized_gaussian",
     perturbation_relative_norm: float = 0.25,
     alpha_beta_grid: Sequence[Tuple[float, float]] = (
-        (0.35, 0.50),
         (0.65, 0.65),
+        (0.35, 0.50),
         (0.85, 0.85),
     ),
     token_scopes: Sequence[str] = ("full",),
@@ -232,10 +313,8 @@ def evaluate_counterfactual_state(
     for _ in range(rem_steps):
         st_cont = adapter.transition(st_cont)
     cont_logits = adapter.readout_logits(st_cont)
-    cont_lp = compute_token_logprob(cont_logits, gold_token_ids[0])
-    # In 2-branch execution without early exit, CONTINUE uses calls_to_reach_visit + rem_steps * len(branches)
     cont_step0_calls = calls_to_reach_visit + rem_steps * len(branches)
-    cont_text, cont_total_calls = _decode_continuation_from_step0_logits(
+    cont_text, cont_total_calls, cont_lp = _decode_continuation_from_step0_logits(
         adapter=adapter,
         tokenizer=tokenizer,
         problem=problem,
@@ -244,6 +323,12 @@ def evaluate_counterfactual_state(
         step0_calls=cont_step0_calls,
         recurrent_steps=recurrent_steps,
         max_output_tokens=max_output_tokens,
+        fork_after_step=fork_after_step,
+        branch_count=branch_count,
+        perturbation_method=perturbation_method,
+        perturbation_relative_norm=perturbation_relative_norm,
+        seed=seed,
+        gold_token_ids=gold_token_ids,
     )
     cont_val = validate_problem_response(problem, cont_text)
 
@@ -262,6 +347,8 @@ def evaluate_counterfactual_state(
                 action_type="CONTINUE",
                 compute_penalty=compute_penalty,
                 logprob_weight=logprob_weight,
+                margin_a=features.margin_a,
+                entropy_a=features.entropy_a,
             )
             action_outcomes[act.action_id] = ActionOutcomeRecord(
                 action_id=act.action_id,
@@ -285,9 +372,8 @@ def evaluate_counterfactual_state(
             )
         elif act.action_type == "EXIT":
             exit_logits = adapter.readout_logits(state_a_at_visit)
-            exit_lp = compute_token_logprob(exit_logits, gold_token_ids[0])
             exit_step0_calls = calls_to_reach_visit
-            exit_text, exit_total_calls = _decode_continuation_from_step0_logits(
+            exit_text, exit_total_calls, exit_lp = _decode_continuation_from_step0_logits(
                 adapter=adapter,
                 tokenizer=tokenizer,
                 problem=problem,
@@ -297,6 +383,12 @@ def evaluate_counterfactual_state(
                 recurrent_steps=recurrent_steps,
                 max_output_tokens=max_output_tokens,
                 early_exit_step=visit_step,
+                fork_after_step=fork_after_step,
+                branch_count=branch_count,
+                perturbation_method=perturbation_method,
+                perturbation_relative_norm=perturbation_relative_norm,
+                seed=seed,
+                gold_token_ids=gold_token_ids,
             )
             exit_val = validate_problem_response(problem, exit_text)
             tr, cn, util, adv = compute_action_utility(
@@ -309,6 +401,8 @@ def evaluate_counterfactual_state(
                 action_type="EXIT",
                 compute_penalty=compute_penalty,
                 logprob_weight=logprob_weight,
+                margin_a=features.margin_a,
+                entropy_a=features.entropy_a,
             )
             action_outcomes[act.action_id] = ActionOutcomeRecord(
                 action_id=act.action_id,
@@ -349,9 +443,8 @@ def evaluate_counterfactual_state(
             for _ in range(max(0, rem_steps - 1)):
                 st_exc = adapter.transition(st_exc)
             exc_logits = adapter.readout_logits(st_exc)
-            exc_lp = compute_token_logprob(exc_logits, gold_token_ids[0])
             exc_step0_calls = cont_step0_calls + 1
-            exc_text, exc_total_calls = _decode_continuation_from_step0_logits(
+            exc_text, exc_total_calls, exc_lp = _decode_continuation_from_step0_logits(
                 adapter=adapter,
                 tokenizer=tokenizer,
                 problem=problem,
@@ -360,10 +453,15 @@ def evaluate_counterfactual_state(
                 step0_calls=exc_step0_calls,
                 recurrent_steps=recurrent_steps,
                 max_output_tokens=max_output_tokens,
+                excursion_config=exc_cfg,
+                donor_index=act.donor_index,
+                fork_after_step=fork_after_step,
+                branch_count=branch_count,
+                perturbation_method=perturbation_method,
+                perturbation_relative_norm=perturbation_relative_norm,
+                seed=seed,
+                gold_token_ids=gold_token_ids,
             )
-            # If continuation generated a 2nd token, E1/E3 excursion on 2nd token adds +1 call if visited
-            if exc_total_calls > exc_step0_calls:
-                exc_total_calls += 1
             exc_val = validate_problem_response(problem, exc_text)
             tr, cn, util, adv = compute_action_utility(
                 is_correct=exc_val.is_valid,
@@ -375,6 +473,9 @@ def evaluate_counterfactual_state(
                 action_type="EXCURSION",
                 compute_penalty=compute_penalty,
                 logprob_weight=logprob_weight,
+                margin_a=features.margin_a,
+                entropy_a=features.entropy_a,
+                alpha=act.alpha,
             )
             action_outcomes[act.action_id] = ActionOutcomeRecord(
                 action_id=act.action_id,
@@ -443,8 +544,8 @@ def collect_counterfactual_dataset(
     branch_count: int = 2,
     perturbation_relative_norm: float = 0.25,
     alpha_beta_grid: Sequence[Tuple[float, float]] = (
-        (0.35, 0.50),
         (0.65, 0.65),
+        (0.35, 0.50),
         (0.85, 0.85),
     ),
     token_scopes: Sequence[str] = ("full",),
@@ -569,27 +670,31 @@ def _calibrate_thresholds_on_records(
             if aid == "CONTINUE":
                 continue
             adv = ckpt.predict_raw_score(featurize_state_action(sf, a_data)) - cont_q
-            if a_data["action_type"] == "EXIT":
+            if a_data["action_type"] == "EXIT" and float(sf.get("margin_a", 0.0)) >= 0.72:
                 exit_raw_vals.append(adv)
-            elif a_data["action_type"] == "EXCURSION":
+            elif (
+                a_data["action_type"] == "EXCURSION"
+                and float(sf.get("margin_a", 1.0)) <= 0.70
+                and float(sf.get("entropy_a", 0.0)) >= 1.20
+            ):
                 exc_raw_vals.append(adv)
 
-    quantiles = [0.15, 0.30, 0.45, 0.55, 0.65, 0.75, 0.85]
+    quantiles = [0.10, 0.25, 0.40, 0.55, 0.70, 0.85]
     exit_cands = sorted(
         set(
-            [-0.01, 0.0, 0.01]
+            [-0.02, -0.01, 0.0, 0.01]
             + ([float(np.quantile(exit_raw_vals, q)) for q in quantiles] if exit_raw_vals else [])
         )
     )
     exc_cands = sorted(
         set(
-            [-0.01, 0.0, 0.01]
+            [-0.02, -0.01, 0.0, 0.01]
             + ([float(np.quantile(exc_raw_vals, q)) for q in quantiles] if exc_raw_vals else [])
         )
     )
 
     best_score = -1e9
-    best_pair = (0.01, 0.0)
+    best_pair = (0.0, 0.0)
     best_stats: Dict[str, Any] = {}
 
     for ex_th in exit_cands:
@@ -602,6 +707,11 @@ def _calibrate_thresholds_on_records(
                 sf = rec["state_features"]
                 acts = rec["actions"]
                 cont_q = ckpt.predict_raw_score(featurize_state_action(sf, acts["CONTINUE"]))
+                allow_exit_rec = float(sf.get("margin_a", 0.0)) >= 0.72
+                allow_exc_rec = (
+                    float(sf.get("margin_a", 1.0)) <= 0.70
+                    and float(sf.get("entropy_a", 0.0)) >= 1.20
+                )
 
                 chosen_id = "CONTINUE"
                 chosen_adj_adv = 0.0
@@ -610,12 +720,12 @@ def _calibrate_thresholds_on_records(
                         continue
                     q_val = ckpt.predict_raw_score(featurize_state_action(sf, a_data))
                     raw_adv = q_val - cont_q
-                    if a_data["action_type"] == "EXIT":
+                    if a_data["action_type"] == "EXIT" and allow_exit_rec:
                         adj = raw_adv - ex_th
                         if adj > chosen_adj_adv:
                             chosen_adj_adv = adj
                             chosen_id = aid
-                    elif a_data["action_type"] == "EXCURSION":
+                    elif a_data["action_type"] == "EXCURSION" and allow_exc_rec:
                         adj = raw_adv - exc_th
                         if adj > chosen_adj_adv:
                             chosen_adj_adv = adj
@@ -630,9 +740,9 @@ def _calibrate_thresholds_on_records(
             n = max(1, len(records))
             mean_u = total_u / n
             mean_acc = total_acc / n
-            active_types = sum(1 for v in counts.values() if v >= max(1, int(0.10 * n)))
-            diversity_bonus = 0.015 * active_types
-            score = mean_u + 0.25 * mean_acc + diversity_bonus
+            active_types = sum(1 for v in counts.values() if v >= max(1, int(0.08 * n)))
+            diversity_bonus = 0.02 * active_types
+            score = mean_u + 0.30 * mean_acc + diversity_bonus
             if score > best_score:
                 best_score = score
                 best_pair = (round(float(ex_th), 6), round(float(exc_th), 6))
@@ -656,8 +766,8 @@ def train_learned_controller(
     mlp_epochs: int = 300,
     mlp_lr: float = 0.015,
     alpha_beta_grid: Sequence[Tuple[float, float]] = (
-        (0.35, 0.50),
         (0.65, 0.65),
+        (0.35, 0.50),
         (0.85, 0.85),
     ),
     token_scopes: Sequence[str] = ("full",),
