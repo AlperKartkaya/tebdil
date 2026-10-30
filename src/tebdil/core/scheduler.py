@@ -39,7 +39,6 @@ from tebdil.core.state import (
     BranchState,
     ExcursionConfig,
     RecurrentAdapter,
-    check_tensor_finite,
     compute_rms,
     frobenius_norm,
 )
@@ -506,7 +505,8 @@ def run_scheduled_trajectory(
                     adapter, state_a, selected_donor, active_cfg
                 )
 
-            if record_pca and exc_telemetry is not None:
+            # E0 visits a seeded random direction, not the donor interpolation reconstructed here.
+            if record_pca and exc_telemetry is not None and method != "E0":
                 a_eff = float(exc_telemetry.effective_alpha)
                 v_vec = (
                     (1.0 - a_eff) * state_a.hidden[:, -1, :].detach().float()

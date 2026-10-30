@@ -11,6 +11,7 @@ import torch
 
 from tebdil.audit import (
     check_counterfactual_and_controller_integrity,
+    check_execution_ledgers,
     check_provenance_artifact,
     check_real_tensor_bundle,
     check_summary_trace_consistency,
@@ -24,9 +25,11 @@ from tebdil.controller.features import _compute_recent_update_cosine
 from tebdil.controller.learned_policy import LearnedControllerCheckpoint
 from tebdil.core.excursions import execute_excursion_step
 from tebdil.core.policies import AdaptivePolicyConfig
+from tebdil.core.scheduler import run_scheduled_trajectory
 from tebdil.core.state import ExcursionConfig, hash_tensor
 from tebdil.evaluation.bootstrap import cluster_paired_bootstrap_ci
 from tebdil.evaluation.runner import ByteLevelToyTokenizer, _decode_method_on_problem
+from tebdil.evaluation.runner import _attach_parallel_compute_provenance
 from tebdil.models.ouro_adapter import OuroRecurrentAdapter, PINNED_OURO_THINKING_REV
 from tebdil.tasks import generate_task_suite
 
@@ -284,6 +287,100 @@ def test_decode_labels_and_token_ledger_identity(method, branch_count):
         assert rec["controller_action_type"] == "EXCURSION"
 
 
+def test_parallel_reference_budget_is_not_verified_execution_cost():
+    selected = {
+        "problem_id": "p1",
+        "seed": 42,
+        "method": "S0",
+        "recurrent_block_calls": 4,
+        "token_ledger": [
+            {"token_index": 0, "token_id": 7, "decoded_token": "7", "recurrent_block_calls": 4}
+        ],
+    }
+    compute_source = {
+        "problem_id": "p1",
+        "seed": 42,
+        "method": "P1",
+        "recurrent_block_calls": 10,
+        "estimated_flops": 123.0,
+        "wall_time_ms": 45.0,
+        "token_ledger": [
+            {
+                "token_index": 0,
+                "token_id": 9,
+                "decoded_token": "9",
+                "recurrent_block_calls": 10,
+                "shared_calls": 1,
+                "primary_branch_calls": 3,
+                "donor_calls": 6,
+                "visit_calls": 0,
+                "continuation_calls": 0,
+            }
+        ],
+    }
+
+    derived = _attach_parallel_compute_provenance(
+        selected,
+        compute_source=compute_source,
+        method="P0",
+        selected_branch="A",
+        consulted_sources=(("A", selected), ("B", compute_source)),
+    )
+
+    assert derived["method"] == "P0"
+    assert derived["token_ledger"][0]["token_id"] == 7
+    assert "token_id" not in derived["reference_parallel_budget_ledger"][0]
+    assert derived["recurrent_block_calls"] == 10
+    assert derived["recurrent_block_calls_semantics"] == "idealized_reference_parallel_budget"
+    assert derived["executed_selection_compute_verified"] is False
+    assert [source["branch"] for source in derived["selection_provenance"]["consulted_sources"]] == ["A", "B"]
+    checked = check_execution_ledgers([derived])
+    assert checked["passed"] is False
+    assert checked["reference_budget_consistent"] == "1/1"
+    assert "not verified executed cost" in checked["ledger_errors"][0]
+
+    hidden_mismatch = copy.deepcopy(derived)
+    hidden_mismatch.pop("reference_parallel_budget_ledger")
+    assert check_execution_ledgers([hidden_mismatch])["passed"] is False
+
+    tampered = copy.deepcopy(derived)
+    tampered["reference_parallel_budget_ledger"][0]["recurrent_block_calls"] = 9
+    tampered_check = check_execution_ledgers([tampered])
+    assert tampered_check["passed"] is False
+    assert tampered_check["reference_budget_consistent"] == "0/1"
+
+
+def test_historical_parallel_token_ledger_mismatch_fails_closed():
+    historical = {
+        "problem_id": "p1",
+        "seed": 42,
+        "method": "P1",
+        "recurrent_block_calls": 10,
+        "token_ledger": [{"recurrent_block_calls": 4}],
+        "step_snapshots": [{"branch_rms": {"A": 1.0}}],
+    }
+    result = check_execution_ledgers([historical])
+    assert result["passed"] is False
+    assert "P1" in result["ledger_errors"][0]
+
+
+def test_e0_does_not_publish_invented_visit_projection():
+    adapter = OuroRecurrentAdapter.from_mini_config(total_ut_steps=4, seed=13)
+    result = run_scheduled_trajectory(
+        adapter=adapter,
+        input_ids=torch.tensor([[1, 2, 3, 4]]),
+        method="E0",
+        recurrent_steps=4,
+        fork_after_step=1,
+        branch_count=2,
+        perturbation_method="normalized_gaussian",
+        perturbation_relative_norm=0.25,
+        excursion_config=ExcursionConfig(visit_step=2, max_relative_norm=0.35),
+        record_pca=True,
+    )
+    assert "VISIT" not in result.pca_coords
+
+
 # ------------------------------------------------------- cluster bootstrap
 def test_cluster_bootstrap_resamples_problems_not_rows():
     clusters = ["p1"] * 3 + ["p2"] * 3
@@ -295,3 +392,12 @@ def test_cluster_bootstrap_resamples_problems_not_rows():
     assert lo in (0.0, 0.5) and hi in (0.5, 1.0)
     with pytest.raises(ValueError):
         cluster_paired_bootstrap_ci(clusters, base, meth[:-1])
+
+
+def test_historical_parallel_equal_sums_do_not_verify_selection_execution():
+    record = {"problem_id": "p1", "seed": 42, "method": "P0",
+              "recurrent_block_calls": 4, "token_ledger": [{"recurrent_block_calls": 4}]}
+    result = check_execution_ledgers([record])
+    assert result["token_ledger_consistent"] == "1/1"
+    assert result["passed"] is False
+    assert "lacks total execution provenance" in result["ledger_errors"][0]

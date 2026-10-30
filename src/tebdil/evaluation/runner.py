@@ -7,7 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 import time
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 import torch
 from torch import Tensor
 import yaml
@@ -19,7 +19,6 @@ from tebdil.core.state import ExcursionConfig, RecurrentAdapter
 from tebdil.evaluation.metrics import compare_logits, compute_token_logprob
 from tebdil.evaluation.trace import (
     create_run_manifest,
-    read_trace_records,
     save_run_manifest,
     write_trace_records,
 )
@@ -314,6 +313,81 @@ def _build_token_ledger_entry(
         "rejected_actions": dec_info["rejected_actions"],
         "step_snapshots": [asdict(s) for s in sched_res.step_snapshots],
     }
+
+
+_PARALLEL_COST_FIELDS = (
+    "token_index",
+    "recurrent_block_calls",
+    "shared_calls",
+    "primary_branch_calls",
+    "donor_calls",
+    "visit_calls",
+    "continuation_calls",
+)
+
+
+def _attach_parallel_compute_provenance(
+    selected_record: Dict[str, Any],
+    *,
+    compute_source: Dict[str, Any],
+    method: str,
+    selected_branch: str,
+    consulted_sources: Sequence[Tuple[str, Dict[str, Any]]],
+) -> Dict[str, Any]:
+    """Attach an idealized reference budget without calling it executed selection cost."""
+    source_ledger = compute_source.get("token_ledger", [])
+    compute_ledger = [
+        {key: entry.get(key, 0) for key in _PARALLEL_COST_FIELDS}
+        for entry in source_ledger
+    ]
+    charged_calls = sum(int(entry["recurrent_block_calls"]) for entry in compute_ledger)
+    source_calls = int(compute_source.get("recurrent_block_calls", 0))
+    if not compute_ledger or charged_calls != source_calls:
+        raise ValueError(
+            f"Parallel compute source ledger mismatch: {charged_calls} vs {source_calls}"
+        )
+
+    consulted = [
+        {
+            "source_id": f"{branch}:{record.get('method', 'unknown')}:{record.get('problem_id', 'unknown')}:{record.get('seed', 'na')}",
+            "branch": branch,
+            "method": str(record.get("method", "unknown")),
+            "problem_id": record.get("problem_id"),
+            "seed": record.get("seed"),
+            "recurrent_block_calls": int(record.get("recurrent_block_calls", 0)),
+        }
+        for branch, record in consulted_sources
+    ]
+    reference_source = next(
+        (source for source in consulted if source["branch"] == "B"),
+        None,
+    )
+    if reference_source is None:
+        raise ValueError("Parallel reference budget requires the independent B source")
+
+    output_source_method = str(selected_record.get("method", "unknown"))
+    result = dict(selected_record)
+    result.update(
+        {
+            "method": method,
+            "derived_parallel_selection": True,
+            "reference_parallel_budget_ledger": compute_ledger,
+            "reference_parallel_budget_source": reference_source,
+            "recurrent_block_calls_semantics": "idealized_reference_parallel_budget",
+            "executed_selection_compute_verified": False,
+            "selection_provenance": {
+                "selected_branch": selected_branch,
+                "output_source_method": output_source_method,
+                "consulted_sources": consulted,
+            },
+            "recurrent_block_calls": charged_calls,
+            "estimated_flops": compute_source.get("estimated_flops", 0.0),
+            "estimated_flops_semantics": "idealized_reference_parallel_budget",
+            "wall_time_ms": compute_source.get("wall_time_ms", 0.0),
+            "wall_time_ms_semantics": "reference_source_only_not_total_selection_execution",
+        }
+    )
+    return result
 
 
 def _decode_method_on_problem(
@@ -857,6 +931,9 @@ def run_experiment_from_config(
             any_donor_correct = donor_b_correct or donor_c_correct
             base_a_lp = float(s0_res["gold_logprob"])
             base_a_seq_lp = float(s0_res.get("sequence_gold_logprob", base_a_lp))
+            parallel_sources = [("A", s0_res), ("B", b_res)]
+            if c_res is not None:
+                parallel_sources.append(("C", c_res))
 
             for method in canonical_methods:
                 if method == "S0":
@@ -879,12 +956,14 @@ def run_experiment_from_config(
                     best_b_id, best_b_res, best_b_logits = max(
                         cand_branches, key=lambda item: float(item[1]["mean_sequence_margin"])
                     )
-                    chosen = dict(best_b_res)
-                    chosen["method"] = "P0"
+                    chosen = _attach_parallel_compute_provenance(
+                        best_b_res,
+                        compute_source=b_res,
+                        method="P0",
+                        selected_branch=best_b_id,
+                        consulted_sources=parallel_sources,
+                    )
                     chosen["selected_donor"] = best_b_id
-                    chosen["recurrent_block_calls"] = b_res["recurrent_block_calls"]
-                    chosen["estimated_flops"] = b_res["estimated_flops"]
-                    chosen["wall_time_ms"] = b_res["wall_time_ms"]
                     chosen["base_a_correct"] = base_a_correct
                     chosen["donor_b_correct"] = any_donor_correct
                     chosen["donor_b_answer"] = b_res["extracted_answer"]
@@ -908,12 +987,14 @@ def run_experiment_from_config(
                         best_b_id, best_b_res, best_b_logits = ("C", c_res, c_logits)
                     else:
                         best_b_id, best_b_res, best_b_logits = ("A", s0_res, s0_logits)
-                    chosen = dict(best_b_res)
-                    chosen["method"] = "P1"
+                    chosen = _attach_parallel_compute_provenance(
+                        best_b_res,
+                        compute_source=b_res,
+                        method="P1",
+                        selected_branch=best_b_id,
+                        consulted_sources=parallel_sources,
+                    )
                     chosen["selected_donor"] = best_b_id
-                    chosen["recurrent_block_calls"] = b_res["recurrent_block_calls"]
-                    chosen["estimated_flops"] = b_res["estimated_flops"]
-                    chosen["wall_time_ms"] = b_res["wall_time_ms"]
                     chosen["base_a_correct"] = base_a_correct
                     chosen["donor_b_correct"] = any_donor_correct
                     chosen["donor_b_answer"] = b_res["extracted_answer"]

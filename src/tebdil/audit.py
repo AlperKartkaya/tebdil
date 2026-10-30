@@ -197,7 +197,9 @@ def check_provenance_artifact(repo_root: Path) -> Dict[str, Any]:
         verified_files[fname] = actual_sha
 
     # Verify vendored model code hashes against snapshot
-    vendored_dir = repo_root / "src" / "tebdil" / "models" / "vendored_ouro"
+    vendored_dir = repo_root / "vendor" / "ouro_1_4b_thinking"
+    if not vendored_dir.exists():
+        vendored_dir = repo_root / "src" / "tebdil" / "models" / "vendored_ouro"
     for v_file in ("modeling_ouro.py", "configuration_ouro.py"):
         vp = vendored_dir / v_file
         sp = snap / v_file
@@ -521,6 +523,96 @@ def check_summary_trace_consistency(summary: Dict[str, Any], records: Sequence[D
     }
 
 
+def check_execution_ledgers(records: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Fail closed unless every recorded call count has matching execution provenance."""
+    valid_calls = 0
+    ledger_consistent = 0
+    reference_budget_consistent = 0
+    s0_misannotated = 0
+    ledger_errors: List[str] = []
+
+    for index, record in enumerate(records):
+        method = str(record.get("method", "unknown"))
+        record_id = f"{method}:{record.get('problem_id', index)}:{record.get('seed', 'na')}"
+        calls = int(record.get("recurrent_block_calls", 0))
+        if calls >= 2:
+            valid_calls += 1
+
+        if record.get("derived_parallel_selection"):
+            reference_ledger = record.get("reference_parallel_budget_ledger", [])
+            provenance = record.get("selection_provenance", {})
+            if method not in ("P0", "P1"):
+                ledger_errors.append(f"{record_id} derived parallel provenance on non-parallel method")
+            if not record.get("reference_parallel_budget_source") or not provenance.get("selected_branch"):
+                ledger_errors.append(f"{record_id} missing parallel selection provenance")
+            reference_calls = sum(
+                int(entry.get("recurrent_block_calls", 0)) for entry in reference_ledger
+            )
+            if reference_ledger and reference_calls == calls:
+                reference_budget_consistent += 1
+            else:
+                ledger_errors.append(
+                    f"{record_id} reference budget calls {reference_calls} != record calls {calls}"
+                )
+
+            if not record.get("executed_selection_compute_verified"):
+                ledger_errors.append(
+                    f"{record_id} idealized reference budget is not verified executed cost"
+                )
+                ledger = []
+            else:
+                ledger = record.get("selection_execution_ledger", [])
+                consulted_ids = {
+                    str(source.get("source_id"))
+                    for source in provenance.get("consulted_sources", [])
+                }
+                accounted_ids = {
+                    str(source_id)
+                    for source_id in record.get("executed_selection_source_ids", [])
+                }
+                if not consulted_ids or accounted_ids != consulted_ids:
+                    ledger_errors.append(
+                        f"{record_id} executed selection sources do not account for every consulted source"
+                    )
+        else:
+            ledger = record.get("token_ledger", [])
+            if method in ("P0", "P1"):
+                ledger_errors.append(
+                    f"{record_id} legacy parallel selection lacks total execution provenance"
+                )
+
+        if not ledger and not record.get("derived_parallel_selection"):
+            ledger_errors.append(f"{record_id} missing execution ledger")
+        elif ledger:
+            ledger_calls = sum(int(entry.get("recurrent_block_calls", 0)) for entry in ledger)
+            if ledger_calls == calls:
+                ledger_consistent += 1
+            else:
+                ledger_errors.append(f"{record_id} ledger calls {ledger_calls} != record calls {calls}")
+
+        if method == "S0" and record.get("controller_action_type") == "EXCURSION":
+            s0_misannotated += 1
+
+    passed = (
+        len(records) > 0
+        and valid_calls == len(records)
+        and ledger_consistent == len(records)
+        and s0_misannotated == 0
+        and not ledger_errors
+    )
+    return {
+        "passed": passed,
+        "status": "PASS" if passed else "FAIL",
+        "category": "artifact_consistency_check",
+        "valid_records": f"{valid_calls}/{len(records)}",
+        "token_ledger_consistent": f"{ledger_consistent}/{len(records)}",
+        "reference_budget_consistent": f"{reference_budget_consistent}/{len(records)}",
+        "s0_misannotated_count": s0_misannotated,
+        "ledger_error_count": len(ledger_errors),
+        "ledger_errors": ledger_errors,
+    }
+
+
 def audit_run(
     run_id: str,
     repo_root: Optional[Path] = None,
@@ -561,39 +653,12 @@ def audit_run(
     }
 
     # 3 & 4. Genuine recurrent execution & real hidden-state capture + token_ledger consistency
-    valid_calls = 0
     valid_snaps = 0
-    ledger_consistent = 0
-    s0_misannotated = 0
     for r in records:
-        rcalls = int(r.get("recurrent_block_calls", 0))
-        if rcalls >= 2:
-            valid_calls += 1
         snaps = r.get("step_snapshots", [])
         if snaps and all(s.get("branch_rms", {}).get("A", 0.0) > 0.0 for s in snaps):
             valid_snaps += 1
-        ledger = r.get("token_ledger", [])
-        if ledger:
-            sum_l = sum(int(t.get("recurrent_block_calls", 0)) for t in ledger)
-            if sum_l == rcalls:
-                ledger_consistent += 1
-        if r.get("method") == "S0" and r.get("controller_action_type") == "EXCURSION":
-            s0_misannotated += 1
-
-    c3_passed = (
-        len(records) > 0
-        and valid_calls == len(records)
-        and (ledger_consistent == len(records) if records and "token_ledger" in records[0] else True)
-        and s0_misannotated == 0
-    )
-    c3_exec = {
-        "passed": c3_passed,
-        "status": "PASS" if c3_passed else "FAIL",
-        "category": "artifact_consistency_check",
-        "valid_records": f"{valid_calls}/{len(records)}",
-        "token_ledger_consistent": f"{ledger_consistent}/{len(records)}",
-        "s0_misannotated_count": s0_misannotated,
-    }
+    c3_exec = check_execution_ledgers(records)
     c4_passed = len(records) > 0 and valid_snaps == len(records)
     c4_hidden = {
         "passed": c4_passed,
