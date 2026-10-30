@@ -4,5 +4,6 @@
   "path": "skills/webapp-testing",
   "license": "Apache-2.0",
   "retrieved": "2026-10-30",
-  "installation": "Copied inspected upstream tree; no remote scripts executed."
+  "installation": "Copied inspected upstream tree; no remote scripts executed.",
+  "local_changes": "Trailing whitespace trimmed in SKILL.md; instructions unchanged."
 }

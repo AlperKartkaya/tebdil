@@ -103,8 +103,16 @@
     $("journeyPosition").textContent = `${index + 1} of ${VIEWS.length}`;
     $("dataControls").hidden = index < 2;
     $("tokenControls").hidden = !["decision", "experiment"].includes(state.view) || !trace();
-    if (["decision", "experiment"].includes(state.view) && !rows.length) loadRun();
-    if (state.view === "evidence") renderEvidence();
+    const caseLabel = $("caseSelect").closest("label");
+    if (caseLabel instanceof HTMLElement) caseLabel.hidden = state.view === "evidence";
+    if (["decision", "experiment"].includes(state.view)) {
+      if (rows.length) { syncMethods(); renderRecording(); }
+      else loadRun();
+    }
+    if (state.view === "evidence") {
+      renderEvidence();
+      if (hasData && !rows.length) $("loadStatus").textContent = "Recorded summary · choose a method, or open its table row to inspect the underlying traces.";
+    }
     syncUrl();
   }
 
@@ -207,7 +215,7 @@
 
   function output(r) {
     if (!r) return "<p>Paired baseline unavailable.</p>";
-    return `<p class="output-answer">${esc(r.extracted_answer ?? "No valid answer")}</p><div class="output-meta"><span class="outcome ${r.is_correct ? "correct" : "incorrect"}">${r.is_correct ? "Correct" : "Incorrect"}</span><span>${esc(r.recurrent_block_calls)} calls${ledgerMatches(r) ? "" : " · ledger unverified"}</span><span>${num(r.wall_time_ms, 0)} ms recorded</span></div><p class="small muted" style="margin:14px 0 0">Decoded: ${esc(JSON.stringify(r.decoded_text))}</p>`;
+    return `<p class="output-answer">${esc(r.extracted_answer ?? "No valid answer")}</p><div class="output-meta"><span class="outcome ${r.is_correct ? "correct" : "incorrect"}">${r.is_correct ? "Correct" : "Incorrect"}</span><span>${esc(r.recurrent_block_calls)} calls${ledgerMatches(r) ? "" : " · ledger unverified"}</span><span>${num(r.wall_time_ms, 0)} ms ${["P0", "P1"].includes(r.method) ? "reference timing, not total" : "recorded"}</span></div><p class="small muted" style="margin:14px 0 0">Decoded: ${esc(JSON.stringify(r.decoded_text))}</p>`;
   }
 
   function mechanismCopy(method) {
@@ -304,6 +312,10 @@
   function renderEvidence() {
     if (!hasData) { $("evidenceConclusion").textContent = "Recording manifest unavailable. No metrics can be verified or displayed."; return; }
     const current = run(), method = availableMethod(current.methods), stats = current.methods[method];
+    if (state.view === "evidence") {
+      state.method = method;
+      options($("methodSelect"), Object.keys(current.methods).map((m) => [m, `${name(m)} · ${m}`]), method);
+    }
     $("evidenceConclusion").textContent = `${name(method)}: ${pct(stats.accuracy)} recorded accuracy vs ${pct(stats.baseline_accuracy)} for ordinary recurrence (${pp(stats.paired_accuracy_diff)} percentage points). ${stats.cluster_ci_95_low <= 0 && stats.cluster_ci_95_high >= 0 ? "The problem-cluster interval includes zero; a general accuracy gain is not established." : "This exploratory contrast is not corrected for multiple comparisons."}`;
     $("sampleNote").textContent = `${current.label} · split ${current.split} · ${current.num_problems} distinct problems × ${current.seeds.length} seed(s) · ${stats.num_instances} paired evaluations per method · ${current.record_count} method traces. Seeds are repeated measurements, not independent problems.`;
     $("integrityNote").textContent = current.ledger_mismatches ? `${current.ledger_mismatches} execution ledgers are missing, inconsistent, or reference-only. Affected methods show “Unverified” costs below. Output accuracy is descriptive; old audit pass flags are not current verification.` : "Export hashes and paired keys are checkable. This recording is exploratory; no claim of strict compute matching or independent replication.";
@@ -356,7 +368,7 @@
     const mechanism = event.target.closest("[data-mechanism]");
     if (mechanism instanceof HTMLElement) { state.mechanism = mechanism.dataset.mechanism; renderMechanism(); }
     const method = event.target.closest("[data-result-method]");
-    if (method instanceof HTMLElement) { state.method = method.dataset.resultMethod; setView("experiment", true); if (rows.length) { syncMethods(); renderRecording(); } }
+    if (method instanceof HTMLElement) { state.method = method.dataset.resultMethod; setView("experiment", true); }
   });
   /** @type {HTMLElement} */ (document.querySelector(".journey")).addEventListener("keydown", (event) => {
     const index = VIEWS.indexOf(state.view);
@@ -369,9 +381,18 @@
   });
   $("previousView").addEventListener("click", () => setView(VIEWS[VIEWS.indexOf(state.view) - 1], true));
   $("nextView").addEventListener("click", () => setView(VIEWS[VIEWS.indexOf(state.view) + 1], true));
-  $("runSelect").addEventListener("change", () => { state.run = $("runSelect").value; state.problem = null; state.seed = null; state.token = 0; renderEvidence(); loadRun(); syncUrl(); });
+  $("runSelect").addEventListener("change", () => {
+    state.run = $("runSelect").value; state.problem = null; state.seed = null; state.token = 0;
+    ++loadVersion; rows = []; pairs = new Map();
+    options($("caseSelect"), [], "");
+    setView(state.view);
+  });
   $("caseSelect").addEventListener("change", () => { [state.problem, state.seed] = $("caseSelect").value.split("|"); state.token = 0; syncMethods(); renderRecording(); });
-  $("methodSelect").addEventListener("change", () => { state.method = $("methodSelect").value; syncMethods(); renderRecording(); });
+  $("methodSelect").addEventListener("change", () => {
+    state.method = $("methodSelect").value;
+    if (state.view === "evidence") { renderEvidence(); syncUrl(); }
+    else { syncMethods(); renderRecording(); }
+  });
   $("tokenSelect").addEventListener("change", () => { state.token = Number($("tokenSelect").value); syncSteps(); renderRecording(); });
   $("stepSelect").addEventListener("change", () => { state.step = Number($("stepSelect").value); renderRecording(); });
   $("retryLoad").addEventListener("click", loadRun);

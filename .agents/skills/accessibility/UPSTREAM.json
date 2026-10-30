@@ -4,5 +4,6 @@
   "path": "skills/accessibility",
   "license": "MIT",
   "retrieved": "2026-10-30",
-  "installation": "Copied inspected upstream tree; no remote scripts executed."
+  "installation": "Copied inspected upstream tree; no remote scripts executed.",
+  "local_changes": "Trailing whitespace trimmed in SKILL.md; instructions unchanged."
 }

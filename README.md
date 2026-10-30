@@ -57,6 +57,7 @@ Rebuilding the export with `python scripts/build_landing_data.py` requires local
 - [Architecture](docs/architecture.md), [methods](docs/methods.md), [methodology](docs/methodology.md), [limitations](docs/limitations.md)
 - [Current findings](docs/findings.md), [final report](reports/final_report.md), [aggregated historical results](reports/final_results.json)
 - [Model provenance](site/static/evidence/model_provenance.json), [controller checkpoint](site/static/evidence/tebdil_mlp_v1.json), [split manifest](site/static/evidence/split_manifest.json)
+- [Release verification](reports/mvp_release_verification.md)
 - [References and installed skills](reports/references_and_skills.md), [design contract](DESIGN.md)
 - Local advanced inspection: `.venv/bin/streamlit run ui/app.py` (requires local raw results; not the public Pages application).
 

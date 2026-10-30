@@ -47,7 +47,7 @@ Hidden files/directories are excluded by XERJ. `.agents/`, `.github/` and tool/r
 
 ## Five installed skills
 
-The source trees and instructions were inspected before copying them into `.agents/skills/`. Each installed directory retains its upstream license and an `UPSTREAM.json` with repository, full commit, path and retrieval date. No remote installer was executed. Existing skills were not overwritten.
+The source trees and instructions were inspected before copying them into `.agents/skills/`. Each installed directory retains its upstream license and an `UPSTREAM.json` with repository, full commit, path and retrieval date. No remote installer was executed. Existing skills were not overwritten. Two installed instruction files have trailing whitespace normalized; their `UPSTREAM.json` records this non-semantic local change.
 
 | Skill | Source and version | Scope and applied guidance |
 | --- | --- | --- |
