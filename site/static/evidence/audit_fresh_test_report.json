@@ -1,0 +1,277 @@
+{
+  "run_id": "phase7_8_fresh_test",
+  "all_passed": true,
+  "unit_checks_passed": true,
+  "artifact_consistency_passed": true,
+  "real_model_replay_verified": true,
+  "num_records": 972,
+  "checks": {
+    "1_checkpoint_provenance": {
+      "passed": true,
+      "status": "PASS",
+      "category": "artifact_consistency_check",
+      "model_id": "ByteDance/Ouro-1.4B-Thinking",
+      "model_revision": "3aaa2224253a92ca45cf2e3d427c360e1ef9c93d",
+      "verified_sha256": {
+        "model.safetensors": "6730581fd366f6d1689728c61637520228385cdfc17c0b24f19aa840b00565fb",
+        "config.json": "44e42ec2ed97f49f20f87985688b6e1be9dd61bbfe9f8a349daac192126e2c55",
+        "configuration_ouro.py": "950443e32929047aa08d02abad2e1888bc1914b3db988d3d675f70787f65dafb",
+        "modeling_ouro.py": "cb8c980b016ae8ae35b6c1193633b9b4496e89993e3a0e8c7853324f01904b30",
+        "tokenizer.json": "fcb808fe5e7642f5299be28aea07fc7f6d4f4364c3ac5e408e15a772cbc8fa8d",
+        "tokenizer_config.json": "e41eafc6bf7269d6f90f2531124949073a57965f5f0765238a744c1c528e2448",
+        "vocab.json": "7b9de3f47796abf8d00ab96be299fea0dc9afdf1827f34e7e0b9fb44593efe5c",
+        "merges.txt": "0b54e8aa4e53d5383e2e4bc635a56b43f9647f7b13832d5d9ecd8f82dac4f510",
+        "special_tokens_map.json": "688ac94df221b18a4d2d4579dfa3c4f0fd5ca3e394da46cd0a317fb5d57d4685"
+      },
+      "hash_mismatches": [],
+      "forward_equivalence_verified": true
+    },
+    "2_model_architecture": {
+      "passed": true,
+      "status": "PASS",
+      "category": "artifact_consistency_check",
+      "manifest_model_id": "ByteDance/Ouro-1.4B-Thinking",
+      "manifest_revision": "3aaa2224253a92ca45cf2e3d427c360e1ef9c93d",
+      "recurrent_steps": 4
+    },
+    "3_genuine_recurrent_execution": {
+      "passed": true,
+      "status": "PASS",
+      "category": "artifact_consistency_check",
+      "valid_records": "972/972",
+      "token_ledger_consistent": "972/972",
+      "s0_misannotated_count": 0
+    },
+    "4_real_hidden_state_capture": {
+      "passed": true,
+      "status": "PASS",
+      "category": "artifact_consistency_check",
+      "valid_snapshots": "972/972"
+    },
+    "5_shared_weights": {
+      "passed": true,
+      "status": "PASS",
+      "category": "unit_check"
+    },
+    "6_branch_isolation": {
+      "passed": true,
+      "status": "PASS",
+      "category": "unit_check"
+    },
+    "7_visited_state_computation": {
+      "passed": true,
+      "status": "PASS",
+      "category": "artifact_consistency_check",
+      "executed_excursions": 273,
+      "nonzero_curvature_count": 273,
+      "tensor_bundle_verification": {
+        "passed": true,
+        "status": "PASS",
+        "category": "artifact_consistency_check",
+        "visit_equation_max_abs_err": 0.014844,
+        "return_equation_max_abs_err": 0.015625,
+        "last_token_curvature_norm": 2.035721,
+        "errors": []
+      }
+    },
+    "8_noop_intervention_equivalence": {
+      "passed": true,
+      "status": "PASS",
+      "category": "unit_check"
+    },
+    "9_deterministic_replay": {
+      "passed": true,
+      "status": "PASS",
+      "category": "real_model_check",
+      "mode": "real_model_execution_replay",
+      "primary_problem_id": "arith_fresh_test_001",
+      "num_cases_replayed": 7,
+      "replayed_cases": [
+        {
+          "role": "baseline_S0",
+          "problem_id": "arith_fresh_test_001",
+          "seed": 42,
+          "method": "S0",
+          "action_type": "CONTINUE",
+          "is_correct": false,
+          "recorded_answer": "34",
+          "replayed_answer": "34",
+          "recorded_gold_logprob": -2.042101,
+          "replayed_gold_logprob": -2.042101,
+          "recorded_calls": 8,
+          "replayed_calls": 8,
+          "matched": true
+        },
+        {
+          "role": "forced_EXCURSION_E1",
+          "problem_id": "arith_fresh_test_001",
+          "seed": 42,
+          "method": "E1",
+          "action_type": "EXCURSION",
+          "is_correct": false,
+          "recorded_answer": "44",
+          "replayed_answer": "44",
+          "recorded_gold_logprob": -1.694295,
+          "replayed_gold_logprob": -1.694295,
+          "recorded_calls": 16,
+          "replayed_calls": 16,
+          "matched": true
+        },
+        {
+          "role": "forced_EXIT_2",
+          "problem_id": "arith_fresh_test_001",
+          "seed": 42,
+          "method": "EXIT_2",
+          "action_type": "EXIT",
+          "is_correct": false,
+          "recorded_answer": "44",
+          "replayed_answer": "44",
+          "recorded_gold_logprob": -1.96972,
+          "replayed_gold_logprob": -1.96972,
+          "recorded_calls": 6,
+          "replayed_calls": 6,
+          "matched": true
+        },
+        {
+          "role": "learned_E3_mlp_primary",
+          "problem_id": "arith_fresh_test_001",
+          "seed": 42,
+          "method": "E3_mlp",
+          "action_type": "EXCURSION",
+          "is_correct": false,
+          "recorded_answer": "44",
+          "replayed_answer": "44",
+          "recorded_gold_logprob": -1.694295,
+          "replayed_gold_logprob": -1.694295,
+          "recorded_calls": 22,
+          "replayed_calls": 22,
+          "matched": true
+        },
+        {
+          "role": "learned_E3_ridge_primary",
+          "problem_id": "arith_fresh_test_001",
+          "seed": 42,
+          "method": "E3_ridge",
+          "action_type": "EXCURSION",
+          "is_correct": false,
+          "recorded_answer": "44",
+          "replayed_answer": "44",
+          "recorded_gold_logprob": -1.694295,
+          "replayed_gold_logprob": -1.694295,
+          "recorded_calls": 22,
+          "replayed_calls": 22,
+          "matched": true
+        },
+        {
+          "role": "natural_learned_CONTINUE",
+          "problem_id": "logic_fresh_test_000",
+          "seed": 42,
+          "method": "E3_ridge",
+          "action_type": "CONTINUE",
+          "is_correct": true,
+          "recorded_answer": "1",
+          "replayed_answer": "1",
+          "recorded_gold_logprob": -0.345265,
+          "replayed_gold_logprob": -0.345265,
+          "recorded_calls": 10,
+          "replayed_calls": 10,
+          "matched": true
+        },
+        {
+          "role": "natural_learned_EXIT",
+          "problem_id": "arith_fresh_test_000",
+          "seed": 42,
+          "method": "E3_ridge",
+          "action_type": "EXIT",
+          "is_correct": false,
+          "recorded_answer": "10",
+          "replayed_answer": "10",
+          "recorded_gold_logprob": -0.275712,
+          "replayed_gold_logprob": -0.275712,
+          "recorded_calls": 8,
+          "replayed_calls": 8,
+          "matched": true
+        }
+      ]
+    },
+    "10_no_ground_truth_leakage": {
+      "passed": true,
+      "status": "PASS",
+      "category": "unit_check",
+      "modules_checked": [
+        "state.py",
+        "perturbations.py",
+        "branching.py",
+        "excursions.py",
+        "controls.py",
+        "policies.py",
+        "scheduler.py",
+        "action_space.py",
+        "features.py",
+        "learned_policy.py"
+      ],
+      "violations": []
+    },
+    "11_train_test_split_separation": {
+      "passed": true,
+      "status": "PASS",
+      "category": "artifact_consistency_check",
+      "train_templates": [
+        "arith_affine_cascade_v1",
+        "arith_linear_eq_v1",
+        "arith_mod_product_v1",
+        "graph_4node_diamond_v1",
+        "logic_2sat_unique_v1",
+        "logic_bool_xor_not_v1"
+      ],
+      "validation_templates": [
+        "arith_affine_cascade_v1",
+        "arith_linear_eq_v1",
+        "arith_mod_product_v1",
+        "graph_4node_diamond_v1",
+        "logic_2sat_unique_v1",
+        "logic_bool_xor_not_v1"
+      ],
+      "test_templates": [
+        "arith_diff_of_products_test",
+        "arith_linear_sub_test",
+        "arith_weighted_comb_test",
+        "graph_5node_test",
+        "logic_2sat_unique_test",
+        "logic_bool_or_xor_test"
+      ],
+      "fresh_test_templates": [
+        "arith_nested_diff_fresh",
+        "arith_quotient_offset_fresh",
+        "arith_two_var_system_fresh",
+        "graph_6node_layered_fresh",
+        "logic_2sat_horn_fresh",
+        "logic_mux_branch_fresh"
+      ],
+      "overlap_train_test": [],
+      "overlap_val_test": [],
+      "overlap_with_fresh_test": [],
+      "prompt_overlap_with_test": 0,
+      "prompt_overlap_with_fresh_test": 0,
+      "config_split_errors": [],
+      "counterfactual_and_controller_chain": {
+        "passed": true,
+        "status": "PASS",
+        "category": "artifact_consistency_check",
+        "checked_controllers": [
+          "tebdil_ridge_v1.json",
+          "tebdil_mlp_v1.json"
+        ],
+        "num_train_states": 48,
+        "num_val_states": 24,
+        "errors": []
+      }
+    },
+    "12_honest_compute_accounting": {
+      "passed": true,
+      "status": "PASS",
+      "category": "artifact_consistency_check",
+      "errors": []
+    }
+  }
+}

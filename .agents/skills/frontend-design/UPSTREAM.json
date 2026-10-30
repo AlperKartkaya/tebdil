@@ -1,0 +1,8 @@
+{
+  "source": "https://github.com/anthropics/skills",
+  "commit": "ca45fc496a3436251f191354091d557da31c15b5",
+  "path": "skills/frontend-design",
+  "license": "Apache-2.0",
+  "retrieved": "2026-10-30",
+  "installation": "Copied inspected upstream tree; no remote scripts executed."
+}

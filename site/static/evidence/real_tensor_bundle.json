@@ -1,0 +1,36 @@
+{
+  "model_id": "ByteDance/Ouro-1.4B-Thinking",
+  "model_revision": "3aaa2224253a92ca45cf2e3d427c360e1ef9c93d",
+  "prompt": "Compute the exact integer value of ((11 * 6) - 18) // 2 + 24. Reply with the final integer only.\nAnswer: ",
+  "seed": 42,
+  "visit_step": 2,
+  "alpha": 0.65,
+  "beta": 0.65,
+  "max_relative_norm": 0.35,
+  "clipped": false,
+  "curvature_frob": 13.360197067260742,
+  "returned_shift_vs_normal_frob": 34.28418731689453,
+  "pt_file_sha256": "3386f80496a235268bab8c7d817ee4317b10ae5f99b06598116db643f274791b",
+  "tensor_sha256": {
+    "h0_last": "5651b073e0e448d6ed10bdc5e3313c7ad39cbfee06632e5e2c353db5f1c87665",
+    "h1_last": "a919b24d151830dc524b65e872fbcf0136772bcb2496e2969274234d493ef381",
+    "h2_a_last": "9bcf6e927010bb31a517c90bc7f55f105b8d1b42eafcc378b22eb053eeeb7533",
+    "h2_b_last": "2732fb8c23d9c513c25e20c8b9d28fb5eaf91beedf820ea5bbb40d0e18872e72",
+    "h2_c_last": "6edd99d46e11b94401612fa7a8e25530af394ef7c79b0f130a0b9f9a240bb974",
+    "h2_visit_last": "fb2f3b9fbd72b3885859140242048957c297f708937de603d3f9257abf148f05",
+    "f_h2_a_last": "90fb2020d7ba8a77655582bdd32b6d375d3a88cafcf558c40d55e26d61fd20e7",
+    "f_h2_b_last": "e9a6ae228601def63f15c5d6c06c6c8a9f3577a764133089ac57797bbd09b9c9",
+    "f_h2_visit_last": "91104a3ce7845eebbd772cf2516ace6148574e6021fe84b363d1c634a3c811c1",
+    "h3_returned_a_last": "1e5c17fa512c1b302c75e1776af805aa3ab712b2b8d35254240cf85c7bb5a60e",
+    "h4_continued_a_last": "369204d8ea57b9cca3d6bb2853fa7f3bdb883739dc6fe76b8b7f2dab82b230c3",
+    "h4_normal_a_last": "31602137a7f2ec84dbcf438c292d756ec5bf12a07a42524ac1dea94f614ebb6d",
+    "excursion_logits_last": "ab6ce600afe8b11032f9fc7b65a661532d97565def211cbe589217d395d520b8",
+    "continue_logits_last": "1451e37a36d9f5be687be227fe6863e1f8796d6d225841c708e0b390e436a850",
+    "exit_step2_logits_last": "34e6f90992d55f8195b440102f51834ff5abd2917fa72c93fc0cf3f628f7e669"
+  },
+  "decoded_top1": {
+    "CONTINUE": "3",
+    "EXIT_step2": "3",
+    "EXCURSION_d0": "3"
+  }
+}

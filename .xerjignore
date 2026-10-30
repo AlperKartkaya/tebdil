@@ -1,0 +1,7 @@
+!results/
+!results/**
+!artifacts/
+!artifacts/**
+artifacts/quarantined_exploratory_20261029/
+*.pt
+site/static/tebdil_data.js

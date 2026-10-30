@@ -1,9 +1,9 @@
 # TEBDIL Final Scientific Report
 
-**Title:** Self-Directed Cooperative Latent Excursions for Recurrent Reasoning in Looped Language Models  
-**Date:** 2026-10-28  
-**Model Backbone:** `ByteDance/Ouro-1.4B-Thinking` (`rev: 3aaa2224253a92ca45cf2e3d427c360e1ef9c93d`)  
-**Total Executed Trajectories:** 1,408 verified runs across 7 experimental runs (`results/` & [`reports/final_results.json`](file:///Users/alperkartkaya/Documents/tebdil/reports/final_results.json))
+**Title:** Self-Directed Cooperative Latent Excursions for Recurrent Reasoning in Looped Language Models
+**Date:** 2026-10-30
+**Model Backbone:** `ByteDance/Ouro-1.4B-Thinking` (`rev: 3aaa2224253a92ca45cf2e3d427c360e1ef9c93d`)
+**Recorded scope:** 2,866 method/problem/seed trace records across eight experiment runs; not 2,866 independent problems. Each controller evaluation has 18 problems × 3 seeds.
 
 ---
 
@@ -18,13 +18,13 @@ Looped Language Models (LoopLMs) such as `ByteDance/Ouro-1.4B-Thinking` refine t
 
 ## 2. Novelty Scope and Literature Positioning
 
-Prior 2025–2026 studies established looped recurrent pretraining (Ouro), parallel latent trajectory sampling with reward selection (ACL 2026), learned multi-agent latent links (RecursiveMAS, Interlat), and single-trajectory recurrent stabilization (STARS). TEBDIL specifically isolates and tests **intra-model excursion-and-return update transport** (`E1`/`E2`) and **learned inference-time meta-control** (`E3_ridge`, `E3_mlp`) against linear update mixing (`M1`), direct state mixing (`M0`), fixed early exit (`EXIT_2`), and random control (`RAND_CTRL`), explicitly quantifying the **nonlinear curvature residual** $C_t = V_t^{\mathrm{visit}} - [(1-\alpha_{\mathrm{eff}})V_t^A + \alpha_{\mathrm{eff}}V_t^B]$. See [`literature_matrix.md`](file:///Users/alperkartkaya/Documents/tebdil/reports/literature_matrix.md), [`docs/methodology.md`](file:///Users/alperkartkaya/Documents/tebdil/docs/methodology.md), and [`docs/findings.md`](file:///Users/alperkartkaya/Documents/tebdil/docs/findings.md).
+The [literature matrix](literature_matrix.md) records the project’s prior-work positioning, not an independently established novelty claim. TEBDIL specifically isolates and tests **intra-model excursion-and-return update transport** (`E1`/`E2`) and **learned inference-time meta-control** (`E3_ridge`, `E3_mlp`) against linear update mixing (`M1`), direct state mixing (`M0`), fixed early exit (`EXIT_2`), and random control (`RAND_CTRL`), explicitly quantifying the **nonlinear curvature residual** $C_t = V_t^{\mathrm{visit}} - [(1-\alpha_{\mathrm{eff}})V_t^A + \alpha_{\mathrm{eff}}V_t^B]$. See [`literature_matrix.md`](literature_matrix.md), [`docs/methodology.md`](../docs/methodology.md), and [`docs/findings.md`](../docs/findings.md).
 
 ---
 
 ## 3. Mathematical Operator, Meta-Controller, and Compute Cost
 
-At recurrent step $t = t_{\mathrm{visit}}$ (`visit_step = 2` after forking at $t_{\mathrm{fork}} = 1$):
+At recurrent step $t = t_{\mathrm{visit}}$ (`visit_step \in \{2, 3\}` after forking at $t_{\mathrm{fork}} = 1$):
 1. **Visited Neighborhood:**
    $$H_t^{\mathrm{visit}} = H_t^A + \alpha_{\mathrm{eff}} (H_t^{(d)} - H_t^A) \odot M_{\mathrm{scope}}$$
    bounded by relative Frobenius norm trust region $\rho_{\max} = 0.35$.
@@ -36,40 +36,78 @@ At recurrent step $t = t_{\mathrm{visit}}$ (`visit_step = 2` after forking at $t
 4. **Learned Inference-Time Controller $\pi_\phi(z_t)$:**
    Observes label-free state features $z_t \in \mathbb{R}^{29}$ (recipient entropy $H(p_t^A)$, top-1/top-2 margin $m_t^A$, step-to-step velocity cosine, native exit gate $g_t^A$, and donor compatibility $\|H_t^{(d)} - H_t^A\|_F / \|H_t^A\|_F$, $\Delta m_{t, d}$, $\mathrm{JSD}(p_t^A \| p_t^{(d)})$) and predicts relative counterfactual advantage $\hat{A}_\phi(z_t, a)$ over $\mathcal{A} = \{\text{CONTINUE}, \text{EXIT}, \text{EXCURSION}(d, \alpha, \beta)\}$.
 
+The return/decomposition above describes the unprojected full-scope operator. Token masks, coordinate projections and clipping require the implemented correction formula; the recorded full curvature norm is not the applied correction norm. Gated E3 variants combine a learned scorer with hand-written feasibility gates; controller scores are not calibrated probabilities.
+
 ---
 
 ## 4. Ouro Integration, Provenance, and Exact Equivalence Verification
 
-- Audited and pinned `ByteDance/Ouro-1.4B-Thinking` (`3aaa2224253a92ca45cf2e3d427c360e1ef9c93d`, `model.safetensors` SHA-256 `6730581fd366f6d1689728c61637520228385cdfc17c0b24f19aa840b00565fb` in [`model_provenance.json`](file:///Users/alperkartkaya/Documents/tebdil/artifacts/evidence/model_provenance.json)).
-- Stepwise unrolling via `OuroRecurrentAdapter` (`use_cache=False`) achieved **`0.0` maximum absolute logit difference** (`1.0` top-5 overlap, `0.0` JSD) against native `OuroForCausalLM.forward` across all validation checks ([`phase0_compatibility_report.md`](file:///Users/alperkartkaya/Documents/tebdil/reports/phase0_compatibility_report.md)).
-- All 12 research integrity and live-replay checks pass (`all_passed: true` in [`audit_phase7_8_report.json`](file:///Users/alperkartkaya/Documents/tebdil/artifacts/evidence/audit_phase7_8_report.json)).
+- Audited and pinned `ByteDance/Ouro-1.4B-Thinking` (`3aaa2224253a92ca45cf2e3d427c360e1ef9c93d`, `model.safetensors` SHA-256 `6730581fd366f6d1689728c61637520228385cdfc17c0b24f19aa840b00565fb` in [`model_provenance.json`](../site/static/evidence/model_provenance.json)).
+- Stepwise unrolling via `OuroRecurrentAdapter` (`use_cache=False`) achieved **`0.0` maximum absolute logit difference** (`1.0` top-5 overlap, `0.0` JSD) against native `OuroForCausalLM.forward` in the documented adapter checks ([`phase0_compatibility_report.md`](phase0_compatibility_report.md)).
+- Current audits fail closed on historical parallel or missing ledgers. Fresh evaluation has 71 mismatches; exploratory controller evaluation has 81. Older `all_passed` audit JSON is historical, not a current certification. See [MVP scientific verification](mvp_scientific_verification.md).
 
 ---
 
-## 5. Experimental Results Across All Phases
+## 5. Recorded results and uncertainty
 
-### 5.1 Phase 1–4 Baseline & Excursion Mechanics (`pilot`, `validation`, `test`)
-- **Pilot (`n = 20`):** `S0` achieved `15.0%` (`3/20`); `E1` achieved `20.0%` (`4/20`, `+5.0%`), rescuing `1/17` failed trajectories with `0/3` degradations and `+0.0601` nats mean gold log-prob gain.
-- **Validation (`n = 18`) & Causal Curvature Ablation:** Unconditional `E1` rescued `graph_validation_002` (`\|C_t\|_F = 64.85`), outperforming `P0`, `R0`, and linear update mixing `M1` (`0/11` rescued). Ablating $C_t \to 0$ (`E1_no_curv`) or randomizing the direction of $C_t$ (`E1_rand_curv`) eliminated the rescue (`0/11`), confirming that the specific direction of $C_t$ is causally required.
+The current [static manifest](../site/static/tebdil_data.js) derives statistics from exported records. These observations remain exploratory; fresh templates do not by themselves make a study confirmatory. Problem-cluster intervals keep repeated seeds together. Methods are compute-accounted where ledgers support the totals, not uniformly compute-matched.
 
-### 5.2 Phase 5: 3-Branch Donor Selection (`results/phase5_donor/summary.json`, `n = 18`)
-- With two candidate donors $B, C$ (`branch_count = 3`), **nearest-donor selection (`D_nearest`) achieved `33.33%` accuracy (`+11.11%` vs `S0`, `2/14` rescued, `0/4` degraded)**, matching the diagnostic donor oracle (`D_oracle`, `33.33%`) and outperforming farthest-donor relocation (`D_farthest`, `22.22%`, `0/14` rescued), while `D_learned`, `D_confidence`, and `D_random` achieved `27.78%` (`+5.56%`, `1/14` rescued).
+### Fresh-template evaluation: 18 problems × 3 seeds
 
-### 5.3 Phase 6: Selective Transfer Mechanisms (`results/phase6_selective/summary.json`, `n = 18`)
-- Restricting perturbations to the final token (`E1_last_token`, `22.22%`), tightening the trust region to $\rho_{\max} = 0.15$ (`E1_norm_tight`, `22.22%`), or attenuating updates by the native gate (`E1_gated`, `22.22%`) eliminated the validation rescue due to Sandwich RMSNorm contraction.
-- **Top-50% velocity subspace projection (`E1_subspace`, `27.78%`, `1/14` rescued)** preserved the full rescue while zeroing out the bottom 50% of hidden dimensions.
-- **`E3_ridge` on validation (`27.78%`, `1/14` rescued, `0/4` degraded)** matched `E1` accuracy while reducing mean recurrent calls from `14.67` to **`11.00` (`-25.0%` compute)**.
+| Method | Accuracy | Difference vs S0 | Problem-cluster 95% CI | Rescued | Degraded | Mean calls | Ledger gaps |
+| --- | ---: | ---: | --- | --- | --- | ---: | ---: |
+| `S0` | 27.78% | +0.00 pp | [+0.00, +0.00] pp | 0/39 | 0/15 | 7.33 | 0 |
+| `S1` | 11.11% | -16.67 pp | [-33.33, +0.00] pp | 0/39 | 9/15 | 12.83 | 0 |
+| `EXIT_2` | 22.22% | -5.56 pp | [-16.67, +0.00] pp | 0/39 | 3/15 | 5.50 | 0 |
+| `P0` | 20.37% | -7.41 pp | [-16.67, +0.00] pp | 0/39 | 4/15 | 17.96 | 21 |
+| `P1` | 35.19% | +7.41 pp | [+0.00, +18.52] pp | 4/39 | 0/15 | 17.96 | 50 |
+| `M0` | 29.63% | +1.85 pp | [+0.00, +5.56] pp | 1/39 | 0/15 | 12.83 | 0 |
+| `M1` | 35.19% | +7.41 pp | [+0.00, +18.52] pp | 4/39 | 0/15 | 12.83 | 0 |
+| `RAND_CTRL` | 35.19% | +7.41 pp | [+0.00, +18.52] pp | 4/39 | 0/15 | 17.83 | 0 |
+| `E1` | 33.33% | +5.56 pp | [-3.70, +16.67] pp | 4/39 | 1/15 | 14.67 | 0 |
+| `E2` | 27.78% | +0.00 pp | [+0.00, +0.00] pp | 0/39 | 0/15 | 13.83 | 0 |
+| `G_gate_only` | 27.78% | +0.00 pp | [+0.00, +0.00] pp | 0/39 | 0/15 | 15.33 | 0 |
+| `E3_t2_1donor` | 27.78% | +0.00 pp | [+0.00, +0.00] pp | 0/39 | 0/15 | 12.02 | 0 |
+| `E3_mlp` | 27.78% | +0.00 pp | [+0.00, +0.00] pp | 0/39 | 0/15 | 16.83 | 0 |
+| `E3_mlp_ungated` | 31.48% | +3.70 pp | [+0.00, +9.26] pp | 2/39 | 0/15 | 17.24 | 0 |
+| `E3_mlp_unshaped` | 27.78% | +0.00 pp | [+0.00, +0.00] pp | 0/39 | 0/15 | 15.63 | 0 |
 
-### 5.4 Phase 7 & 8: Held-Out Test Split Controller Evaluation (`results/phase7_8_controller_test/summary.json`, `n = 36`)
-- **`E3_mlp` (2-layer MLP controller) achieved `27.78%` (`10/36`, `+5.56%` vs `S0`, `95% CI [0.00%, +13.89%]`), rescuing `2/28` failed trajectories (`arith_test_003` and `graph_test_005`) with `0/8` (`0.0%`) degradations at only `11.08` mean recurrent calls** — saving **24.5% of compute vs `E1` (`14.67` calls)**, **19.6% vs `E2` (`13.78` calls)**, and **18.9% vs `H_budget` (`13.67` calls)**.
-- **Comparison against fixed early exit (`EXIT_2`):** `EXIT_2` (`5.50` calls) rescued `4/28` instances where later recurrent steps over-thought an initially valid answer, but **degraded `2/8` (`25.0%`) of correct trajectories** (`graph_test_000`, where the second token had low step-2 margin `0.125`). By gating `EXIT` on step-2 convergence (`margin_a >= 0.72`), `E3_mlp` (`exit_freq = 0.56`) and `E3_ridge` (`exit_freq = 0.44`) achieved **`0/8` (`0.0%`) degradations**.
-- **Comparison against linear state mixing (`M0`):** On the held-out test split, direct state mixing (`M0`) achieved `33.33%` (`12/36`, `4/28` rescued, `0/8` degraded) at `12.83` calls, placing **`["EXIT_2", "E3_mlp", "M0"]`** on the non-oracle compute-accuracy Pareto frontier.
+### Exploratory controller evaluation: 18 problems × 3 seeds
 
----
+| Method | Accuracy | Difference vs S0 | Problem-cluster 95% CI | Rescued | Degraded | Mean calls | Ledger gaps |
+| --- | ---: | ---: | --- | --- | --- | ---: | ---: |
+| `S0` | 22.22% | +0.00 pp | [+0.00, +0.00] pp | 0/42 | 0/12 | 7.33 | 0 |
+| `S1` | 22.22% | +0.00 pp | [+0.00, +0.00] pp | 0/42 | 0/12 | 12.83 | 0 |
+| `EXIT_2` | 27.78% | +5.56 pp | [-11.11, +27.78] pp | 6/42 | 3/12 | 5.50 | 0 |
+| `P0` | 22.22% | +0.00 pp | [+0.00, +0.00] pp | 0/42 | 0/12 | 18.33 | 30 |
+| `P1` | 27.78% | +5.56 pp | [+0.00, +14.81] pp | 3/42 | 0/12 | 18.33 | 51 |
+| `M0` | 31.48% | +9.26 pp | [+0.00, +20.37] pp | 5/42 | 0/12 | 12.83 | 0 |
+| `M1` | 25.93% | +3.70 pp | [+0.00, +9.26] pp | 2/42 | 0/12 | 12.83 | 0 |
+| `RAND_CTRL` | 29.63% | +7.41 pp | [+0.00, +16.67] pp | 4/42 | 0/12 | 17.83 | 0 |
+| `E1` | 27.78% | +5.56 pp | [+0.00, +14.81] pp | 3/42 | 0/12 | 14.67 | 0 |
+| `E2` | 27.78% | +5.56 pp | [+0.00, +14.81] pp | 3/42 | 0/12 | 13.78 | 0 |
+| `G_gate_only` | 27.78% | +5.56 pp | [+0.00, +14.81] pp | 3/42 | 0/12 | 14.61 | 0 |
+| `E3_t2_1donor` | 27.78% | +5.56 pp | [+0.00, +14.81] pp | 3/42 | 0/12 | 11.06 | 0 |
+| `E3_mlp` | 31.48% | +9.26 pp | [+0.00, +22.22] pp | 5/42 | 0/12 | 15.94 | 0 |
+| `E3_mlp_ungated` | 31.48% | +9.26 pp | [+0.00, +22.22] pp | 5/42 | 0/12 | 15.41 | 0 |
+| `E3_mlp_unshaped` | 22.22% | +0.00 pp | [+0.00, +0.00] pp | 0/42 | 0/12 | 16.89 | 0 |
 
-## 6. Scientific Conclusion
+The [findings](../docs/findings.md) explain denominators and inference limits. All eight phases, including donor and transfer ablations, remain selectable in the observatory; full statistics and records are linked from the manifest. A ledger-gap count is a failed reconciliation, not a repaired cost estimate. P1 is an answer-informed oracle upper bound.
 
-Our empirical findings establish that:
-1. **Self-directed latent control is viable and compute-efficient:** A compact 2-layer MLP controller (`E3_mlp`) trained on counterfactual rollouts learns to combine early halting on converged states (`55.6%` of instances), normal continuation on stable states (`13.9%`), and cooperative latent excursions on uncertain states (`30.6%`), matching unconditional excursion accuracy (`27.78%`) with zero degradations while cutting recurrent compute by **24.5%** (`11.08` vs `14.67` calls).
-2. **Donor proximity and subspace concentration govern effective relocation:** In multi-branch settings, visiting the nearest compatible donor (`D_nearest`) matches the diagnostic donor oracle (`33.33%`), and top-50% velocity subspace transport (`E1_subspace`) suffices to preserve nonlinear rescue dynamics.
-3. **Simpler state mixing (`M0`) remains a strong higher-compute competitor:** At `12.83` recurrent calls/problem, direct linear state mixing (`M0`) achieves the highest overall test accuracy (`33.33%`), whereas `E3_mlp` dominates the lower-compute regime (`11.08` calls) without the `25.0%` degradation penalty of fixed early exit (`EXIT_2`).
+## 6. What is supported
+
+- **Implemented and tested:** genuine pinned Ouro recurrence, hidden-state access, isolated branches, visited-state computation and return; trained scorers with explicit gates; fixed and heuristic controls.
+- **Observed:** exploratory E3_mlp accuracy is 31.48%, versus S0 22.22%. On fresh templates, gated E3_mlp equals S0 at 27.78%; ungated E3_mlp reaches 31.48%, while M1 and random control reach 35.19%.
+- **Not established:** broad generalization, superiority to the strongest baseline, universal safety, a causal necessity claim for reward shaping/curvature, or a validated compute Pareto frontier across rows with ledger gaps.
+
+Fresh ungated E3's difference is +3.70 percentage points, problem-cluster 95% CI [0.00, +9.26], problem-level exact sign test p = 0.5. Fresh S1's difference is -16.67 points, interval [-33.33, 0.00], problem-level exact sign test p = 0.25. Neither claim should use repeated-seed instance counts as independent problem counts. Multiple exploratory comparisons add further uncertainty.
+
+## 7. Release verification and remaining limits
+
+The local full test suite passed 65 tests including real Ouro integration. Seven selected replay cases matched recorded answers, log-probabilities, costs and action types on Apple MPS. This does not mean every historical trace was replayed or every audit passed. The [scientific verification record](mvp_scientific_verification.md) records the failing historical-ledger audit and scope of real-model checks.
+
+The public product is a static recorded-evidence explorer, not live inference. A clean clone can verify the committed export with `python3 scripts/build_landing_data.py --check`; rebuilding from research inputs requires ignored local `results/` and other artifacts. See [reproduction](../docs/reproduction.md).
+
+No complete experiment campaign was rerun during this refactor. CUDA-specific behavior, larger independent benchmarks, preregistered comparisons and generalization remain unverified. Zero observed degradations are not a safety guarantee.
+
+Parallel selection caveat: all historical P0/P1 total-selection costs are unverified, including rows whose selected-output ledger sums happen to match. The 71/81 counts describe arithmetic mismatches, not the full scope of uncertain parallel execution.

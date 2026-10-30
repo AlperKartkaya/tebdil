@@ -1,1174 +1,380 @@
-/* TEBDİL Interactive Landing Page Controller
- * Driven 100% by real ByteDance/Ouro-1.4B-Thinking traces in window.TEBDIL_DATA.
- */
-(function () {
+/// <reference path="./schema.d.ts" />
+/* Recorded evidence only. Schematic layout never represents measured latent coordinates. */
+(() => {
   "use strict";
-
-  const DATA = window.TEBDIL_DATA || {};
-  const FINAL = DATA.final_results || {};
-  const GRID = (DATA.grid_summary && DATA.grid_summary.grid) || [];
-  const DIM_ABL = (DATA.dimension_ablations && DATA.dimension_ablations.ablations) || [];
-  const TRACES_P78 = (DATA.traces && DATA.traces.test_phase7_8) || [];
-  const TRACES_P5 = (DATA.traces && DATA.traces.validation_phase5) || [];
-  const TRACES_P6 = (DATA.traces && DATA.traces.validation_phase6) || [];
-  const TRACES_VAL = (DATA.traces && DATA.traces.validation_phase3) || [];
-  const TRACES_TEST = (DATA.traces && DATA.traces.test_phase4) || [];
-
-  // Index traces by (splitKey, problem_id, seed, method)
-  const traceIndex = new Map();
-  const problemCatalog = [];
-  const seenProblemSeeds = new Set();
-
-  function addTraces(splitKey, list) {
-    list.forEach((row) => {
-      const key = `${splitKey}|${row.problem_id}|${row.seed}`;
-      if (!traceIndex.has(key)) {
-        traceIndex.set(key, {});
-      }
-      traceIndex.get(key)[row.method] = row;
-      if (!seenProblemSeeds.has(key)) {
-        seenProblemSeeds.add(key);
-        problemCatalog.push({
-          key,
-          splitKey,
-          problem_id: row.problem_id,
-          seed: row.seed,
-          family: row.family,
-          gold_answer: row.gold_answer,
-          prompt: row.prompt,
-        });
-      }
-    });
+  /** @type {Observatory} */
+  const DATA = window.TEBDIL_DATA;
+  const hasData = DATA?.schema_version === 2 && Object.keys(DATA.runs || {}).length > 0;
+  /** @overload @param {"runSelect"|"caseSelect"|"methodSelect"|"tokenSelect"|"stepSelect"} id @returns {HTMLSelectElement} */
+  /** @overload @param {"previousView"|"nextView"|"retryLoad"} id @returns {HTMLButtonElement} */
+  /** @overload @param {"downloadTrace"|"downloadRun"|"downloadConfig"} id @returns {HTMLAnchorElement} */
+  /** @overload @param {string} id @returns {HTMLElement} */
+  /** @param {string} id */
+  function $(id) {
+    const element = document.getElementById(id);
+    if (!element) throw new Error(`Missing observatory element: ${id}`);
+    return element;
   }
-
-  addTraces("test_phase7_8", TRACES_P78);
-  addTraces("validation_phase5", TRACES_P5);
-  addTraces("validation_phase6", TRACES_P6);
-  addTraces("test_phase4", TRACES_TEST);
-  addTraces("validation_phase3", TRACES_VAL);
-
-  // Curated highlights at top of selector
-  const CURATED_KEYS = [
-    {
-      key: "test_phase7_8|arith_test_003|42",
-      tag: "★ Self-Directed Controller Rescue (S0=42, P1=42 → E3_mlp=48)",
-    },
-    {
-      key: "test_phase7_8|logic_test_003|42",
-      tag: "⚡ Self-Directed Early Exit at t=2 (E3_mlp=True in 6 calls vs E1 14 calls)",
-    },
-    {
-      key: "validation_phase5|arith_validation_001|1042",
-      tag: "★ 3-Branch Donor Selection (D_nearest picks Donor B → Rescues 42)",
-    },
-    {
-      key: "validation_phase6|graph_validation_002|42",
-      tag: "★ Selective Subspace Transfer (E1_subspace top-25% SVD → Rescues 17)",
-    },
-    {
-      key: "validation_phase3|graph_validation_002|42",
-      tag: "★ Causal Curvature Rescue (M1=13, E1_rand=13 → E1=17)",
-    },
-    {
-      key: "test_phase7_8|graph_test_005|42",
-      tag: "★ Held-Out Graph Rescue (S0=17 → E3_mlp/E2/E1=12)",
-    },
-    {
-      key: "validation_phase3|arith_validation_003|42",
-      tag: "⚠ Honest Failure Case (Borderline S0=38 → Fixed E1=33)",
-    },
-  ];
-
-  let activeProblemKey = traceIndex.has(CURATED_KEYS[0].key)
-    ? CURATED_KEYS[0].key
-    : "test_phase4|arith_test_003|42";
-  let activeMethod = "E3_mlp";
-  let activeStep = 2; // 1..4
-  let autoLoopTimer = null;
-
-  const $ = (id) => document.getElementById(id);
-
-  function fmtPct(v) {
-    if (v === undefined || v === null || Number.isNaN(v)) return "--";
-    return (v * 100).toFixed(2) + "%";
-  }
-
-  function fmtSignedPct(v) {
-    if (v === undefined || v === null || Number.isNaN(v)) return "--";
-    const s = (v * 100).toFixed(2) + "%";
-    return v > 0 ? "+" + s : s;
-  }
-
-  function fmtNum(v, digits = 2) {
-    if (v === undefined || v === null || Number.isNaN(v)) return "--";
-    return Number(v).toFixed(digits);
-  }
-
-  const METHOD_LABELS = {
-    E3_mlp: "E3_mlp — Learned 2-Layer MLP Self-Directed Controller (Ours)",
-    E3_ridge: "E3_ridge — Learned Ridge Regression Meta-Controller (Ours)",
-    E3_no_exit: "E3_no_exit — Learned Controller Without Early Exit",
-    H_budget: "H_budget — Hand-Tuned Budgeted Heuristic Controller",
-    EXIT_2: "EXIT_2 — Naive Unconditional Early Exit at Step t=2",
-    RAND_CTRL: "RAND_CTRL — Random Action & Donor Controller",
-    D_nearest: "D_nearest — Nearest Trust-Region Donor Selection (3-Branch)",
-    D_oracle: "D_oracle — Post-Hoc Oracle Donor Selection (Upper Bound)",
-    D_learned: "D_learned — Learned Advantage Donor Selection (3-Branch)",
-    D_confidence: "D_confidence — Highest Margin Donor Selection (3-Branch)",
-    D_random: "D_random — Uniform Random Donor Selection (3-Branch)",
-    D_farthest: "D_farthest — Farthest Divergence Donor Selection (3-Branch)",
-    E1_subspace: "E1_subspace — Top-25% SVD Subspace Curvature Transfer",
-    E1_norm_tight: "E1_norm_tight — Tight Trust-Region Clip (γ_max=0.75)",
-    E1_last_token: "E1_last_token — Last-Token-Only Excursion Return",
-    E1_gated: "E1_gated — Sigmoid Margin-Gate Modulated Excursion",
-    E2: "E2 — Adaptive TEBDİL Excursion (Label-Free Trigger)",
-    E1: "E1 — Fixed TEBDİL Excursion (α=0.5, β=0.5)",
-    M1: "M1 — Linear Update Mixing (Curvature C₂ = 0)",
-    E1_no_curv: "E1_no_curv — Causal Curvature Stripped (C₂ = 0)",
-    E1_rand_curv: "E1_rand_curv — Random Direction Curvature Control",
-    M0: "M0 — Direct Hidden State Mixing",
-    C0: "C0 — Visit Midpoint Without Return",
-    P0: "P0 — Parallel 2-Branch Confidence Vote",
-    P1: "P1 — Oracle Best-of-2 Selection",
-    R0: "R0 — Norm-Matched Random State Noise",
-    E0: "E0 — Random-Direction Excursion Probe",
-    S1: "S1 — Single Trajectory + Extra Depth (5 Steps)",
-    S0: "S0 — Standard Single Trajectory (4 Steps)",
+  /** @param {string} selector */
+  const all = (selector) => /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(selector));
+  const VIEWS = ["problem", "mechanism", "decision", "experiment", "evidence"];
+  const VIEW_NAMES = ["The problem", "The mechanism", "The decision", "The experiment", "The evidence"];
+  const METHODS = {
+    S0: ["Ordinary recurrence", "No intervention"], S1: ["Extra recurrent depth", "Fixed schedule"],
+    P0: ["Independent branches", "Confidence-based selection"], P1: ["Oracle best branch", "Uses gold outcomes; upper bound only"],
+    M0: ["Direct state mixing", "Fixed schedule"], M1: ["Linear update mixing", "Fixed schedule; no visited-state computation"],
+    E1: ["Fixed excursion", "Fixed schedule"], E2: ["Adaptive excursion", "Heuristic adaptive rules; not learned"],
+    E3_mlp: ["Learned relocation", "Offline-trained MLP + hand-set margin/entropy gates"],
+    E3_mlp_ungated: ["Ungated learned relocation", "Offline-trained MLP; heuristic eligibility gates disabled"],
+    E3_ridge: ["Learned linear control", "Offline-trained ridge + hand-set margin/entropy gates"],
+    E3_no_exit: ["Learned control without exit", "Offline-trained scorer + heuristic gates; EXIT disabled"],
+    E3_mlp_unshaped: ["Unshaped learned control", "Offline-trained MLP + heuristic gates; no utility shaping"],
+    E3_t2_1donor: ["Budgeted learned control", "Offline-trained MLP + heuristic gates; step 2, one donor"],
+    EXIT_2: ["Fixed early exit", "Fixed schedule; stop at step 2"],
+    RAND_CTRL: ["Random control", "Random actions; not learned"], H_budget: ["Budget heuristic", "Hand-set adaptive rules; not learned"],
+    G_gate_only: ["Gate-only controller", "Hand-set margin/entropy EXIT and EXCURSION rules; no learned scorer"],
+    R0: ["Norm-matched random noise", "Negative control"], E0: ["Random-direction excursion", "Negative control"],
+    C0: ["Visit without return", "Visited state replaces receiving trajectory"],
+    E1_no_curv: ["Excursion without residual", "Curvature ablation"], E1_rand_curv: ["Randomized residual", "Negative control"],
+    D_nearest: ["Nearest donor", "Heuristic donor selection"], D_farthest: ["Farthest donor", "Heuristic donor selection"],
+    D_confidence: ["Highest-margin donor", "Heuristic donor selection"], D_random: ["Random donor", "Random donor selection"],
+    D_oracle: ["Oracle donor", "Uses gold outcomes; upper bound only"], D_learned: ["Learned donor", "Offline-trained donor scorer + hand-set margin/entropy gates"],
+    E1_last_token: ["Last-token transfer", "Fixed scoped excursion"], E1_norm_tight: ["Tight trust region", "Fixed clipped excursion"],
+    E1_coord_top50: ["Coordinate-restricted transfer", "Fixed masked excursion"], E1_subspace: ["Coordinate-limited transfer", "Fixed correction-coordinate restriction; not a learned subspace"],
+    E1_multi_visit: ["Multiple visits", "Fixed schedule"], E1_gated: ["Native-gate weighted transfer", "Fixed schedule; return scaled by Ouro gate, not a trained controller"],
   };
+  const name = (m) => METHODS[m]?.[0] || m;
+  const policy = (m) => METHODS[m]?.[1] || "See execution manifest";
+  const esc = (v) => String(v ?? "Unavailable").replace(/[&<>"']/g, (c) => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"})[c]);
+  const num = (v, digits = 3) => typeof v === "number" && Number.isFinite(v) ? v.toFixed(digits) : "Unavailable";
+  const pct = (v) => typeof v === "number" ? `${(100 * v).toFixed(1)}%` : "Unavailable";
+  const pp = (v) => typeof v === "number" ? `${v > 0 ? "+" : ""}${(100 * v).toFixed(1)}` : "Unavailable";
+  const options = (select, rows, value) => {
+    select.replaceChildren(...rows.map(([key, label]) => new Option(label, String(key))));
+    select.value = String(value);
+    select.disabled = !rows.length;
+  };
+  const params = new URLSearchParams(location.search);
+  const oldRuns = {fresh_test_phase7_8:"phase7_8_fresh_test", test_phase7_8:"phase7_8_controller_test", test_phase4:"phase4_adaptive", validation_phase3:"phase3_ablations", validation_phase5:"phase5_donor", validation_phase6:"phase6_selective"};
+  const aliases = {"live-stage":"experiment", "demo":"experiment", "simulator":"experiment", "architecture":"mechanism", "theory":"mechanism", "controls":"mechanism", "abstract":"problem", "results":"evidence", "main-results":"evidence", "grid":"evidence", "patterns":"mechanism", "scaling":"evidence", "case-study":"experiment", "examples":"experiment", "reproduction":"evidence", "case-studies":"experiment", "trace-explorer":"experiment", "cases":"experiment", "roadmap":"evidence", "bibtex":"evidence", "cite":"evidence"};
+  const workflow = {understand:"problem", explore:"experiment", reproduce:"evidence"};
+  const hashView = () => aliases[location.hash.slice(1)] || (VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : null);
+  const state = {
+    view: params.get("view") || hashView() || workflow[params.get("workflow")] || "problem",
+    run: oldRuns[params.get("run")] || params.get("run") || "phase7_8_fresh_test",
+    problem: params.get("problem"), seed: params.get("seed"), method: params.get("method") || "E3_mlp",
+    token: Number(params.get("token")) || 0, step: Number(params.get("step")) || 2, mechanism: "excursion",
+  };
+  /** @type {RecordedTrace[]} */
+  let rows = [];
+  /** @type {Map<string, Record<string, RecordedTrace>>} */
+  let pairs = new Map();
+  let loadVersion = 0, downloadUrl;
+  const cache = new Map();
+  const run = () => DATA.runs[state.run];
+  const trace = () => pairs.get(`${state.problem}|${state.seed}`)?.[state.method];
+  const baseline = () => pairs.get(`${state.problem}|${state.seed}`)?.S0;
+  const token = () => trace()?.token_ledger?.[state.token];
+  const snapshots = () => token()?.step_snapshots || (state.token === 0 ? trace()?.step_snapshots || [] : []);
+  const snapshot = () => snapshots().find((s) => s.step === state.step);
+  const telemetry = () => snapshots().find((s) => s.excursion_telemetry?.step === state.step)?.excursion_telemetry;
 
-  const PREFERRED_METHOD_ORDER = [
-    "E3_mlp",
-    "E3_ridge",
-    "E3_no_exit",
-    "H_budget",
-    "EXIT_2",
-    "RAND_CTRL",
-    "D_nearest",
-    "D_learned",
-    "D_confidence",
-    "D_random",
-    "D_farthest",
-    "D_oracle",
-    "E1_subspace",
-    "E1_norm_tight",
-    "E1_last_token",
-    "E1_gated",
-    "E2",
-    "E1",
-    "M1",
-    "E1_no_curv",
-    "E1_rand_curv",
-    "M0",
-    "C0",
-    "P0",
-    "P1",
-    "R0",
-    "E0",
-    "S1",
-    "S0",
-  ];
+  function syncUrl() {
+    const query = new URLSearchParams();
+    ["view", "run", "problem", "seed", "method", "token", "step"].forEach((key) => {
+      if (state[key] !== null && state[key] !== undefined) query.set(key, state[key]);
+    });
+    history.replaceState(null, "", `${location.pathname}?${query}`);
+  }
 
-  /* ============================================================
-   * 1. STAGE SELECTORS & CONTROLS
-   * ============================================================ */
-  function initStageControls() {
-    const caseSel = $("caseSelect");
-    const methodSel = $("methodSelect");
-    if (!caseSel || !methodSel) return;
+  function setView(view, focus = false) {
+    state.view = VIEWS.includes(view) ? view : "problem";
+    VIEWS.forEach((v) => {
+      const selected = v === state.view;
+      $(`tab-${v}`).setAttribute("aria-selected", String(selected));
+      $(`tab-${v}`).tabIndex = selected ? 0 : -1;
+      $(`view-${v}`).hidden = !selected;
+    });
+    if (focus) $(`tab-${state.view}`).focus();
+    const index = VIEWS.indexOf(state.view);
+    $("previousView").disabled = index === 0;
+    $("nextView").disabled = index === VIEWS.length - 1;
+    $("nextView").textContent = index === VIEWS.length - 1 ? "End of journey" : `Next: ${VIEW_NAMES[index + 1]}`;
+    $("journeyPosition").textContent = `${index + 1} of ${VIEWS.length}`;
+    $("dataControls").hidden = index < 2;
+    $("tokenControls").hidden = !["decision", "experiment"].includes(state.view) || !trace();
+    if (["decision", "experiment"].includes(state.view) && !rows.length) loadRun();
+    if (state.view === "evidence") renderEvidence();
+    syncUrl();
+  }
 
-    caseSel.innerHTML = "";
-
-    const optGroupCurated = document.createElement("optgroup");
-    optGroupCurated.label = "Featured Mechanistic & Controller Cases";
-    CURATED_KEYS.forEach((item) => {
-      if (traceIndex.has(item.key)) {
-        const opt = document.createElement("option");
-        opt.value = item.key;
-        opt.textContent = item.tag;
-        optGroupCurated.appendChild(opt);
+  async function loadRun() {
+    if (!hasData) return;
+    const version = ++loadVersion;
+    const selectedRun = state.run;
+    const recording = run();
+    rows = []; pairs = new Map();
+    $("loadStatus").textContent = `Loading ${recording.label.toLowerCase()}… Recorded data, not a new model run.`;
+    $("retryLoad").hidden = true;
+    all("#caseSelect, #methodSelect, #tokenSelect, #stepSelect").forEach((select) => { if (select instanceof HTMLSelectElement) select.disabled = true; });
+    all(".data-dependent").forEach((el) => { el.hidden = true; });
+    $("tokenControls").hidden = true;
+    try {
+      let recorded = cache.get(selectedRun);
+      if (!recorded) {
+        const response = await fetch(recording.trace_url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const bytes = await response.arrayBuffer();
+        if (!globalThis.crypto?.subtle) throw new Error("Secure browser context required to verify recording checksums");
+        const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+        if (hash !== recording.trace_sha256) throw new Error("Recording checksum mismatch");
+        recorded = JSON.parse(new TextDecoder().decode(bytes));
+        if (!Array.isArray(recorded) || recorded.length !== recording.record_count) throw new Error("Recording count mismatch");
+        cache.set(selectedRun, recorded);
       }
-    });
-    caseSel.appendChild(optGroupCurated);
-
-    const optGroupAll = document.createElement("optgroup");
-    optGroupAll.label = "All Benchmark Problem Instances";
-    problemCatalog.forEach((p) => {
-      const methods = traceIndex.get(p.key) || {};
-      const s0 = methods.S0;
-      const best = methods.E3_mlp || methods.D_nearest || methods.E2 || methods.E1;
-      let statusTag = "";
-      if (s0 && best) {
-        if (!s0.is_correct && best.is_correct) statusTag = " [RESCUED]";
-        else if (s0.is_correct && !best.is_correct) statusTag = " [DEGRADED]";
-        else if (best.is_correct) statusTag = " [CORRECT]";
+      if (version !== loadVersion) return;
+      rows = recorded;
+      rows.forEach((r) => {
+        const key = `${r.problem_id}|${r.seed}`;
+        if (!pairs.has(key)) pairs.set(key, {});
+        pairs.get(key)[r.method] = r;
+      });
+      let key = `${state.problem}|${state.seed}`;
+      if (!pairs.has(key)) {
+        const candidate = rows.find((r) => r.method === state.method && r.token_ledger?.some((t) => t.controller_action_type === "EXCURSION")) || rows[0];
+        state.problem = candidate.problem_id; state.seed = String(candidate.seed); key = `${state.problem}|${state.seed}`;
       }
-      const opt = document.createElement("option");
-      opt.value = p.key;
-      opt.textContent = `[${p.splitKey}] ${p.problem_id} (seed=${p.seed}, ${p.family}, gold=${p.gold_answer})${statusTag}`;
-      optGroupAll.appendChild(opt);
-    });
-    caseSel.appendChild(optGroupAll);
-
-    caseSel.value = activeProblemKey;
-    caseSel.addEventListener("change", () => {
-      activeProblemKey = caseSel.value;
-      syncMethodDropdown();
-      renderStage();
-    });
-
-    methodSel.addEventListener("change", () => {
-      activeMethod = methodSel.value;
-      renderStage();
-    });
-
-    document.querySelectorAll(".step-pill").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        stopAutoLoop();
-        activeStep = Number(btn.getAttribute("data-step")) || 2;
-        renderStage();
-      });
-    });
-
-    const playBtn = $("playLoopBtn");
-    if (playBtn) {
-      playBtn.addEventListener("click", () => {
-        if (autoLoopTimer) {
-          stopAutoLoop();
-        } else {
-          startAutoLoop();
-        }
-      });
+      options($("caseSelect"), [...pairs].map(([k, values]) => [k, `${values.S0.problem_id} · seed ${values.S0.seed}`]), key);
+      syncMethods();
+      $("loadStatus").textContent = `${recording.record_count.toLocaleString()} recorded traces · ${recording.num_problems} distinct problems · ${recording.seeds.length} seed(s) · SHA-256 verified in this browser.`;
+      renderRecording();
+    } catch (error) {
+      if (version !== loadVersion) return;
+      $("loadStatus").textContent = `Recording unavailable: ${error.message}. Check your connection, then retry. No results have been simulated.`;
+      $("retryLoad").hidden = false;
     }
-
-    syncMethodDropdown();
-    renderStage();
   }
 
-  function syncMethodDropdown() {
-    const methodSel = $("methodSelect");
-    const methodsObj = traceIndex.get(activeProblemKey) || {};
-    const available = Object.keys(methodsObj);
-    const ordered = PREFERRED_METHOD_ORDER.filter((m) => available.includes(m));
-    available.forEach((m) => {
-      if (!ordered.includes(m)) ordered.push(m);
-    });
+  function availableMethod(methods) {
+    if (methods[state.method]) return state.method;
+    return ["E3_mlp", "E1", "S0"].find((method) => methods[method]) || Object.keys(methods)[0];
+  }
 
-    methodSel.innerHTML = "";
-    ordered.forEach((m) => {
-      const opt = document.createElement("option");
-      opt.value = m;
-      opt.textContent = METHOD_LABELS[m] || m;
-      methodSel.appendChild(opt);
-    });
-    if (!ordered.includes(activeMethod)) {
-      activeMethod = ordered.includes("E3_mlp")
-        ? "E3_mlp"
-        : ordered.includes("D_nearest")
-        ? "D_nearest"
-        : ordered.includes("E1_subspace")
-        ? "E1_subspace"
-        : ordered.includes("E2")
-        ? "E2"
-        : ordered[0] || "E1";
+  function syncMethods() {
+    const selected = pairs.get(`${state.problem}|${state.seed}`) || {};
+    const available = Object.keys(selected);
+    state.method = availableMethod(selected);
+    options($("methodSelect"), available.map((m) => [m, `${name(m)} · ${m}`]), state.method);
+    const ledger = trace()?.token_ledger || [];
+    state.token = Math.max(0, Math.min(ledger.length - 1, state.token));
+    options($("tokenSelect"), ledger.length ? ledger.map((t, i) => [i, `Token ${i + 1}: ${JSON.stringify(t.decoded_token ?? t.token_id)}`]) : [[0, "Final output · per-token data unavailable"]], state.token);
+    $("tokenSelect").disabled = !ledger.length;
+    syncSteps();
+  }
+
+  function syncSteps() {
+    const steps = snapshots().map((s) => s.step);
+    if (!steps.includes(state.step)) state.step = steps[0];
+    options($("stepSelect"), steps.map((s) => [s, `Step ${s}`]), state.step);
+  }
+
+  function decisionAtStep() {
+    for (const s of snapshots()) {
+      const d = s.policy_decision;
+      if (!d) continue;
+      const step = d.state_features?.step ?? s.excursion_telemetry?.step ?? (s.step - (d.action_type === "EXIT" ? 0 : 1));
+      if (step === state.step) return d;
     }
-    methodSel.value = activeMethod;
+    return null;
   }
 
-  function startAutoLoop() {
-    stopAutoLoop();
-    const icon = $("playLoopIcon");
-    const txt = $("playLoopText");
-    if (icon) icon.className = "fas fa-pause";
-    if (txt) txt.textContent = "Pause";
-    autoLoopTimer = setInterval(() => {
-      activeStep = (activeStep % 4) + 1;
-      renderStage();
-    }, 1800);
+  function renderDecision() {
+    const r = trace(), t = token(), d = decisionAtStep(), tel = telemetry();
+    $("policyKind").textContent = policy(r.method);
+    const controlActions = {M0: "STATE MIX", M1: "UPDATE MIX", C0: "VISIT WITHOUT RETURN", R0: "RANDOM NOISE"};
+    const action = d?.action_type || (tel ? controlActions[r.method] || "EXCURSION" : null);
+    all("[data-action]").forEach((el) => { el.dataset.selected = String(el.dataset.action === action); });
+    const actionLabel = action || "No decision recorded at this step";
+    $("decisionReadout").innerHTML = `<p><strong>${esc(actionLabel)}</strong> · ${t ? `token ${state.token + 1}` : "final-output snapshot; token identity unavailable"}, recurrent step ${esc(state.step)}</p><p class="muted">${esc(d?.reason || (tel ? "Scheduled intervention with recorded transition telemetry." : "The token summary below is not a decision at every recurrent step."))}</p><p class="small">Token-level summary: ${esc(t?.controller_action_type)} · donor ${esc(t?.selected_donor)} · α ${num(t?.effective_alpha, 2)} · β ${num(t?.effective_beta, 2)}</p>`;
+    $("decisionDetails").textContent = JSON.stringify({selected_step_decision: d, outgoing_excursion: tel || null, token_summary: {action: t?.controller_action_type, reason: t?.policy_reason, action_scores: t?.action_scores, rejected_actions: t?.rejected_actions}}, null, 2);
   }
 
-  function stopAutoLoop() {
-    if (autoLoopTimer) {
-      clearInterval(autoLoopTimer);
-      autoLoopTimer = null;
-    }
-    const icon = $("playLoopIcon");
-    const txt = $("playLoopText");
-    if (icon) icon.className = "fas fa-play";
-    if (txt) txt.textContent = "Auto-Loop";
+  function ledgerMatches(r) {
+    if (r.derived_parallel_selection || ["P0", "P1"].includes(r.method)) return false; // Reference budget omits separately decoded selection candidates.
+    const ledger = r.token_ledger;
+    return !!ledger?.length && ledger.reduce((sum, t) => sum + t.recurrent_block_calls, 0) === r.recurrent_block_calls;
   }
 
-  /* ============================================================
-   * 2. RENDER INTERACTIVE STAGE (SVG + PCA + TELEMETRY)
-   * ============================================================ */
-  function renderStage() {
-    const methodsObj = traceIndex.get(activeProblemKey) || {};
-    const trace = methodsObj[activeMethod] || methodsObj.E3_mlp || methodsObj.E1 || methodsObj.S0;
-    const s0Trace = methodsObj.S0 || trace;
-    const e1Trace = methodsObj.E1 || methodsObj.E3_mlp || trace;
-    if (!trace) return;
+  function output(r) {
+    if (!r) return "<p>Paired baseline unavailable.</p>";
+    return `<p class="output-answer">${esc(r.extracted_answer ?? "No valid answer")}</p><div class="output-meta"><span class="outcome ${r.is_correct ? "correct" : "incorrect"}">${r.is_correct ? "Correct" : "Incorrect"}</span><span>${esc(r.recurrent_block_calls)} calls${ledgerMatches(r) ? "" : " · ledger unverified"}</span><span>${num(r.wall_time_ms, 0)} ms recorded</span></div><p class="small muted" style="margin:14px 0 0">Decoded: ${esc(JSON.stringify(r.decoded_text))}</p>`;
+  }
 
-    // Update step pills
-    document.querySelectorAll(".step-pill").forEach((btn) => {
-      const s = Number(btn.getAttribute("data-step"));
-      btn.classList.toggle("is-active", s === activeStep);
-    });
-
-    const stepTitles = {
-      1: "UT Step t = 1 · Branch Fork & Full-Sequence Perturbation",
-      2: "UT Step t = 2 · Meta-Controller Decision & Midpoint Excursion",
-      3: "UT Step t = 3 · Trust-Region Return / Early-Exit Bypass",
-      4: "UT Step t = 4 · Final Recurrent Refinement & Token Readout",
+  function mechanismCopy(method) {
+    const controls = {
+      E0: {stages: ["Receiving A", "Visit in random direction", "Compute F(visit) − visit", "Weighted update returns to A"], note: "Random-direction excursion: this visit does not move toward the donor state.", residualMeasured: true},
+      M0: {stages: ["Receiving A + donor B", "Mix hidden states", "F(mixed state)", "Continue from mix"], note: "Direct state mixing: no visited update returns to the original A.", residualMeasured: false},
+      M1: {stages: ["F(A) and F(B)", "Mix update vectors", "Apply linear update to A"], note: "No transition is evaluated at a visited state; the zero residual field is a placeholder.", residualMeasured: false},
+      C0: {stages: ["Receiving A", "Visit toward B", "F(visit)", "Continue from visit"], note: "Visit-without-return control: the visited state replaces the receiving anchor.", residualMeasured: false},
+      R0: {stages: ["Receiving A", "Norm-matched noise", "Perturbed normal update"], note: "Random-noise control, not a latent excursion.", residualMeasured: false},
+      E1_no_curv: {stages: ["Receiving A", "Compute visited response", "Remove nonlinear residual", "Linear update returns to A"], note: "Residual ablation: visit computation is measured but its nonlinear residual is not transferred.", residualMeasured: true},
+      E1_rand_curv: {stages: ["Receiving A", "Compute visited response", "Randomize residual", "Modified update returns to A"], note: "Randomized-residual control: the actual visited residual is replaced before transfer.", residualMeasured: true},
     };
-    $("stageStepLabel").textContent = stepTitles[activeStep] || stepTitles[2];
-
-    $("liveProblemHeader").textContent =
-      `Problem: ${trace.problem_id} (seed=${trace.seed}) · Split: ${trace.split} · Family: ${trace.family.toUpperCase()}`;
-    $("liveGoldBadge").textContent = `Gold Answer: ${trace.gold_answer}`;
-    $("livePromptBody").textContent = trace.prompt;
-
-    const snapshots = trace.step_snapshots || [];
-    const snap = snapshots.find((s) => s.step === activeStep) || snapshots[Math.min(activeStep - 1, snapshots.length - 1)] || {};
-    const snap2 = snapshots.find((s) => s.step === 2) || {};
-
-    renderExcursionSvg(trace, snap, snap2);
-    renderPcaSvg(trace, e1Trace);
-    renderTelemetryGrid(trace, snap, snap2);
-    renderTerminalComparison(methodsObj, trace, s0Trace);
+    return controls[method] || {stages: ["Receiving A", "Temporary visit toward donor", "Compute F(visit) − visit", "Weighted update returns to A"], note: "A genuine visited-state transition is recorded; the returned update remains anchored at A.", residualMeasured: true};
   }
 
-  function renderExcursionSvg(trace, snap, snap2) {
-    const svg = $("excursionStageSvg");
-    if (!svg) return;
-
-    const m = trace.method;
-    const ctrlAction = trace.controller_action_type || (trace.policy_action === "excursion" ? "excursion" : trace.policy_action === "skip" ? "continue" : "");
-    const earlyExited = trace.early_exit_step !== null && trace.early_exit_step !== undefined;
-    const selectedDonor = trace.selected_donor || (m !== "S0" && m !== "S1" && m !== "EXIT_2" ? "B" : null);
-    const hasBranchB = m !== "S0" && m !== "S1" && m !== "EXIT_2" && !earlyExited;
-    const hasMidpointEval =
-      ["E1", "E2", "C0", "E0", "E1_no_curv", "E1_rand_curv", "E1_subspace", "E1_norm_tight", "E1_last_token", "E1_gated"].includes(m) ||
-      ctrlAction === "excursion" ||
-      m.startsWith("D_");
-    const skippedMidpoint = (m === "E2" && trace.policy_action === "skip") || ctrlAction === "continue" || ctrlAction === "exit";
-    const curvFrob = fmtNum(trace.curvature_frob, 2);
-    const relDist2 = fmtNum(snap2.ab_relative_distance || trace.branch_relative_distance, 3);
-    const marginA2 = snap2.branch_margin && snap2.branch_margin.A !== undefined ? fmtNum(snap2.branch_margin.A, 3) : "--";
-    const entA2 = snap2.branch_entropy && snap2.branch_entropy.A !== undefined ? fmtNum(snap2.branch_entropy.A, 3) : "--";
-
-    // Active highlights based on activeStep (1..4)
-    const s1Active = activeStep === 1;
-    const s2Active = activeStep === 2;
-    const s3Active = activeStep === 3;
-    const s4Active = activeStep === 4;
-
-    const colActive = "#4338ca";
-    const colDonor = "#0ea5e9";
-    const colVisit = "#7c3aed";
-    const colReturn = "#059669";
-
-    const donorLabel = selectedDonor ? `Donor H₂${selectedDonor === "C" ? "ᶜ (η=0.35)" : "ᴮ (η=0.25)"}` : "Donor H₂ᴮ";
-
-    svg.innerHTML = `
-      <defs>
-        <marker id="arrIndigo" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="#4338ca"/>
-        </marker>
-        <marker id="arrSky" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="#0ea5e9"/>
-        </marker>
-        <marker id="arrViolet" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
-        </marker>
-        <marker id="arrEmerald" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
-        </marker>
-      </defs>
-
-      <!-- Step column background bands -->
-      <rect x="18" y="10" width="135" height="298" rx="10" fill="${s1Active ? 'rgba(99,102,241,0.09)' : '#f8fafc'}" stroke="${s1Active ? '#6366f1' : '#e2e8f0'}" stroke-width="${s1Active ? 2 : 1}"/>
-      <rect x="168" y="10" width="185" height="298" rx="10" fill="${s2Active ? 'rgba(124,58,237,0.09)' : '#f8fafc'}" stroke="${s2Active ? '#7c3aed' : '#e2e8f0'}" stroke-width="${s2Active ? 2 : 1}"/>
-      <rect x="368" y="10" width="140" height="298" rx="10" fill="${s3Active ? 'rgba(5,150,105,0.09)' : '#f8fafc'}" stroke="${s3Active ? '#059669' : '#e2e8f0'}" stroke-width="${s3Active ? 2 : 1}"/>
-      <rect x="522" y="10" width="144" height="298" rx="10" fill="${s4Active ? 'rgba(14,165,233,0.09)' : '#f8fafc'}" stroke="${s4Active ? '#0ea5e9' : '#e2e8f0'}" stroke-width="${s4Active ? 2 : 1}"/>
-
-      <text x="85" y="28" text-anchor="middle" font-size="10" font-weight="800" fill="#475569">STEP t = 1 (FORK)</text>
-      <text x="260" y="28" text-anchor="middle" font-size="10" font-weight="800" fill="#475569">STEP t = 2 (CONTROLLER)</text>
-      <text x="438" y="28" text-anchor="middle" font-size="10" font-weight="800" fill="#475569">STEP t = 3 (RETURN)</text>
-      <text x="594" y="28" text-anchor="middle" font-size="10" font-weight="800" fill="#475569">STEP t = 4 (READOUT)</text>
-
-      <!-- ================= PRIMARY BRANCH A (TOP RAIL) ================= -->
-      <rect x="34" y="44" width="104" height="52" rx="10" fill="#fff" stroke="${colActive}" stroke-width="${s1Active ? 3 : 2}"/>
-      <text x="86" y="65" text-anchor="middle" font-size="12" font-weight="800" fill="#1e1b4b">Primary H₁ᴬ</text>
-      <text x="86" y="82" text-anchor="middle" font-size="9.5" font-family="JetBrains Mono,monospace" fill="#475569">Anchor State</text>
-
-      <line x1="138" y1="70" x2="196" y2="70" stroke="${colActive}" stroke-width="2.5" marker-end="url(#arrIndigo)"/>
-      <text x="167" y="62" text-anchor="middle" font-size="9" font-weight="700" fill="#4338ca">F_θ,1</text>
-
-      <rect x="202" y="44" width="116" height="52" rx="10" fill="#fff" stroke="${colActive}" stroke-width="${s2Active ? 3 : 2}"/>
-      <text x="260" y="64" text-anchor="middle" font-size="12" font-weight="800" fill="#1e1b4b">State H₂ᴬ</text>
-      <text x="260" y="81" text-anchor="middle" font-size="9" font-family="JetBrains Mono,monospace" fill="#475569">m=${marginA2} | H=${entA2}</text>
-
-      <!-- Baseline V2^A arrow -->
-      <line x1="318" y1="70" x2="376" y2="70" stroke="${colActive}" stroke-width="2.5" marker-end="url(#arrIndigo)" opacity="${earlyExited ? '0.3' : '1.0'}"/>
-      <text x="347" y="61" text-anchor="middle" font-size="9" font-weight="700" fill="#4338ca">${earlyExited ? 'EARLY EXIT' : '(1-β)V₂ᴬ'}</text>
-
-      <!-- Returned state H3^{A'} -->
-      <rect x="382" y="44" width="112" height="54" rx="10" fill="${s3Active ? '#ecfdf5' : '#fff'}" stroke="${colReturn}" stroke-width="${s3Active ? 3 : 2}" opacity="${earlyExited ? '0.45' : '1.0'}"/>
-      <text x="438" y="64" text-anchor="middle" font-size="12" font-weight="800" fill="#065f46">${earlyExited ? 'Skipped t=3,4' : 'Return H₃ᴬ′'}</text>
-      <text x="438" y="81" text-anchor="middle" font-size="9" font-family="JetBrains Mono,monospace" fill="#047857">${earlyExited ? 'H₂ᴬ → Readout' : m === 'S0' ? 'Standard H₃ᴬ' : 'Excursion Merged'}</text>
-
-      <line x1="494" y1="70" x2="532" y2="70" stroke="${colReturn}" stroke-width="2.5" marker-end="url(#arrEmerald)"/>
-      <text x="513" y="61" text-anchor="middle" font-size="9" font-weight="700" fill="#059669">${earlyExited ? 'g_φ(H₂ᴬ)' : 'F_θ,3'}</text>
-
-      <!-- Final Readout Node -->
-      <rect x="538" y="42" width="116" height="58" rx="10" fill="${trace.is_correct ? '#ecfdf5' : '#fff1f2'}" stroke="${trace.is_correct ? '#059669' : '#e11d48'}" stroke-width="${s4Active ? 3 : 2}"/>
-      <text x="596" y="62" text-anchor="middle" font-size="11" font-weight="800" fill="${trace.is_correct ? '#065f46' : '#9f1239'}">LM Head (${trace.recurrent_block_calls} calls)</text>
-      <text x="596" y="80" text-anchor="middle" font-size="11" font-family="JetBrains Mono,monospace" font-weight="800" fill="${trace.is_correct ? '#047857' : '#be123c'}">Pred: ${trace.extracted_answer || '--'} ${trace.is_correct ? '✓' : '✗'}</text>
-      <text x="596" y="93" text-anchor="middle" font-size="8.5" font-family="JetBrains Mono,monospace" fill="#64748b">Gold: ${trace.gold_answer}</text>
-
-      <!-- ================= MIDPOINT EXCURSION ZONE (CENTER RAIL) ================= -->
-      <g opacity="${hasMidpointEval && !skippedMidpoint ? '1.0' : '0.32'}">
-        <path d="M 245 96 L 245 126" stroke="${colVisit}" stroke-width="2" stroke-dasharray="4 2" marker-end="url(#arrViolet)"/>
-        <path d="M 245 236 L 245 200" stroke="${colVisit}" stroke-width="2" stroke-dasharray="4 2" marker-end="url(#arrViolet)"/>
-
-        <rect x="182" y="132" width="156" height="62" rx="11" fill="${s2Active ? '#f5f3ff' : '#fff'}" stroke="${colVisit}" stroke-width="${s2Active ? 3 : 2}"/>
-        <text x="260" y="151" text-anchor="middle" font-size="11" font-weight="800" fill="#5b21b6">Midpoint H₂ᵛⁱˢⁱᵗ (α=${trace.alpha})</text>
-        <text x="260" y="167" text-anchor="middle" font-size="9.5" font-family="JetBrains Mono,monospace" fill="#6d28d9">${trace.subspace_fraction && trace.subspace_fraction < 1 ? `Subspace k=${(trace.subspace_fraction*100).toFixed(0)}%` : 'V₂ᵛⁱˢⁱᵗ = Lin + C₂'}</text>
-        <text x="260" y="182" text-anchor="middle" font-size="9.5" font-family="JetBrains Mono,monospace" font-weight="700" fill="#4c1d95">||C₂||_F = ${curvFrob}</text>
-
-        <path d="M 338 162 Q 415 162 432 104" fill="none" stroke="${colReturn}" stroke-width="2.8" marker-end="url(#arrEmerald)"/>
-        <rect x="355" y="130" width="96" height="22" rx="6" fill="#ecfdf5" stroke="#6ee7b7"/>
-        <text x="403" y="145" text-anchor="middle" font-size="9.5" font-family="JetBrains Mono,monospace" font-weight="700" fill="#047857">+ β Ṽ₂ᵛⁱˢⁱᵗ (β=${trace.beta})</text>
-      </g>
-
-      <!-- ================= PERTURBED DONOR BRANCH B/C (BOTTOM RAIL) ================= -->
-      <g opacity="${hasBranchB ? '1.0' : '0.28'}">
-        <path d="M 86 96 L 86 230" stroke="${colDonor}" stroke-width="2" stroke-dasharray="4 2" marker-end="url(#arrSky)"/>
-        <rect x="38" y="148" width="96" height="22" rx="6" fill="#e0f2fe" stroke="#7dd3fc"/>
-        <text x="86" y="163" text-anchor="middle" font-size="9" font-family="JetBrains Mono,monospace" font-weight="700" fill="#0369a1">+ε₁ (η=${trace.eta || 0.25}, full)</text>
-
-        <rect x="34" y="236" width="104" height="52" rx="10" fill="#fff" stroke="${colDonor}" stroke-width="${s1Active ? 3 : 2}"/>
-        <text x="86" y="257" text-anchor="middle" font-size="12" font-weight="800" fill="#0c4a6e">Donor H₁${selectedDonor === "C" ? "ᶜ" : "ᴮ"}</text>
-        <text x="86" y="274" text-anchor="middle" font-size="9.5" font-family="JetBrains Mono,monospace" fill="#0369a1">${trace.num_donors === 2 ? '2-Donor Pool (B,C)' : 'Perturbed Fork'}</text>
-
-        <line x1="138" y1="262" x2="196" y2="262" stroke="${colDonor}" stroke-width="2.5" marker-end="url(#arrSky)"/>
-        <text x="167" y="254" text-anchor="middle" font-size="9" font-weight="700" fill="#0284c7">F_θ,1</text>
-
-        <rect x="202" y="236" width="116" height="52" rx="10" fill="#fff" stroke="${colDonor}" stroke-width="${s2Active ? 3 : 2}"/>
-        <text x="260" y="256" text-anchor="middle" font-size="11.5" font-weight="800" fill="#0c4a6e">${donorLabel}</text>
-        <text x="260" y="273" text-anchor="middle" font-size="9" font-family="JetBrains Mono,monospace" fill="#0369a1">RelDist=${relDist2}</text>
-
-        <rect x="378" y="242" width="124" height="40" rx="8" fill="#f1f5f9" stroke="#cbd5e1" stroke-dasharray="4 2"/>
-        <text x="440" y="259" text-anchor="middle" font-size="9.5" font-weight="700" fill="#475569">${m === 'P0' || m === 'P1' ? 'Donor Continues →' : 'Donor Retired'}</text>
-        <text x="440" y="273" text-anchor="middle" font-size="8.5" font-family="JetBrains Mono,monospace" fill="#64748b">${m === 'P0' || m === 'P1' ? `Ans B: ${trace.donor_b_answer || '--'}` : 'Saves t=3 Compute'}</text>
-      </g>
-    `;
-
-    // Narrative text below SVG
-    const narratives = {
-      1: `<b>Step t = 1 (Branch Fork):</b> Primary trajectory $H_1^A$ forks companion donor state(s) (${trace.num_donors === 2 ? "Donor $B$ ($\\eta{=}0.25$) and Donor $C$ ($\\eta{=}0.35$)" : "Donor $B$ ($\\eta{=}0.25$)"}). States evolve through the 24 shared decoder layers of $F_{\\theta,1}$.`,
-      2: `<b>Step t = 2 (Self-Directed Controller & Midpoint Excursion):</b> Branch divergence reaches $\\|H_2^A - H_2^B\\|_F / \\|H_2^A\\|_F = ${relDist2}$. Method <code>${m}</code> ${
-        earlyExited
-          ? `executes <b>EARLY EXIT</b> at $t=2$ ($m_2^A = ${marginA2}$), halving recurrent compute (${trace.recurrent_block_calls} block calls).`
-          : skippedMidpoint
-          ? `chooses <b>CONTINUE</b> (${trace.policy_reason || "high confidence"}), skipping donor fork/midpoint probe.`
-          : hasMidpointEval
-          ? `selects <b>EXCURSION</b> (donor=${selectedDonor || "B"}, $\\alpha=${trace.alpha}, \\beta=${trace.beta}$), extracting nonlinear curvature $\\|C_2\\|_F = ${curvFrob}$ (${fmtNum(trace.curvature_relative * 100, 1)}% of midpoint velocity).`
-          : "combines branch states without midpoint curvature evaluation."
-      }`,
-      3: earlyExited
-        ? `<b>Step t = 3 (Bypassed via Early Exit):</b> Controller exited at $t=2$ because $H_2^A$ already converged, saving steps $t=3,4$ and all donor evaluations.`
-        : `<b>Step t = 3 (Trust-Region Return):</b> Primary trajectory imports the norm-clipped midpoint update vector $\\tilde{V}_2^{\\mathrm{visit}}$ with weight $\\beta=${trace.beta}$, advancing to $H_3^{A'}$ (${trace.clipped ? "clipped" : "unclipped, within trust region"}).`,
-      4: `<b>Step t = 4 (Final Refinement & Readout):</b> Decodes <code>${trace.extracted_answer}</code> in <b>${trace.recurrent_block_calls} recurrent block calls</b> (Gold: <code>${trace.gold_answer}</code>, $\\Delta \\log p(\\text{gold}) = ${fmtNum(trace.delta_gold_logprob, 4)}$ vs $S_0$).`,
-    };
-    $("stageStepNarrative").innerHTML = narratives[activeStep] || narratives[2];
-    if (window.MathJax && window.MathJax.typesetPromise) {
-      window.MathJax.typesetPromise([$("stageStepNarrative")]).catch(() => {});
+  function renderRecording() {
+    const r = trace(), b = baseline(), t = token(), s = snapshot(), tel = telemetry();
+    if (!r) return;
+    all(".data-dependent").forEach((el) => { el.hidden = false; });
+    $("tokenControls").hidden = !["decision", "experiment"].includes(state.view);
+    $("problemPrompt").textContent = r.prompt;
+    $("goldAnswer").textContent = `Verified target: ${r.gold_answer}`;
+    $("baselineOutput").innerHTML = output(b);
+    $("methodOutput").innerHTML = output(r);
+    $("methodHeading").textContent = `${name(r.method)} · ${r.method}`;
+    let result = "Baseline unavailable.";
+    if (b) {
+      if (!b.is_correct && r.is_correct) result = "Recovered in this recorded instance.";
+      else if (b.is_correct && !r.is_correct) result = "Degraded in this recorded instance.";
+      else result = r.is_correct ? "Both methods answered correctly." : "Neither method recovered the correct answer.";
     }
+    $("outcomeNote").textContent = `${result} One selected example is not evidence of a general benefit.`;
+    $("stepContext").textContent = `${t ? `Token ${state.token + 1}` : "Final-output snapshot; token identity unavailable"} · step ${state.step ?? "unavailable"} · snapshots are measured states`;
+    const copy = mechanismCopy(r.method);
+    const vals = [["Receiving A · entropy (nats)", s?.branch_entropy?.A], ["Receiving A · logit margin", s?.branch_margin?.A], ["A–B relative distance", s?.ab_relative_distance], ["Full-response residual ‖C‖", copy.residualMeasured ? tel?.curvature_frob : undefined]];
+    $("stepTelemetry").innerHTML = vals.map(([label, value]) => `<div><small>${esc(label)}</small><strong>${num(value)}</strong></div>`).join("");
+    renderDecision();
+    const d = decisionAtStep();
+    $("recordedStepTitle").textContent = `${t ? `Token ${state.token + 1}` : "Final-output snapshot"}, step ${state.step ?? "unavailable"}`;
+    if (tel) {
+      $("recordedMechanism").innerHTML = copy.stages.map((label, i) => `<span class="${i === 1 ? "visit" : "return"}">${esc(label)}</span>`).join("<b>→</b>");
+      $("recordedStepNote").textContent = `Outgoing step ${tel.step} → ${tel.step + 1}. ${tel.skipped_unstable ? "Intervention rejected as unstable; no relocation applied." : copy.note} Donor ${tel.donor_branch_id ?? "unavailable"}; α_eff=${num(tel.effective_alpha, 2)}, β=${num(tel.beta, 2)}.${copy.residualMeasured ? ` Returned shift vs normal ${num(tel.returned_shift_vs_normal_frob)}. Full-response residual is not necessarily the scoped, applied update.` : " Placeholder response-residual and return-shift fields are not displayed as measurements for this control."}`;
+      if (tel.receiving_state_hash && tel.visit_state_hash === tel.receiving_state_hash && (tel.beta === 0 || tel.effective_alpha === 0)) {
+        $("recordedMechanism").innerHTML = '<span class="return">Receiving A</span><b>→</b><span>Identity/no-op: normal update</span>';
+        $("recordedStepNote").textContent = "Recorded identity short-circuit: no visited-state transition is required. A advances normally.";
+      }
+      if (tel.skipped_unstable) $("recordedMechanism").innerHTML = '<span class="return">Receiving A</span><b>→</b><span>Normal update; intervention skipped</span>';
+    } else if (d?.action_type === "EXIT") {
+      $("recordedMechanism").innerHTML = '<span class="return">Receiving A</span><b>EXIT</b><span>Readout at this depth</span>';
+      $("recordedStepNote").textContent = "Later steps are not recorded for this token. No excursion is implied.";
+    } else {
+      $("recordedMechanism").innerHTML = `<span class="return">Receiving A · step ${esc(state.step)}</span><span>${esc(d?.action_type || "Recorded state snapshot")}</span>`;
+      $("recordedStepNote").textContent = "No outgoing excursion telemetry at the selected step. Absence of telemetry is not a fabricated visit or a zero residual.";
+    }
+    const ledger = r.token_ledger || [];
+    $("ledgerRows").innerHTML = ledger.map((item, i) => `<tr data-selected="${i === state.token}"><td>${i + 1}: ${esc(JSON.stringify(item.decoded_token ?? item.token_id))}</td><td>${esc(item.controller_action_type)}</td><td>${esc(item.selected_donor)}</td><td>${num(item.effective_alpha, 2)} / ${num(item.effective_beta, 2)}</td>${["shared_calls", "primary_branch_calls", "donor_calls", "visit_calls", "continuation_calls", "recurrent_block_calls"].map((key) => `<td>${esc(item[key])}</td>`).join("")}</tr>`).join("");
+    $("ledgerNote").textContent = ledgerMatches(r) ? `Ledger totals match ${r.recurrent_block_calls} recorded calls. Calls describe execution, not accuracy or equal FLOPs.` : "Missing or inconsistent execution ledger. Cost is unverified. Raw values are preserved, not repaired in the UI.";
+    if (["P0", "P1"].includes(r.method)) $("ledgerNote").textContent = "Parallel selection cost is unverified, even if ledger sums coincide. These rows describe the selected output, not the total work of decoding all consulted candidates. Raw records preserve the reference budget separately when available.";
+    if (r.derived_parallel_selection) $("ledgerNote").textContent += " Rows above describe the selected output only. reference_parallel_budget_ledger is a reference budget, not the total executed cost of decoding all selection candidates; inspect raw JSON.";
+    renderProjection(r);
+    $("rawTrace").textContent = JSON.stringify(r, null, 2);
+    if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+    downloadUrl = URL.createObjectURL(new Blob([JSON.stringify(r, null, 2)], {type:"application/json"}));
+    $("downloadTrace").href = downloadUrl;
+    $("downloadTrace").download = `${r.problem_id}-${r.seed}-${r.method}.json`;
+    $("downloadRun").href = run().trace_url;
+    $("downloadConfig").href = run().manifest_url;
+    renderEvidence(); syncUrl();
   }
 
-  function renderPcaSvg(trace, e1Trace) {
-    const svg = $("pcaPlotSvg");
-    if (!svg) return;
-
-    const source = (trace.pca_coords && trace.pca_coords.B && trace.pca_coords.B.length) ? trace : (e1Trace || trace);
-    const coordsA = (source.pca_coords && source.pca_coords.A) || [];
-    const coordsB = (source.pca_coords && source.pca_coords.B) || [];
-    const ev = source.pca_explained_variance || [];
-    $("pcaVarLabel").textContent = ev.length >= 2
-      ? `PC1 ${(ev[0] * 100).toFixed(1)}% · PC2 ${(ev[1] * 100).toFixed(1)}%`
-      : "2D SVD Projection";
-
-    const allPts = [...coordsA, ...coordsB];
-    if (!allPts.length) {
-      svg.innerHTML = `<text x="190" y="90" text-anchor="middle" font-size="11" fill="#64748b">No PCA points recorded</text>`;
+  function renderProjection(r) {
+    const svg = $("projection");
+    const branches = Object.entries(r.pca_coords || {}).filter(([branch, points]) => branch !== "VISIT" && Array.isArray(points) && points.length);
+    if (state.token !== 0 || r.method === "E0" || !branches.length) {
+      svg.replaceChildren();
+      $("projectionNote").textContent = state.token !== 0 ? "No per-token projection recorded here. Token 1 coordinates are not borrowed for later tokens." : r.method === "E0" ? "Historical random-direction visit coordinates were reconstructed, not captured. Projection withheld." : "No measured projection available.";
       return;
     }
-
-    const xs = allPts.map((p) => p[0]);
-    const ys = allPts.map((p) => p[1]);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    const padX = Math.max((maxX - minX) * 0.18, 1.0);
-    const padY = Math.max((maxY - minY) * 0.22, 1.0);
-
-    const W = 380;
-    const H = 175;
-    const mapX = (x) => 28 + ((x - (minX - padX)) / (maxX - minX + 2 * padX)) * (W - 56);
-    const mapY = (y) => H - 24 - ((y - (minY - padY)) / (maxY - minY + 2 * padY)) * (H - 46);
-
-    const pathStr = (pts) =>
-      pts.map((p, i) => `${i === 0 ? "M" : "L"} ${mapX(p[0]).toFixed(1)} ${mapY(p[1]).toFixed(1)}`).join(" ");
-
-    let midpointHtml = "";
-    if (coordsA.length >= 2 && coordsB.length >= 2) {
-      const mx = (mapX(coordsA[1][0]) + mapX(coordsB[1][0])) / 2;
-      const my = (mapY(coordsA[1][1]) + mapY(coordsB[1][1])) / 2;
-      const ax3 = coordsA[2] ? mapX(coordsA[2][0]) : mx;
-      const ay3 = coordsA[2] ? mapY(coordsA[2][1]) : my;
-      midpointHtml = `
-        <line x1="${mapX(coordsA[1][0])}" y1="${mapY(coordsA[1][1])}" x2="${mapX(coordsB[1][0])}" y2="${mapY(coordsB[1][1])}" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="3 3"/>
-        <line x1="${mx}" y1="${my}" x2="${ax3}" y2="${ay3}" stroke="#059669" stroke-width="2" stroke-dasharray="4 2"/>
-        <circle cx="${mx}" cy="${my}" r="5.5" fill="#7c3aed" stroke="#fff" stroke-width="1.5"/>
-        <text x="${mx + 7}" y="${my + 3}" font-size="8.5" font-weight="800" fill="#5b21b6">H₂ᵛⁱˢⁱᵗ</text>
-      `;
-    }
-
-    const nodesHtml = (pts, color, prefix) =>
-      pts
-        .map((p, i) => {
-          const cx = mapX(p[0]).toFixed(1);
-          const cy = mapY(p[1]).toFixed(1);
-          const isCurr = i + 1 === activeStep;
-          return `
-            <circle cx="${cx}" cy="${cy}" r="${isCurr ? 6.5 : 4.2}" fill="${color}" stroke="#fff" stroke-width="1.5"/>
-            <text x="${Number(cx) + 6}" y="${Number(cy) - 5}" font-size="8.5" font-family="JetBrains Mono,monospace" font-weight="700" fill="${color}">${prefix}${i + 1}</text>
-          `;
-        })
-        .join("");
-
-    svg.innerHTML = `
-      <line x1="20" y1="${H - 18}" x2="${W - 16}" y2="${H - 18}" stroke="#e2e8f0" stroke-width="1"/>
-      <line x1="24" y1="12" x2="24" y2="${H - 14}" stroke="#e2e8f0" stroke-width="1"/>
-      ${coordsB.length ? `<path d="${pathStr(coordsB)}" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-dasharray="4 2"/>` : ""}
-      ${coordsA.length ? `<path d="${pathStr(coordsA)}" fill="none" stroke="#4338ca" stroke-width="2.5"/>` : ""}
-      ${midpointHtml}
-      ${nodesHtml(coordsB, "#0284c7", "B")}
-      ${nodesHtml(coordsA, "#4338ca", "A")}
-    `;
+    const pts = branches.flatMap(([, points]) => points).filter((p) => p.length >= 2 && p.every(Number.isFinite));
+    if (!pts.length) { svg.replaceChildren(); return; }
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const x = (v) => 48 + (v - minX) / (maxX - minX || 1) * 600;
+    const y = (v) => 215 - (v - minY) / (maxY - minY || 1) * 175;
+    const colors = {A:"#74d5e8", B:"#efbd73", C:"#b8a2ef"};
+    svg.innerHTML = '<text x="10" y="20" fill="#a8b6c9" font-size="12">PC2</text><text x="660" y="247" fill="#a8b6c9" font-size="12">PC1</text>' + branches.map(([branch, points]) => {
+      const valid = points.filter((p) => p.length >= 2 && p.every(Number.isFinite));
+      const color = colors[branch] || "#edf1f7";
+      return `<polyline points="${valid.map((p) => `${x(p[0])},${y(p[1])}`).join(" ")}" fill="none" stroke="${color}" stroke-width="2" ${branch === "A" ? "" : 'stroke-dasharray="5 5"'}/>` + valid.map((p, i) => `<circle cx="${x(p[0])}" cy="${y(p[1])}" r="${i + 1 === state.step ? 6 : 4}" fill="${color}"/><text x="${x(p[0]) + 8}" y="${y(p[1]) - 8}" fill="${color}" font-size="11">${esc(branch)} #${i + 1}</text>`).join("");
+    }).join("");
+    $("projectionNote").textContent = `Recorded token 1 only. ${r.pca_explained_variance?.length >= 2 ? `PC1 ${pct(r.pca_explained_variance[0])}, PC2 ${pct(r.pca_explained_variance[1])} explained variance.` : "Explained variance unavailable."} Points are recorded branch samples; visit geometry is deliberately omitted.`;
   }
 
-  function renderTelemetryGrid(trace, snap, snap2) {
-    const grid = $("telemetryGrid");
-    if (!grid) return;
-    $("telemetryStepTag").textContent = `Step t = ${activeStep} (${trace.method})`;
-
-    const entA = snap.branch_entropy && snap.branch_entropy.A !== undefined ? fmtNum(snap.branch_entropy.A, 3) : fmtNum(trace.first_token_entropy, 3);
-    const marA = snap.branch_margin && snap.branch_margin.A !== undefined ? fmtNum(snap.branch_margin.A, 3) : fmtNum(trace.first_token_margin, 3);
-    const relDist = snap.ab_relative_distance !== null && snap.ab_relative_distance !== undefined
-      ? fmtNum(snap.ab_relative_distance, 4)
-      : fmtNum(trace.branch_relative_distance, 4);
-    const ctrlAct = trace.controller_action_type
-      ? `${trace.controller_action_type.toUpperCase()}${trace.selected_donor ? ` (Donor ${trace.selected_donor})` : ""}`
-      : trace.policy_action || "fixed";
-    const predAdv = trace.controller_predicted_advantage
-      ? fmtNum(trace.controller_predicted_advantage, 4)
-      : "n/a";
-
-    const items = [
-      { k: `Branch A Entropy / Margin`, v: `H=${entA} · m=${marA}` },
-      { k: "Controller Decision", v: ctrlAct },
-      { k: "Predicted Advantage Ĵ", v: predAdv },
-      { k: "A–Donor Relative Distance", v: relDist },
-      { k: "Midpoint Curvature ||C₂||_F", v: fmtNum(trace.curvature_frob, 2) },
-      { k: "Δ Gold Log-Prob / Calls", v: `${fmtNum(trace.delta_gold_logprob, 3)} (${trace.recurrent_block_calls}c)` },
-    ];
-
-    grid.innerHTML = items
-      .map(
-        (it) => `
-      <div class="t-kv">
-        <div class="k">${it.k}</div>
-        <div class="v">${it.v}</div>
-      </div>`
-      )
-      .join("");
+  function renderEvidence() {
+    if (!hasData) { $("evidenceConclusion").textContent = "Recording manifest unavailable. No metrics can be verified or displayed."; return; }
+    const current = run(), method = availableMethod(current.methods), stats = current.methods[method];
+    $("evidenceConclusion").textContent = `${name(method)}: ${pct(stats.accuracy)} recorded accuracy vs ${pct(stats.baseline_accuracy)} for ordinary recurrence (${pp(stats.paired_accuracy_diff)} percentage points). ${stats.cluster_ci_95_low <= 0 && stats.cluster_ci_95_high >= 0 ? "The problem-cluster interval includes zero; a general accuracy gain is not established." : "This exploratory contrast is not corrected for multiple comparisons."}`;
+    $("sampleNote").textContent = `${current.label} · split ${current.split} · ${current.num_problems} distinct problems × ${current.seeds.length} seed(s) · ${stats.num_instances} paired evaluations per method · ${current.record_count} method traces. Seeds are repeated measurements, not independent problems.`;
+    $("integrityNote").textContent = current.ledger_mismatches ? `${current.ledger_mismatches} execution ledgers are missing, inconsistent, or reference-only. Affected methods show “Unverified” costs below. Output accuracy is descriptive; old audit pass flags are not current verification.` : "Export hashes and paired keys are checkable. This recording is exploratory; no claim of strict compute matching or independent replication.";
+    $("resultRows").innerHTML = Object.entries(current.methods).map(([m, s]) => `<tr data-selected="${m === state.method}"><td><button data-result-method="${esc(m)}" title="Inspect this recorded method"><span class="method-name">${esc(name(m))}</span><span class="method-code">${esc(m)}${m === "P1" || m === "D_oracle" ? " · gold-label oracle" : ""}</span></button></td><td>${pct(s.accuracy)}</td><td>${pp(s.paired_accuracy_diff)} pp</td><td>[${pp(s.cluster_ci_95_low)}, ${pp(s.cluster_ci_95_high)}] pp</td><td>${s.rescued_count} / ${s.base_wrong_count}</td><td>${s.degraded_count} / ${s.base_correct_count}</td><td>${(s.ledger_mismatches || ["P0", "P1"].includes(m)) ? "Unverified" : num(s.mean_recurrent_calls, 2)}</td></tr>`).join("");
+    $("evidenceLinks").innerHTML = DATA.evidence.map((e) => `<li><a href="${esc(e.url)}">${esc(e.label)}${e.historical ? " · historical audit" : ""}</a><small>SHA-256 ${esc(e.sha256)}</small></li>`).join("");
+    $("runHash").textContent = `Original JSONL SHA-256: ${current.source_trace_sha256}\nExported recording SHA-256: ${current.trace_sha256}`;
   }
 
-  function renderTerminalComparison(methodsObj, trace, s0Trace) {
-    $("terminalCallCost").textContent = `Recurrent Block Calls: ${trace.recurrent_block_calls} · Wall Time: ${fmtNum(trace.wall_time_ms, 0)} ms`;
-    const statusHtml = trace.is_correct
-      ? `<span style="color:#34d399; font-weight:800;">✓ CORRECT</span>`
-      : `<span style="color:#fda4af; font-weight:800;">✗ INCORRECT</span>`;
-
-    let scoresHtml = "";
-    if (trace.controller_action_scores && Object.keys(trace.controller_action_scores).length) {
-      const topScores = Object.entries(trace.controller_action_scores)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 4)
-        .map(([k, v]) => `<code>${k}: ${Number(v).toFixed(3)}</code>`)
-        .join(" &middot; ");
-      scoresHtml = `<div style="font-size:0.75rem; color:#38bdf8; margin-top:0.2rem;">Top Controller Action Scores Ĵ(s₂, a): ${topScores}</div>`;
-    }
-
-    $("terminalMainText").innerHTML = `
-      <div><b>Active Method [${trace.method}]:</b> Decoded = <code>${JSON.stringify(trace.decoded_text)}</code> &rarr; Extracted = <b>${trace.extracted_answer}</b> (Gold = <b>${trace.gold_answer}</b>) ${statusHtml}</div>
-      <div style="font-size:0.78rem; color:#94a3b8; margin-top:0.25rem;">
-        Action: <code>${trace.controller_action_type || trace.policy_action}</code> (${trace.policy_reason || "n/a"}) &middot;
-        Donor: <code>${trace.selected_donor || "none"}</code> &middot;
-        Early Exit: <code>${trace.early_exit_step || "no"}</code> &middot;
-        Gold LogProb: <code>${fmtNum(trace.gold_logprob, 4)}</code> (S0: <code>${fmtNum(s0Trace.gold_logprob, 4)}</code>, &Delta; = <code>${fmtNum(trace.delta_gold_logprob, 4)}</code>)
-      </div>
-      ${scoresHtml}
-    `;
-
-    const badgesBar = $("terminalMethodBadges");
-    const avail = PREFERRED_METHOD_ORDER.filter((m) => methodsObj[m]);
-    badgesBar.innerHTML = avail
-      .map((m) => {
-        const r = methodsObj[m];
-        const cls = r.is_correct ? "pass" : "fail";
-        const activeCls = m === trace.method ? "active-method" : "";
-        return `<span class="m-chip ${cls} ${activeCls}" style="cursor:pointer;" data-method="${m}" title="Click to inspect ${m} (${r.recurrent_block_calls} calls)">
-          ${m}: ${r.extracted_answer} ${r.is_correct ? "✓" : "✗"} (${r.recurrent_block_calls}c)
-        </span>`;
-      })
-      .join("");
-
-    badgesBar.querySelectorAll(".m-chip").forEach((el) => {
-      el.addEventListener("click", () => {
-        activeMethod = el.getAttribute("data-method");
-        $("methodSelect").value = activeMethod;
-        renderStage();
-      });
-    });
-  }
-
-  /* ============================================================
-   * 3. POPULATE EMPIRICAL TABLES & PARETO CHART
-   * ============================================================ */
-  function renderResultsTables() {
-    // 0. Phase 7-8 Self-Directed Controller Held-Out Test Table (n=36, 14 methods)
-    const p78 = FINAL.runs && FINAL.runs.phase7_8_controller_test;
-    if (p78 && p78.rescue_matrix && $("phase78TestTable")) {
-      const methods = p78.rescue_matrix.methods;
-      const order = [
-        "S0",
-        "S1",
-        "EXIT_2",
-        "RAND_CTRL",
-        "P0",
-        "P1",
-        "M0",
-        "M1",
-        "E1",
-        "E2",
-        "H_budget",
-        "E3_no_exit",
-        "E3_ridge",
-        "E3_mlp",
-      ];
-      $("phase78TestTable").innerHTML = `
-        <thead>
-          <tr>
-            <th>Method</th>
-            <th>Accuracy (n=36)</th>
-            <th>Paired Δ vs S0</th>
-            <th>95% Bootstrap CI</th>
-            <th>Rescued</th>
-            <th>Degraded</th>
-            <th>Mean ||C₂||_F</th>
-            <th>Δ Gold LogProb</th>
-            <th>Recurrent Calls</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${order
-            .filter((k) => methods[k])
-            .map((k) => {
-              const m = methods[k];
-              const isOurs = k === "E3_mlp" || k === "E3_ridge" || k === "E2" || k === "E1";
-              const diffCls = m.paired_accuracy_diff > 0 ? "delta-up" : m.paired_accuracy_diff < 0 ? "delta-down" : "";
-              return `
-                <tr class="${isOurs ? "row-ours" : ""}">
-                  <td><b>${METHOD_LABELS[k] || k}</b></td>
-                  <td><b>${fmtPct(m.accuracy)}</b></td>
-                  <td class="${diffCls}">${fmtSignedPct(m.paired_accuracy_diff)}</td>
-                  <td>[${fmtSignedPct(m.ci_95_low)}, ${fmtSignedPct(m.ci_95_high)}]</td>
-                  <td>${m.rescued_count} / ${m.base_wrong_count} (${fmtPct(m.rescue_rate)})</td>
-                  <td>${m.degraded_count} / ${m.base_correct_count} (${fmtPct(m.degradation_rate)})</td>
-                  <td>${fmtNum(m.mean_curvature_frob, 2)}</td>
-                  <td>${fmtNum(m.mean_delta_gold_logprob, 4)}</td>
-                  <td><b>${fmtNum(m.mean_recurrent_calls, 2)}</b></td>
-                </tr>
-              `;
-            })
-            .join("")}
-        </tbody>
-      `;
-
-      // Family Breakdown Table (using Phase 7-8 methods)
-      const byFam = p78.rescue_matrix.by_family || {};
-      const famOrder = ["S0", "EXIT_2", "RAND_CTRL", "P0", "P1", "M1", "E1", "E2", "H_budget", "E3_ridge", "E3_mlp"];
-      if ($("familyBreakdownTable")) {
-        $("familyBreakdownTable").innerHTML = `
-          <thead>
-            <tr>
-              <th>Method</th>
-              <th>Arithmetic (n=12)</th>
-              <th>2-SAT Logic (n=12)</th>
-              <th>Shortest Path (n=12)</th>
-              <th>Overall (n=36)</th>
-              <th>Calls</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${famOrder
-              .filter((k) => methods[k])
-              .map((k) => {
-                const isOurs = k === "E3_mlp" || k === "E3_ridge" || k === "E2" || k === "E1";
-                const ar = byFam.arithmetic && byFam.arithmetic[k] ? fmtPct(byFam.arithmetic[k].accuracy) : "--";
-                const lg = byFam.logic && byFam.logic[k] ? fmtPct(byFam.logic[k].accuracy) : "--";
-                const gr = byFam.graph && byFam.graph[k] ? fmtPct(byFam.graph[k].accuracy) : "--";
-                return `
-                  <tr class="${isOurs ? "row-ours" : ""}">
-                    <td><b>${k}</b></td>
-                    <td>${ar}</td>
-                    <td>${lg}</td>
-                    <td>${gr}</td>
-                    <td><b>${fmtPct(methods[k].accuracy)}</b></td>
-                    <td>${fmtNum(methods[k].mean_recurrent_calls, 2)}</td>
-                  </tr>
-                `;
-              })
-              .join("")}
-          </tbody>
-        `;
-      }
-
-      renderParetoSvg(p78.pareto_frontier && p78.pareto_frontier.points);
-    }
-
-    // 1. Phase 5 Multi-Branch Donor Selection Table (n=18)
-    const p5 = FINAL.runs && FINAL.runs.phase5_donor;
-    if (p5 && p5.rescue_matrix && $("phase5DonorTable")) {
-      const methods = p5.rescue_matrix.methods;
-      const order = ["S0", "D_farthest", "D_random", "D_confidence", "D_learned", "D_nearest", "D_oracle"];
-      $("phase5DonorTable").innerHTML = `
-        <thead>
-          <tr>
-            <th>Donor Policy (3-Branch: A + Donors B, C)</th>
-            <th>Val Accuracy (n=18)</th>
-            <th>Paired Δ vs S0</th>
-            <th>Rescued</th>
-            <th>Degraded</th>
-            <th>Mean ||C₂||_F</th>
-            <th>Δ Gold LogProb</th>
-            <th>Calls</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${order
-            .filter((k) => methods[k])
-            .map((k) => {
-              const m = methods[k];
-              const isOurs = k === "D_nearest" || k === "D_learned";
-              return `
-                <tr class="${isOurs ? "row-ours" : ""}">
-                  <td><b>${METHOD_LABELS[k] || k}</b></td>
-                  <td><b>${fmtPct(m.accuracy)}</b></td>
-                  <td class="${m.paired_accuracy_diff > 0 ? "delta-up" : ""}">${fmtSignedPct(m.paired_accuracy_diff)}</td>
-                  <td>${m.rescued_count} / ${m.base_wrong_count}</td>
-                  <td>${m.degraded_count} / ${m.base_correct_count}</td>
-                  <td>${fmtNum(m.mean_curvature_frob, 2)}</td>
-                  <td>${fmtNum(m.mean_delta_gold_logprob, 4)}</td>
-                  <td>${fmtNum(m.mean_recurrent_calls, 2)}</td>
-                </tr>
-              `;
-            })
-            .join("")}
-        </tbody>
-      `;
-    }
-
-    // 2. Phase 6 Selective Transfer & Subspace Projection Table (n=18)
-    const p6 = FINAL.runs && FINAL.runs.phase6_selective;
-    if (p6 && p6.rescue_matrix && $("phase6SelectiveTable")) {
-      const methods = p6.rescue_matrix.methods;
-      const order = ["S0", "E1", "E1_subspace", "E1_norm_tight", "E1_last_token", "E1_gated", "E3_ridge"];
-      $("phase6SelectiveTable").innerHTML = `
-        <thead>
-          <tr>
-            <th>Selective Transfer Variant</th>
-            <th>Val Accuracy (n=18)</th>
-            <th>Paired Δ vs S0</th>
-            <th>Rescued</th>
-            <th>Degraded</th>
-            <th>Mean ||C₂||_F</th>
-            <th>Δ Gold LogProb</th>
-            <th>Calls</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${order
-            .filter((k) => methods[k])
-            .map((k) => {
-              const m = methods[k];
-              const isOurs = k === "E1_subspace" || k === "E3_ridge";
-              return `
-                <tr class="${isOurs ? "row-ours" : ""}">
-                  <td><b>${METHOD_LABELS[k] || k}</b></td>
-                  <td><b>${fmtPct(m.accuracy)}</b></td>
-                  <td class="${m.paired_accuracy_diff > 0 ? "delta-up" : ""}">${fmtSignedPct(m.paired_accuracy_diff)}</td>
-                  <td>${m.rescued_count} / ${m.base_wrong_count}</td>
-                  <td>${m.degraded_count} / ${m.base_correct_count}</td>
-                  <td>${fmtNum(m.mean_curvature_frob, 2)}</td>
-                  <td>${fmtNum(m.mean_delta_gold_logprob, 4)}</td>
-                  <td><b>${fmtNum(m.mean_recurrent_calls, 2)}</b></td>
-                </tr>
-              `;
-            })
-            .join("")}
-        </tbody>
-      `;
-    }
-
-    // 3. Phase 3 Validation Table (12 Methods)
-    const p3 = FINAL.runs && FINAL.runs.phase3_ablations;
-    if (p3 && p3.rescue_matrix && $("phase3ValidationTable")) {
-      const methods = p3.rescue_matrix.methods;
-      const order = ["S0", "S1", "P0", "P1", "M0", "M1", "C0", "R0", "E0", "E1_no_curv", "E1_rand_curv", "E1"];
-      $("phase3ValidationTable").innerHTML = `
-        <thead>
-          <tr>
-            <th>Method</th>
-            <th>Accuracy (n=18)</th>
-            <th>Paired Δ vs S0</th>
-            <th>Rescued</th>
-            <th>Degraded</th>
-            <th>Net Rescue</th>
-            <th>Mean ||C₂||_F</th>
-            <th>Δ Gold LogProb</th>
-            <th>Calls</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${order
-            .filter((k) => methods[k])
-            .map((k) => {
-              const m = methods[k];
-              const isOurs = k === "E1";
-              const net = m.rescued_count - m.degraded_count;
-              const netStr = net > 0 ? `+${net}` : `${net}`;
-              return `
-                <tr class="${isOurs ? "row-ours" : ""}">
-                  <td><b>${k}</b></td>
-                  <td><b>${fmtPct(m.accuracy)}</b></td>
-                  <td class="${m.paired_accuracy_diff > 0 ? "delta-up" : m.paired_accuracy_diff < 0 ? "delta-down" : ""}">${fmtSignedPct(m.paired_accuracy_diff)}</td>
-                  <td>${m.rescued_count} / ${m.base_wrong_count}</td>
-                  <td>${m.degraded_count} / ${m.base_correct_count}</td>
-                  <td><b>${netStr}</b></td>
-                  <td>${fmtNum(m.mean_curvature_frob, 2)}</td>
-                  <td>${fmtNum(m.mean_delta_gold_logprob, 4)}</td>
-                  <td>${fmtNum(m.mean_recurrent_calls, 2)}</td>
-                </tr>
-              `;
-            })
-            .join("")}
-        </tbody>
-      `;
-    }
-  }
-
-  function renderParetoSvg(points) {
-    const svg = $("paretoChartSvg");
-    if (!svg || !points || !points.length) return;
-
-    const W = 440;
-    const H = 250;
-    const padL = 54;
-    const padR = 30;
-    const padT = 24;
-    const padB = 38;
-
-    const mapX = (calls) => padL + ((calls - 4.8) / (15.6 - 4.8)) * (W - padL - padR);
-    const mapY = (acc) => H - padB - ((acc - 0.19) / (0.355 - 0.19)) * (H - padT - padB);
-
-    const pExit = points.find((p) => p.method === "EXIT_2");
-    const pMlp = points.find((p) => p.method === "E3_mlp");
-    const pM0 = points.find((p) => p.method === "M0");
-    const frontierPts = [pExit, pMlp, pM0].filter(Boolean);
-    const frontierPath = frontierPts
-      .map((p, i) => `${i === 0 ? "M" : "L"} ${mapX(p.mean_recurrent_calls).toFixed(1)} ${mapY(p.accuracy).toFixed(1)}`)
-      .join(" ");
-
-    const yTicks = [0.2222, 0.25, 0.2778, 0.3333];
-    const xTicks = [5.5, 7.33, 11.08, 12.83, 14.67];
-
-    const offsets = {
-      EXIT_2: { dx: 6, dy: -8 },
-      S0: { dx: 6, dy: 12 },
-      E3_ridge: { dx: -38, dy: 13 },
-      E3_mlp: { dx: -20, dy: -10 },
-      M0: { dx: 7, dy: -6 },
-      M1: { dx: 7, dy: 12 },
-      P1: { dx: -24, dy: -8 },
-      E2: { dx: -18, dy: -9 },
-      E1: { dx: 6, dy: -8 },
-      H_budget: { dx: -32, dy: 14 },
+  function renderMechanism() {
+    const mode = state.mechanism;
+    const descriptions = {
+      excursion: ["Excursion-and-return", "A temporary visit moves toward B. The shared recurrent transition computes an update there. That update returns to A; A does not become B."],
+      switch: ["Trajectory switching", "Select B as the new trajectory. A is abandoned. No update computed during a temporary visit returns to A."],
+      mix: ["Direct state mixing", "Replace A with a blend of A and B, then continue from that blended state. There is no return to A’s original anchor."],
     };
-
-    const showMethods = new Set(["EXIT_2", "S0", "E3_ridge", "E3_mlp", "P1", "M1", "M0", "H_budget", "E2", "E1"]);
-    const filteredPts = points.filter((p) => showMethods.has(p.method));
-
-    svg.innerHTML = `
-      <rect x="${padL}" y="${padT}" width="${W - padL - padR}" height="${H - padT - padB}" fill="#f8fafc" stroke="#e2e8f0"/>
-      ${yTicks
-        .map((y) => {
-          const py = mapY(y).toFixed(1);
-          return `
-            <line x1="${padL}" y1="${py}" x2="${W - padR}" y2="${py}" stroke="#e2e8f0" stroke-dasharray="3 3"/>
-            <text x="${padL - 6}" y="${Number(py) + 3}" text-anchor="end" font-size="9" font-family="JetBrains Mono,monospace" fill="#64748b">${(y * 100).toFixed(1)}%</text>
-          `;
-        })
-        .join("")}
-      ${xTicks
-        .map((x) => {
-          const px = mapX(x).toFixed(1);
-          return `
-            <line x1="${px}" y1="${padT}" x2="${px}" y2="${H - padB}" stroke="#f1f5f9"/>
-            <text x="${px}" y="${H - padB + 14}" text-anchor="middle" font-size="8.5" font-family="JetBrains Mono,monospace" fill="#64748b">${x}</text>
-          `;
-        })
-        .join("")}
-      <text x="${(padL + W - padR) / 2}" y="${H - 6}" text-anchor="middle" font-size="10" font-weight="700" fill="#334155">Mean Recurrent Block Calls per Instance</text>
-
-      <path d="${frontierPath}" fill="none" stroke="#059669" stroke-width="2.5" stroke-dasharray="5 3"/>
-
-      ${filteredPts
-        .map((p) => {
-          const cx = mapX(p.mean_recurrent_calls).toFixed(1);
-          const cy = mapY(p.accuracy).toFixed(1);
-          const isOurs = p.method === "E3_mlp" || p.method === "E3_ridge" || p.method === "E2" || p.method === "E1";
-          const color = isOurs ? "#059669" : p.is_oracle ? "#f59e0b" : "#4338ca";
-          const off = offsets[p.method] || { dx: 7, dy: -7 };
-          return `
-            <circle cx="${cx}" cy="${cy}" r="${p.method === "E3_mlp" ? 7 : isOurs ? 6 : 4.8}" fill="${color}" stroke="#fff" stroke-width="1.8"/>
-            <text x="${Number(cx) + off.dx}" y="${Number(cy) + off.dy}" font-size="9.5" font-family="JetBrains Mono,monospace" font-weight="800" fill="${color}">${p.method}</text>
-          `;
-        })
-        .join("")}
-    `;
+    const [title, description] = descriptions[mode];
+    const node = (x, y, w, label, sub, color = "#74d5e8") => `<rect x="${x}" y="${y}" width="${w}" height="64" rx="6" class="node" style="stroke:${color}"/><text x="${x + w / 2}" y="${y + 27}" text-anchor="middle" class="label" style="fill:${color}">${label}</text><text x="${x + w / 2}" y="${y + 47}" text-anchor="middle" class="sub-label">${sub}</text>`;
+    const line = (path, color, dashed = false) => `<path d="${path}" fill="none" stroke="${color}" stroke-width="2" ${dashed ? 'stroke-dasharray="6 5"' : ""} marker-end="url(#arrow)"/>`;
+    let diagram = `<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#a8b6c9"/></marker></defs><title id="mechanismTitle">${title}</title><desc id="mechanismDesc">${description}</desc>`;
+    diagram += node(24, 34, 150, "Receiving A", "original anchor") + node(24, 210, 150, "Donor B", "same model weights", "#efbd73");
+    if (mode === "excursion") {
+      diagram += node(280, 34, 180, "Normal update", "V(A) = F(A) − A") + node(280, 185, 180, "Temporary visit", "H_visit = A + α_eff(B−A)", "#b8a2ef") + node(540, 185, 150, "Compute there", "V_visit = F(visit) − visit", "#b8a2ef") + node(694, 34, 165, "Return to A", "A′ = A + weighted update");
+      diagram += line("M174 66 H280", "#74d5e8") + line("M174 242 H230 V217 H280", "#efbd73", true) + line("M99 98 V160 H370 V185", "#b8a2ef", true) + line("M460 217 H540", "#b8a2ef") + line("M615 185 V130 H776 V98", "#b8a2ef", true) + line("M460 66 H694", "#74d5e8");
+      diagram += '<text x="540" y="49" class="sub-label">(1−β) V(A)</text><text x="672" y="120" class="sub-label">β V_visit returns</text>';
+    } else if (mode === "switch") {
+      diagram += node(620, 210, 210, "Continue as B", "A is not the receiving anchor", "#efbd73") + line("M174 242 H620", "#efbd73");
+      diagram += '<text x="290" y="72" class="sub-label">A stops here. No excursion-and-return.</text>';
+    } else {
+      diagram += node(330, 120, 190, "Mixed state", "H_mix = (1−α)A + αB", "#b8a2ef") + node(660, 120, 170, "Continue from mix", "F(H_mix)", "#b8a2ef");
+      diagram += line("M174 66 H250 V142 H330", "#74d5e8") + line("M174 242 H250 V164 H330", "#efbd73", true) + line("M520 152 H660", "#b8a2ef");
+    }
+    $("mechanismDiagram").innerHTML = diagram;
+    $("mechanismExplanation").textContent = description;
+    $("mechanismCaption").textContent = `${title}. Schematic positions encode computation order, not latent distance. Recipient A is cyan; donor B amber; temporary computation violet and dashed.`;
+    all("[data-mechanism]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.mechanism === mode)));
   }
 
-  /* ============================================================
-   * 4. PHASE 1 HEATMAP & PHASE 3 DIMENSION ABLATIONS
-   * ============================================================ */
-  function initGridAndAblations() {
-    const sel = $("gridMetricSelect");
-    if (sel) {
-      sel.addEventListener("change", () => renderHeatmap(sel.value));
-      renderHeatmap(sel.value);
-    }
-
-    if ($("dimAblationTable") && DIM_ABL.length) {
-      $("dimAblationTable").innerHTML = `
-        <thead>
-          <tr>
-            <th>Visit Step $t_{\\mathrm{visit}}$</th>
-            <th>Token Perturbation Scope</th>
-            <th>Mean $\\|C_t\\|_F$</th>
-            <th>Subset Accuracy</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${DIM_ABL.map((row) => {
-            const isBest = row.visit_step === 2 && row.token_scope === "full";
-            return `
-              <tr class="${isBest ? "row-ours" : ""}">
-                <td><b>Step $t = ${row.visit_step}$</b></td>
-                <td><code>${row.token_scope}</code></td>
-                <td>${fmtNum(row.mean_curvature_frob, 2)}</td>
-                <td><b>${fmtPct(row.accuracy)}</b></td>
-              </tr>
-            `;
-          }).join("")}
-        </tbody>
-      `;
-      if (window.MathJax && window.MathJax.typesetPromise) {
-        window.MathJax.typesetPromise([$("dimAblationTable")]).catch(() => {});
-      }
-    }
+  if (!hasData) {
+    $("loadStatus").textContent = "Recording manifest unavailable. Source and methodology links remain available.";
+    $("dataControls").hidden = false;
   }
-
-  function renderHeatmap(metricKey) {
-    const container = $("alphaBetaHeatmap");
-    if (!container || !GRID.length) return;
-
-    const alphas = [0.0, 0.25, 0.5, 0.75, 1.0];
-    const betas = [0.0, 0.25, 0.5, 1.0];
-    const vals = GRID.map((g) => Number(g[metricKey]) || 0);
-    const maxV = Math.max(...vals.map(Math.abs), 1e-6);
-
-    let html = `<div class="hm-head">α \\ β</div>`;
-    betas.forEach((b) => {
-      html += `<div class="hm-head">β = ${b.toFixed(2)}</div>`;
-    });
-
-    alphas.forEach((a) => {
-      html += `<div class="hm-head">α = ${a.toFixed(2)}</div>`;
-      betas.forEach((b) => {
-        const cell = GRID.find((g) => g.alpha === a && g.beta === b) || {};
-        const v = Number(cell[metricKey]) || 0;
-        const ratio = Math.min(Math.abs(v) / maxV, 1);
-        const bg =
-          v === 0
-            ? "#f8fafc"
-            : v > 0
-            ? `rgba(67, 56, 202, ${(0.1 + 0.72 * ratio).toFixed(2)})`
-            : `rgba(225, 29, 72, ${(0.1 + 0.65 * ratio).toFixed(2)})`;
-        const fg = ratio > 0.52 && v !== 0 ? "#ffffff" : "#0f172a";
-        const digits = metricKey === "mean_curvature_frob" ? 2 : 4;
-        html += `<div class="hm-cell" style="background:${bg}; color:${fg};" title="α=${a}, β=${b}: ${v.toFixed(6)}">${v.toFixed(digits)}</div>`;
-      });
-    });
-
-    container.innerHTML = html;
-  }
-
-  /* ============================================================
-   * 5. INTERACTIVE TRACE EXPLORER
-   * ============================================================ */
-  function initTraceExplorer() {
-    const splitSel = $("explorerSplitFilter");
-    const famSel = $("explorerFamilyFilter");
-    const methSel = $("explorerMethodFilter");
-    if (!splitSel || !famSel || !methSel) return;
-
-    const splitMap = {
-      test_phase7_8: TRACES_P78,
-      validation_phase5: TRACES_P5,
-      validation_phase6: TRACES_P6,
-      test_phase4: TRACES_TEST,
-      validation_phase3: TRACES_VAL,
-    };
-
-    const update = () => {
-      const splitKey = splitSel.value;
-      const fam = famSel.value;
-      const meth = methSel.value;
-      const src = splitMap[splitKey] || TRACES_P78;
-
-      const filtered = src.filter((r) => {
-        if (fam !== "all" && r.family !== fam) return false;
-        if (meth !== "all" && r.method !== meth) return false;
-        return true;
-      });
-
-      $("explorerCountBadge").textContent = `Showing ${filtered.length} of ${src.length} trace records`;
-      const tbody = $("traceExplorerBody");
-      tbody.innerHTML = filtered
-        .map((r) => {
-          const s0 = (traceIndex.get(`${splitKey}|${r.problem_id}|${r.seed}`) || {}).S0;
-          let statusBadge = r.is_correct
-            ? `<span style="color:#059669; font-weight:700;">✓ Correct</span>`
-            : `<span style="color:#94a3b8;">✗ Wrong</span>`;
-          if (s0 && !s0.is_correct && r.is_correct) {
-            statusBadge = `<span style="background:#ecfdf5; color:#047857; padding:0.15rem 0.45rem; border-radius:6px; font-weight:800;">★ RESCUED</span>`;
-          } else if (s0 && s0.is_correct && !r.is_correct) {
-            statusBadge = `<span style="background:#fff1f2; color:#be123c; padding:0.15rem 0.45rem; border-radius:6px; font-weight:800;">⚠ DEGRADED</span>`;
-          }
-          return `
-            <tr>
-              <td><code>${r.problem_id}</code></td>
-              <td>${r.family}</td>
-              <td>${r.seed}</td>
-              <td><b>${r.method}</b></td>
-              <td><b>${r.gold_answer}</b></td>
-              <td><code>${r.extracted_answer}</code></td>
-              <td>${statusBadge}</td>
-              <td>${fmtNum(r.curvature_frob, 2)}</td>
-              <td>${fmtNum(r.delta_gold_logprob, 4)}</td>
-              <td>${r.recurrent_block_calls}</td>
-              <td>
-                <button type="button" class="stage-btn load-trace-btn" style="padding:0.25rem 0.55rem; font-size:0.74rem;"
-                  data-key="${splitKey}|${r.problem_id}|${r.seed}" data-method="${r.method}">
-                  Inspect &uarr;
-                </button>
-              </td>
-            </tr>
-          `;
-        })
-        .join("");
-
-      tbody.querySelectorAll(".load-trace-btn").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          activeProblemKey = btn.getAttribute("data-key");
-          activeMethod = btn.getAttribute("data-method");
-          $("caseSelect").value = activeProblemKey;
-          syncMethodDropdown();
-          $("methodSelect").value = activeMethod;
-          renderStage();
-          document.getElementById("demo").scrollIntoView({ behavior: "smooth" });
-        });
-      });
-    };
-
-    splitSel.addEventListener("change", update);
-    famSel.addEventListener("change", update);
-    methSel.addEventListener("change", update);
-    update();
-  }
-
-  /* ============================================================
-   * 6. TOC NAVIGATION & BIBTEX COPY
-   * ============================================================ */
-  function initTocAndUtilities() {
-    const tocRail = $("tocRail");
-    const tocToggle = $("tocToggle");
-    if (tocToggle && tocRail) {
-      tocToggle.addEventListener("click", () => {
-        const collapsed = tocRail.classList.toggle("is-collapsed");
-        tocToggle.setAttribute("aria-expanded", String(!collapsed));
-      });
-    }
-
-    const links = Array.from(document.querySelectorAll(".toc-link[href^='#']"));
-    const sections = links.map((l) => document.querySelector(l.getAttribute("href"))).filter(Boolean);
-    if ("IntersectionObserver" in window && sections.length) {
-      const io = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              links.forEach((l) => l.classList.toggle("is-active", l.getAttribute("href") === "#" + entry.target.id));
-            }
-          });
-        },
-        { rootMargin: "-25% 0px -60% 0px", threshold: 0.01 }
-      );
-      sections.forEach((s) => io.observe(s));
-    }
-
-    const copyBtn = $("copyBibBtn");
-    if (copyBtn) {
-      copyBtn.addEventListener("click", () => {
-        const text = $("bibtexCode").textContent;
-        navigator.clipboard.writeText(text).then(() => {
-          copyBtn.innerHTML = `<i class="fas fa-check"></i>&nbsp;Copied!`;
-          setTimeout(() => {
-            copyBtn.innerHTML = `<i class="fas fa-copy"></i>&nbsp;Copy`;
-          }, 1800);
-        });
-      });
-    }
-  }
-
-  document.addEventListener("DOMContentLoaded", () => {
-    initStageControls();
-    renderResultsTables();
-    initGridAndAblations();
-    initTraceExplorer();
-    initTocAndUtilities();
+  if (hasData && !DATA.runs[state.run]) state.run = Object.keys(DATA.runs)[0];
+  if (hasData) options($("runSelect"), Object.entries(DATA.runs).map(([id, r]) => [id, r.label]), state.run);
+  $("dataControls").after($("tokenControls"));
+  all("[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+  $("main").addEventListener("click", (event) => {
+    if (!(event.target instanceof Element)) return;
+    const go = event.target.closest("[data-go]");
+    if (go instanceof HTMLElement) setView(go.dataset.go, true);
+    const mechanism = event.target.closest("[data-mechanism]");
+    if (mechanism instanceof HTMLElement) { state.mechanism = mechanism.dataset.mechanism; renderMechanism(); }
+    const method = event.target.closest("[data-result-method]");
+    if (method instanceof HTMLElement) { state.method = method.dataset.resultMethod; setView("experiment", true); if (rows.length) { syncMethods(); renderRecording(); } }
   });
+  /** @type {HTMLElement} */ (document.querySelector(".journey")).addEventListener("keydown", (event) => {
+    const index = VIEWS.indexOf(state.view);
+    let next;
+    if (event.key === "ArrowRight") next = (index + 1) % VIEWS.length;
+    if (event.key === "ArrowLeft") next = (index + VIEWS.length - 1) % VIEWS.length;
+    if (event.key === "Home") next = 0;
+    if (event.key === "End") next = VIEWS.length - 1;
+    if (next !== undefined) { event.preventDefault(); setView(VIEWS[next], true); }
+  });
+  $("previousView").addEventListener("click", () => setView(VIEWS[VIEWS.indexOf(state.view) - 1], true));
+  $("nextView").addEventListener("click", () => setView(VIEWS[VIEWS.indexOf(state.view) + 1], true));
+  $("runSelect").addEventListener("change", () => { state.run = $("runSelect").value; state.problem = null; state.seed = null; state.token = 0; renderEvidence(); loadRun(); syncUrl(); });
+  $("caseSelect").addEventListener("change", () => { [state.problem, state.seed] = $("caseSelect").value.split("|"); state.token = 0; syncMethods(); renderRecording(); });
+  $("methodSelect").addEventListener("change", () => { state.method = $("methodSelect").value; syncMethods(); renderRecording(); });
+  $("tokenSelect").addEventListener("change", () => { state.token = Number($("tokenSelect").value); syncSteps(); renderRecording(); });
+  $("stepSelect").addEventListener("change", () => { state.step = Number($("stepSelect").value); renderRecording(); });
+  $("retryLoad").addEventListener("click", loadRun);
+  window.addEventListener("hashchange", () => { if (hashView()) setView(hashView(), true); });
+  renderMechanism(); setView(state.view);
 })();

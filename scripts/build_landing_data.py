@@ -1,91 +1,183 @@
-"""Compile real TEBDIL experimental artifacts into site/static/tebdil_data.js."""
+"""Export an evidence-bound static observatory; verify it without local model/results files.
 
+Build: python scripts/build_landing_data.py
+Check committed export: python scripts/build_landing_data.py --check
+"""
 from __future__ import annotations
 
+import argparse
+import hashlib
 import json
+from collections import Counter
+from dataclasses import asdict
 from pathlib import Path
+from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+RUN_LABELS = {
+    "phase7_8_fresh_test": "Fresh-template evaluation",
+    "phase7_8_controller_test": "Exploratory controller evaluation",
+    "phase4_adaptive": "Adaptive vs fixed excursions",
+    "phase3_ablations": "Mechanism and curvature controls",
+    "phase5_donor": "Multiple-donor comparison",
+    "phase6_selective": "Selective-transfer comparison",
+    "phase2_recovery": "Recovery pilot",
+    "phase1_smoke": "Initial feasibility pilot",
+}
 
 
-def load_jsonl(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-
-
-def load_json(path: Path) -> dict:
-    if not path.exists():
-        return {}
+def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def main() -> None:
-    root = Path(__file__).resolve().parent.parent
-    final_results = load_json(root / "reports" / "final_results.json")
-    grid_summary = load_json(root / "results" / "phase1_grid" / "grid_summary.json")
-    dim_ablations = load_json(root / "results" / "phase3_ablations" / "dimension_ablations.json")
+def load_jsonl(path: Path) -> list[dict[str, Any]]:
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not rows:
+        raise ValueError(f"Empty recording: {path}")
+    return rows
 
-    phase3_traces = load_jsonl(root / "results" / "phase3_ablations" / "traces.jsonl")
-    phase4_traces = load_jsonl(root / "results" / "phase4_adaptive" / "traces.jsonl")
-    phase5_traces = load_jsonl(root / "results" / "phase5_donor" / "traces.jsonl")
-    phase6_traces = load_jsonl(root / "results" / "phase6_selective" / "traces.jsonl")
-    phase78_traces = load_jsonl(root / "results" / "phase7_8_controller_test" / "traces.jsonl")
 
-    ridge_ckpt = load_json(root / "artifacts" / "controllers" / "tebdil_ridge_v1.json")
-    mlp_ckpt = load_json(root / "artifacts" / "controllers" / "tebdil_mlp_v1.json")
-    audit_report = load_json(root / "artifacts" / "evidence" / "audit_phase7_8_report.json")
-    split_manifest = load_json(root / "artifacts" / "counterfactuals" / "split_manifest.json")
+def digest(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
 
-    payload = {
-        "meta": {
-            "project": "TEBDİL",
-            "title": "Self-Directed & Cooperative Latent Excursions for Recurrent Reasoning",
-            "model_id": "ByteDance/Ouro-1.4B-Thinking",
-            "model_revision": "3aaa2224253a92ca45cf2e3d427c360e1ef9c93d",
-            "architecture": {
-                "hidden_size": 2048,
-                "num_hidden_layers": 24,
-                "total_ut_steps": 4,
-                "rmsnorms_per_step": 96,
-                "vocab_size": 49152,
-            },
-            "total_records_analyzed": final_results.get("total_records_analyzed", 1408),
-        },
-        "final_results": final_results,
-        "grid_summary": grid_summary,
-        "dimension_ablations": dim_ablations,
-        "controllers": {
-            "ridge": {
-                "controller_type": ridge_ckpt.get("controller_type"),
-                "metrics": ridge_ckpt.get("metrics", {}),
-                "feature_names": ridge_ckpt.get("feature_names", []),
-            },
-            "mlp": {
-                "controller_type": mlp_ckpt.get("controller_type"),
-                "metrics": mlp_ckpt.get("metrics", {}),
-                "feature_names": mlp_ckpt.get("feature_names", []),
-            },
-            "split_manifest": split_manifest,
-        },
-        "audit_report": audit_report,
-        "traces": {
-            "test_phase7_8": phase78_traces,
-            "validation_phase5": phase5_traces,
-            "validation_phase6": phase6_traces,
-            "test_phase4": phase4_traces,
-            "validation_phase3": phase3_traces,
-        },
+
+def ledger_matches(row: dict[str, Any]) -> bool:
+    if row.get("derived_parallel_selection"):
+        return False  # Reference budget is not total execution across selected candidates.
+    ledger = row.get("token_ledger")
+    return bool(ledger) and sum(t["recurrent_block_calls"] for t in ledger) == row["recurrent_block_calls"]
+
+
+def validate_rows(rows: list[dict[str, Any]]) -> None:
+    keys = [(r["problem_id"], r["seed"], r["method"]) for r in rows]
+    if len(keys) != len(set(keys)):
+        raise ValueError("Duplicate problem/seed/method recording")
+    baseline = {(r["problem_id"], r["seed"]) for r in rows if r["method"] == "S0"}
+    if not baseline:
+        raise ValueError("Recording has no S0 baseline")
+    methods = {r["method"] for r in rows}
+    for method in methods:
+        pairs = {(r["problem_id"], r["seed"]) for r in rows if r["method"] == method}
+        if pairs != baseline:
+            raise ValueError(f"Unpaired recording for {method}")
+    for row in rows:
+        if type(row["is_correct"]) is not bool:
+            raise ValueError("Correctness must be an explicit boolean")
+        if not isinstance(row["recurrent_block_calls"], int) or row["recurrent_block_calls"] <= 0:
+            raise ValueError("Missing or invalid measured recurrent-call count")
+
+
+def build(root: Path = ROOT) -> None:
+    from tebdil.evaluation.bootstrap import mcnemar_exact_test, paired_bootstrap_ci
+    from tebdil.evaluation.metrics import summarize_paired_records
+
+    site = root / "site"
+    manifest: dict[str, Any] = {
+        "schema_version": 2,
+        "meta": {"project": "TEBDİL", "mode": "Recorded experiment", "model_id": "ByteDance/Ouro-1.4B-Thinking",
+                 "model_revision": "3aaa2224253a92ca45cf2e3d427c360e1ef9c93d"},
+        "runs": {}, "evidence": [], "files": {},
     }
 
-    out_dir = root / "site" / "static"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / "tebdil_data.js"
-    js_content = "window.TEBDIL_DATA = " + json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + ";\n"
-    out_file.write_text(js_content, encoding="utf-8")
-    print(f"Wrote {out_file} ({out_file.stat().st_size / 1024:.1f} KB)")
+    def write_file(relative: str, body: bytes, source: str) -> str:
+        target = site / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(body)
+        manifest["files"][relative] = {"sha256": digest(body), "bytes": len(body), "source": source}
+        return relative
+
+    for run_id, label in RUN_LABELS.items():
+        base = root / "results" / run_id
+        rows = load_jsonl(base / "traces.jsonl")
+        validate_rows(rows)
+        baseline = [r for r in rows if r["method"] == "S0"]
+        e1 = [r for r in rows if r["method"] == "E1"]
+        methods = {}
+        mismatches = Counter(r["method"] for r in rows if not ledger_matches(r))
+        for method in dict.fromkeys(r["method"] for r in rows):
+            selected = [r for r in rows if r["method"] == method]
+            stats = asdict(summarize_paired_records(
+                method, selected, baseline_records=baseline, e1_records=e1 or None,
+                bootstrap_fn=paired_bootstrap_ci, mcnemar_fn=mcnemar_exact_test,
+            ))
+            stats = {key: stats[key] for key in (
+                "num_instances", "accuracy", "baseline_accuracy", "paired_accuracy_diff",
+                "rescued_count", "base_wrong_count", "degraded_count", "base_correct_count",
+                "mean_recurrent_calls", "cluster_ci_95_low", "cluster_ci_95_high",
+                "cluster_mcnemar_p_value", "num_unique_problems",
+            )}
+            stats["ledger_mismatches"] = mismatches[method]
+            methods[method] = stats
+        body = json.dumps(rows, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode() + b"\n"
+        trace_url = write_file(f"static/data/{run_id}.json", body, f"results/{run_id}/traces.jsonl")
+        run_manifest = write_file(f"static/evidence/{run_id}.yaml", (base / "manifest.yaml").read_bytes(), f"results/{run_id}/manifest.yaml")
+        splits = {r["split"] for r in rows}
+        if len(splits) != 1:
+            raise ValueError(f"Mixed splits in {run_id}")
+        manifest["runs"][run_id] = {
+            "run_id": run_id, "label": label, "split": next(iter(splits)), "record_count": len(rows),
+            "problem_ids": sorted({r["problem_id"] for r in baseline}),
+            "num_problems": len({r["problem_id"] for r in baseline}), "seeds": sorted({r["seed"] for r in baseline}),
+            "methods": methods, "trace_url": trace_url, "trace_sha256": digest(body),
+            "source_trace_sha256": digest((base / "traces.jsonl").read_bytes()),
+            "manifest_url": run_manifest, "ledger_mismatches": sum(mismatches.values()),
+            "status": "Exploratory; historical recording, not a preregistered confirmatory study",
+        }
+
+    sources = [
+        "reports/mvp_audit_fresh_test.json",
+        "artifacts/evidence/model_provenance.json",
+        "artifacts/evidence/phase1_excursion_verification.json",
+        "artifacts/evidence/real_tensor_bundle.json", "artifacts/evidence/real_tensor_bundle.pt",
+        "artifacts/evidence/audit_phase7_8_report.json", "artifacts/evidence/audit_fresh_test_report.json",
+        "artifacts/counterfactuals/train_counterfactuals.json", "artifacts/counterfactuals/val_counterfactuals.json",
+        "artifacts/counterfactuals/split_manifest.json",
+    ]
+    sources += [p.relative_to(root).as_posix() for p in sorted((root / "artifacts/controllers").glob("*.json"))]
+    for source in sources:
+        path = root / source
+        url = write_file(f"static/evidence/{path.name}", path.read_bytes(), source)
+        manifest["evidence"].append({"label": path.stem.replace("_", " "), "source": source, "url": url, "sha256": digest(path.read_bytes()),
+                                     "historical": path.name.startswith("audit_")})
+    bundle = "window.TEBDIL_DATA = " + json.dumps(manifest, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + ";\n"
+    (site / "static/tebdil_data.js").write_text(bundle, encoding="utf-8")
+    check(root)
+    print(f"Built {len(manifest['runs'])} recorded runs; startup manifest {len(bundle.encode()):,} bytes.")
+
+
+def check(root: Path = ROOT) -> dict[str, Any]:
+    site = root / "site"
+    bundle = (site / "static/tebdil_data.js").read_text(encoding="utf-8")
+    manifest = json.loads(bundle.removeprefix("window.TEBDIL_DATA = ").removesuffix(";\n"))
+    if manifest["schema_version"] != 2 or not manifest["runs"]:
+        raise ValueError("Unsupported or empty observatory export")
+    for relative, expected in manifest["files"].items():
+        path = (site / relative).resolve()
+        if not path.is_relative_to(site.resolve()):
+            raise ValueError(f"Unsafe export path: {relative}")
+        data = path.read_bytes()
+        if digest(data) != expected["sha256"] or len(data) != expected["bytes"]:
+            raise ValueError(f"Export checksum mismatch: {relative}")
+    for run in manifest["runs"].values():
+        body = (site / run["trace_url"]).read_bytes()
+        if digest(body) != run["trace_sha256"]:
+            raise ValueError("Trace does not match recording manifest")
+        rows = json.loads(body)
+        validate_rows(rows)
+        if len(rows) != run["record_count"]:
+            raise ValueError("Trace record count mismatch")
+        mismatches = sum(not ledger_matches(r) for r in rows)
+        if mismatches != run["ledger_mismatches"]:
+            raise ValueError("Unreported compute-ledger mismatch")
+    print(f"Verified export checksums and pairing for {len(manifest['runs'])} runs.")
+    return manifest
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="Verify committed export without model or raw local results")
+    args = parser.parse_args()
+    check() if args.check else build()
 
 
 if __name__ == "__main__":

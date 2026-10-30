@@ -1,102 +1,77 @@
-# TEBDİL Empirical Findings: Self-Directed Latent Relocation in `ByteDance/Ouro-1.4B-Thinking`
+# TEBDİL: recorded findings and evidence limits
 
-## 1. Executive Summary
+Updated 2026-10-30. Values below come from the current [static manifest](../site/static/tebdil_data.js), recomputed from exported raw records by `scripts/build_landing_data.py`. No model outputs were changed for presentation.
 
-Across **1,408 verified recurrent trajectories** (`7` experimental runs in `results/`), we evaluated whether a lightweight learned inference-time controller $\pi_\phi(z_t)$ can manage the latent recurrent computation of `ByteDance/Ouro-1.4B-Thinking` (`rev: 3aaa2224253a92ca45cf2e3d427c360e1ef9c93d`) over the action space $\mathcal{A} = \{\text{CONTINUE}, \text{EXCURSION}(d, \alpha, \beta), \text{EXIT}\}$.
+## Scope
 
-### Core Empirical Conclusions
-1. **Self-directed nonlinear control (`E3_mlp`) matches unconditional excursion accuracy while cutting recurrent compute by 24.5%:**
-   On the held-out `test` split (`n = 36` paired instances across 3 task families and 2 seeds), `E3_mlp` achieves **`27.78%` accuracy (`10/36`, `+5.56%` vs `S0`, `2/28` rescued, `0/8` degraded)** at **`11.08` mean recurrent core calls/problem** — matching the accuracy of unconditional excursion `E1` (`27.78%`, `14.67` calls) and heuristic `E2` (`27.78%`, `13.78` calls) while using **24.5% fewer recurrent evaluations than `E1`** and **19.6% fewer than `E2`**.
-2. **State-dependent early exit avoids the 25% degradation rate of fixed early exit (`EXIT_2`):**
-   Unconditional early exit at step 2 (`EXIT_2`, `5.50` calls) rescues `4/28` failed trajectories where extra recurrent steps over-think an initially valid prediction, but **degrades `2/8` (`25.0%`) of correct trajectories** (`graph_test_000`, where the second answer token has low step-2 margin `0.125` and requires steps 3–4 to converge). By gating `EXIT` on step-2 convergence (`margin_a >= 0.72`), `E3_mlp` (`exit_freq = 0.56`) and `E3_ridge` (`exit_freq = 0.44`) achieve **`0/8` (`0.0%`) degradations**.
-3. **3-branch donor selection (`Phase 5`) shows nearest-neighbor donor compatibility (`D_nearest`) matches the diagnostic oracle (`D_oracle`):**
-   When choosing between two co-evolving donor branches $B$ and $C$ (`branch_count = 3`) on the validation split (`n = 18`), visiting the nearest donor in hidden space (`D_nearest`) achieves **`33.33%` accuracy (`+11.11%` vs `S0`, `2/14` rescued, `0/4` degraded)**, matching the diagnostic donor oracle (`D_oracle`, `33.33%`) and outperforming farthest-donor relocation (`D_farthest`, `22.22%`, `0/14` rescued). Learned donor ranking (`D_learned`) and donor confidence (`D_confidence`) achieve `27.78%` (`+5.56%`, `1/14` rescued).
-4. **Selective transfer mechanisms (`Phase 6`) demonstrate that full-sequence context and top-50% subspace transport are essential:**
-   Restricting excursions to the last token only (`E1_last_token`, `22.22%`, `0/14` rescued), tightening the trust region to $\rho_{\max} = 0.15$ (`E1_norm_tight`, `22.22%`), or attenuating updates by the native exit gate (`E1_gated`, `22.22%`) eliminates the excursion rescue on `Ouro-1.4B-Thinking` due to strong Sandwich RMSNorm contraction across all 24 layers. By contrast, transporting only the **top-50% highest-magnitude velocity dimensions (`E1_subspace`, `subspace_fraction = 0.50`)** preserves the full rescue (`27.78%`, `1/14` rescued, `0/4` degraded).
-5. **Honest competitive reporting (`M0` on held-out test):**
-   Direct linear state mixing (`M0`, $H_{t+1}^{A'} = F_{\theta, t}((1-\alpha)H_t^A + \alpha H_t^B)$) is a strong lower-compute competitor (`12.83` calls), achieving `33.33%` (`12/36`, `4/28` rescued, `0/8` degraded) on the held-out test split. On the non-oracle compute-accuracy Pareto frontier (`["EXIT_2", "E3_mlp", "M0"]`), `E3_mlp` dominates `S1`, `P0`, `P1`, `M1`, `E1`, `E2`, `H_budget`, `RAND_CTRL`, `E3_no_exit`, and `E3_ridge` in the `7.5–12.5` call budget regime, while `M0` occupies the `12.83`-call frontier point.
+There are **2,866 trace records across eight runs**. A trace is one method/problem/seed result, not an independent problem. Both controller evaluations contain **18 distinct problems × 3 seeds = 54 paired instances per method**. The label `fresh_test` identifies a separate generated split; it does not establish preregistration, distributional generalization, or a confirmatory study.
 
----
+## Fresh-template evaluation
 
-## 2. Phase 3 & 4: Counterfactual Dataset and Learned Controller Calibration
+Source: [records](../site/static/data/phase7_8_fresh_test.json), [configuration](../site/static/evidence/phase7_8_fresh_test.yaml).
 
-Counterfactual rollouts were collected on disjoint `train` (`18` problems $\times$ 2 seeds $= 36$ states) and `validation` (`18` problems $\times$ 1 seed $= 18$ states) splits (`54` decision states total; `artifacts/counterfactuals/split_manifest.json`), with zero template or prompt overlap with `test`.
+| Method | Accuracy | Difference vs S0 | Problem-cluster 95% CI | Rescued | Degraded | Mean calls | Ledger gaps |
+| --- | ---: | ---: | --- | --- | --- | ---: | ---: |
+| `S0` | 27.78% | +0.00 pp | [+0.00, +0.00] pp | 0/39 | 0/15 | 7.33 | 0 |
+| `S1` | 11.11% | -16.67 pp | [-33.33, +0.00] pp | 0/39 | 9/15 | 12.83 | 0 |
+| `EXIT_2` | 22.22% | -5.56 pp | [-16.67, +0.00] pp | 0/39 | 3/15 | 5.50 | 0 |
+| `P0` | 20.37% | -7.41 pp | [-16.67, +0.00] pp | 0/39 | 4/15 | 17.96 | 21 |
+| `P1` | 35.19% | +7.41 pp | [+0.00, +18.52] pp | 4/39 | 0/15 | 17.96 | 50 |
+| `M0` | 29.63% | +1.85 pp | [+0.00, +5.56] pp | 1/39 | 0/15 | 12.83 | 0 |
+| `M1` | 35.19% | +7.41 pp | [+0.00, +18.52] pp | 4/39 | 0/15 | 12.83 | 0 |
+| `RAND_CTRL` | 35.19% | +7.41 pp | [+0.00, +18.52] pp | 4/39 | 0/15 | 17.83 | 0 |
+| `E1` | 33.33% | +5.56 pp | [-3.70, +16.67] pp | 4/39 | 1/15 | 14.67 | 0 |
+| `E2` | 27.78% | +0.00 pp | [+0.00, +0.00] pp | 0/39 | 0/15 | 13.83 | 0 |
+| `G_gate_only` | 27.78% | +0.00 pp | [+0.00, +0.00] pp | 0/39 | 0/15 | 15.33 | 0 |
+| `E3_t2_1donor` | 27.78% | +0.00 pp | [+0.00, +0.00] pp | 0/39 | 0/15 | 12.02 | 0 |
+| `E3_mlp` | 27.78% | +0.00 pp | [+0.00, +0.00] pp | 0/39 | 0/15 | 16.83 | 0 |
+| `E3_mlp_ungated` | 31.48% | +3.70 pp | [+0.00, +9.26] pp | 2/39 | 0/15 | 17.24 | 0 |
+| `E3_mlp_unshaped` | 27.78% | +0.00 pp | [+0.00, +0.00] pp | 0/39 | 0/15 | 15.63 | 0 |
 
-| Controller Checkpoint | Architecture | Calibrated $\tau_{\mathrm{exit}}$ | Calibrated $\tau_{\mathrm{exc}}$ | Calibration Mean Utility | Calibration Mean Calls | Action Distribution (`CONTINUE` / `EXCURSION` / `EXIT`) |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| [`tebdil_ridge_v1.json`](file:///Users/alperkartkaya/Documents/tebdil/artifacts/controllers/tebdil_ridge_v1.json) | Linear Ridge + Bradley-Terry | `-1.0144` | `-0.0717` | `0.3919` | `9.15` | `17 / 14 / 23` |
-| [`tebdil_mlp_v1.json`](file:///Users/alperkartkaya/Documents/tebdil/artifacts/controllers/tebdil_mlp_v1.json) | 2-Layer Tanh MLP ($29 \to 16 \to 1$) | `-1.8758` | `-0.1278` | `0.3885` | `9.11` | `18 / 13 / 23` |
+## Exploratory controller evaluation
 
----
+Source: [records](../site/static/data/phase7_8_controller_test.json), [configuration](../site/static/evidence/phase7_8_controller_test.yaml).
 
-## 3. Phase 5: Multi-Branch Destination Selection (`results/phase5_donor/summary.json`)
+| Method | Accuracy | Difference vs S0 | Problem-cluster 95% CI | Rescued | Degraded | Mean calls | Ledger gaps |
+| --- | ---: | ---: | --- | --- | --- | ---: | ---: |
+| `S0` | 22.22% | +0.00 pp | [+0.00, +0.00] pp | 0/42 | 0/12 | 7.33 | 0 |
+| `S1` | 22.22% | +0.00 pp | [+0.00, +0.00] pp | 0/42 | 0/12 | 12.83 | 0 |
+| `EXIT_2` | 27.78% | +5.56 pp | [-11.11, +27.78] pp | 6/42 | 3/12 | 5.50 | 0 |
+| `P0` | 22.22% | +0.00 pp | [+0.00, +0.00] pp | 0/42 | 0/12 | 18.33 | 30 |
+| `P1` | 27.78% | +5.56 pp | [+0.00, +14.81] pp | 3/42 | 0/12 | 18.33 | 51 |
+| `M0` | 31.48% | +9.26 pp | [+0.00, +20.37] pp | 5/42 | 0/12 | 12.83 | 0 |
+| `M1` | 25.93% | +3.70 pp | [+0.00, +9.26] pp | 2/42 | 0/12 | 12.83 | 0 |
+| `RAND_CTRL` | 29.63% | +7.41 pp | [+0.00, +16.67] pp | 4/42 | 0/12 | 17.83 | 0 |
+| `E1` | 27.78% | +5.56 pp | [+0.00, +14.81] pp | 3/42 | 0/12 | 14.67 | 0 |
+| `E2` | 27.78% | +5.56 pp | [+0.00, +14.81] pp | 3/42 | 0/12 | 13.78 | 0 |
+| `G_gate_only` | 27.78% | +5.56 pp | [+0.00, +14.81] pp | 3/42 | 0/12 | 14.61 | 0 |
+| `E3_t2_1donor` | 27.78% | +5.56 pp | [+0.00, +14.81] pp | 3/42 | 0/12 | 11.06 | 0 |
+| `E3_mlp` | 31.48% | +9.26 pp | [+0.00, +22.22] pp | 5/42 | 0/12 | 15.94 | 0 |
+| `E3_mlp_ungated` | 31.48% | +9.26 pp | [+0.00, +22.22] pp | 5/42 | 0/12 | 15.41 | 0 |
+| `E3_mlp_unshaped` | 22.22% | +0.00 pp | [+0.00, +0.00] pp | 0/42 | 0/12 | 16.89 | 0 |
 
-Evaluated on the balanced `validation` split (`n = 18`, `branch_count = 3`: recipient $A$ + donors $B, C$):
+## Interpretation
 
-| Method | Accuracy | Paired Diff vs `S0` | Rescue Rate | Degradation Rate | Mean Calls | Excursion Freq | Mechanistic Takeaway |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| `S0` | `22.22%` | `+0.00%` | `0/14 (0.0%)` | `0/4 (0.0%)` | `7.33` | `0.00` | Single-trajectory baseline |
-| `D_farthest` | `22.22%` | `+0.00%` | `0/14 (0.0%)` | `0/4 (0.0%)` | `19.28` | `0.39` | Excessively distant donor overshoots local basin |
-| `D_random` | `27.78%` | `+5.56%` | `1/14 (7.1%)` | `0/4 (0.0%)` | `19.28` | `0.39` | Random donor selection rescues 1/2 eligible |
-| `D_confidence` | `27.78%` | `+5.56%` | `1/14 (7.1%)` | `0/4 (0.0%)` | `19.28` | `0.39` | Highest-margin donor rescues `graph_validation_002` |
-| `D_learned` | `27.78%` | `+5.56%` | `1/14 (7.1%)` | `0/4 (0.0%)` | `19.28` | `0.39` | Learned controller ranks donor compatibility |
-| **`D_nearest`** | **`33.33%`** | **`+11.11%`** | **`2/14 (14.3%)`** | **`0/4 (0.0%)`** | `19.28` | `0.39` | **Nearest compatible donor matches oracle** |
-| `D_oracle` *(diag)* | `33.33%` | `+11.11%` | `2/14 (14.3%)` | `0/4 (0.0%)` | `19.28` | `0.39` | Diagnostic upper bound across donors $\{B, C\}$ |
+- The real excursion-and-return operator is implemented and tested. Its implementation does not establish a general reasoning benefit.
+- On fresh templates, gated E3_mlp matches S0 accuracy; ungated E3_mlp improves the observed average by 3.70 percentage points. The latter interval includes zero and problem-level exact sign test p = 0.5.
+- E1 records both rescues and a degradation on fresh templates. Zero observed degradations for another method is not a safety guarantee.
+- Direct update mixing M1 and random control score 35.19% on fresh templates, above both E3 variants. TEBDİL does not claim superiority to these controls.
+- S1 loses 16.67 percentage points on fresh templates. Its problem-cluster interval is [-33.33, 0.00] points and problem-level exact sign test p = 0.25. The earlier instance-level p-value treated repeated seeds differently and must not support an independent-problem significance claim.
+- Curvature and reward-shaping ablations are local exploratory observations. They do not prove the mechanism is universally necessary or isolate every possible explanation.
+- P1 is an answer-informed oracle upper bound, not an executable label-free deployment policy. E3 is a learned action scorer with heuristic gates in gated variants; E2 is heuristic, not learned.
 
----
+## Compute and provenance limitations
 
-## 4. Phase 6: Selective Transfer Mechanisms (`results/phase6_selective/summary.json`)
+Mean calls are historical recorded aggregates, not wall-clock speed or universally matched budgets. A nonzero ledger-gap count means the displayed total cannot be reconciled with the available per-token ledger; do not use those rows for validated efficiency claims. There are **71** such records in fresh evaluation and **81** in exploratory controller evaluation, confined to historical P0/P1 selection records. Initial feasibility, recovery, curvature and adaptive runs also lack token ledgers for their recorded rows.
 
-Evaluated on the `validation` split (`n = 18`, `branch_count = 2`):
+Current audit code reports these gaps as failures. Older exported audit JSON is retained as historical evidence, not a current all-checks-passed certificate. Future parallel records preserve selected-output provenance and an explicitly idealized reference parallel budget, not verified total execution cost; this does not retroactively repair old evidence.
 
-| Method | Accuracy | Paired Diff vs `S0` | Rescue Rate | Degradation Rate | Mean $\|C_t\|_F$ | Mean Calls | Mechanistic Takeaway |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| `S0` | `22.22%` | `+0.00%` | `0/14` | `0/4` | `0.00` | `7.33` | Baseline |
-| `E1` | `27.78%` | `+5.56%` | `1/14` | `0/4` | `45.32` | `14.67` | Full-sequence, full-space excursion |
-| `E1_norm_tight` ($\rho_{\max}=0.15$) | `22.22%` | `+0.00%` | `0/14` | `0/4` | `25.81` | `14.67` | Tight trust region damped by RMSNorm |
-| `E1_last_token` | `22.22%` | `+0.00%` | `0/14` | `0/4` | `7.94` | `14.67` | Single-token perturbation washed out by attention |
-| **`E1_subspace` ($\kappa=0.50$)** | **`27.78%`** | **`+5.56%`** | **`1/14`** | **`0/4`** | `45.32` | `14.67` | **Top-50% velocity coordinates suffice for rescue** |
-| `E1_gated` | `22.22%` | `+0.00%` | `0/14` | `0/4` | `45.32` | `14.67` | Native gate attenuation weakens return step |
-| `E1_multi_visit` ($t \in \{2,3\}$) | `27.78%` | `+5.56%` | `1/14` | `0/4` | `45.32` | `16.50` | Second visit adds compute without extra rescue |
-| **`E3_ridge`** | **`27.78%`** | **`+5.56%`** | **`1/14`** | **`0/4`** | `7.64` | **`11.00`** | **Matches `E1` accuracy with 25.0% fewer calls** |
+The pinned checkpoint and seven selected replay cases were checked on Apple MPS. See [MVP scientific verification](../reports/mvp_scientific_verification.md). No full campaign was rerun. Curvature telemetry measures the full pre-projection residual, not necessarily the applied correction norm.
 
----
+## Earlier phases and deeper evidence
 
-## 5. Phase 7 & 8: Held-Out Test Split Evaluation (`results/phase7_8_controller_test/summary.json`)
+The observatory retains all eight experiments, including donor selection and selective-transfer ablations. Their full method statistics and original records remain in the [manifest](../site/static/tebdil_data.js) and [data directory](../site/static/data/). Older prose reports describe historical snapshots and may use different record counts or inference units; the current manifest and explicit source records govern this summary.
 
-Evaluated on `n = 36` held-out test instances (`18` problems $\times$ 2 seeds `[42, 1042]`):
+See [reproduction](reproduction.md), [methods](methods.md), [limitations](limitations.md), and [final report](../reports/final_report.md).
 
-| Method | Accuracy | Paired Diff vs `S0` | 95% Bootstrap CI | Rescued | Degraded | Mean Calls | Excursion Freq | Early Exit Freq |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `S0` (4 steps) | `22.22% (8/36)` | `+0.00%` | `[0.00%, 0.00%]` | `0/28` | `0/8` | `7.33` | `0.00` | `0.00` |
-| `S1` (7 steps) | `22.22% (8/36)` | `+0.00%` | `[0.00%, 0.00%]` | `0/28` | `0/8` | `12.83` | `0.00` | `0.00` |
-| `EXIT_2` (Fixed exit $t=2$) | `27.78% (10/36)` | `+5.56%` | `[-5.56%, +16.67%]` | `4/28` | **`2/8 (25.0%)`** | `5.50` | `0.00` | `1.00` |
-| `RAND_CTRL` (Random policy) | `25.00% (9/36)` | `+2.78%` | `[0.00%, +8.33%]` | `1/28` | `0/8` | `14.17` | `0.50` | `0.00` |
-| `P0` (Independent Branch $B$) | `22.22% (8/36)` | `+0.00%` | `[0.00%, 0.00%]` | `0/28` | `0/8` | `12.83` | `0.00` | `0.00` |
-| `P1` *(Oracle Best-of-2)* | `25.00% (9/36)` | `+2.78%` | `[0.00%, +8.33%]` | `1/28` | `0/8` | `12.83` | `0.00` | `0.00` |
-| `M0` (Direct state mix) | `33.33% (12/36)` | `+11.11%` | `[0.00%, +22.22%]` | `4/28` | `0/8` | `12.83` | `1.00` | `0.00` |
-| `M1` (Linear update mix) | `25.00% (9/36)` | `+2.78%` | `[0.00%, +8.33%]` | `1/28` | `0/8` | `12.83` | `1.00` | `0.00` |
-| `E1` (Unconditional excursion) | `27.78% (10/36)` | `+5.56%` | `[0.00%, +13.89%]` | `2/28` | `0/8` | `14.67` | `1.00` | `0.00` |
-| `E2` (Heuristic uncertainty) | `27.78% (10/36)` | `+5.56%` | `[0.00%, +13.89%]` | `2/28` | `0/8` | `13.78` | `0.39` | `0.00` |
-| `H_budget` (Budgeted heuristic) | `27.78% (10/36)` | `+5.56%` | `[0.00%, +13.89%]` | `2/28` | `0/8` | `13.67` | `0.33` | `0.00` |
-| `E3_no_exit` (Learned, no exit) | `25.00% (9/36)` | `+2.78%` | `[0.00%, +8.33%]` | `1/28` | `0/8` | `13.39` | `0.17` | `0.00` |
-| `E3_ridge` (Learned Ridge) | `25.00% (9/36)` | `+2.78%` | `[0.00%, +8.33%]` | `1/28` | `0/8` | `10.94` | `0.17` | `0.44` |
-| **`E3_mlp` (Learned 2-layer MLP)** | **`27.78% (10/36)`** | **`+5.56%`** | **`[0.00%, +13.89%]`** | **`2/28`** | **`0/8 (0.0%)`** | **`11.08`** | **`0.31`** | **`0.56`** |
-
----
-
-## 6. Independent Audit Verification (`artifacts/evidence/audit_phase7_8_report.json`)
-
-Running `python -m tebdil.audit --run-id phase7_8_controller_test --replay-problem-id arith_test_003` verified all **12 research integrity invariants** (`all_passed: true`):
-1. `1_checkpoint_provenance`: Verified local `ByteDance/Ouro-1.4B-Thinking` SHA-256 weight digest.
-2. `2_model_architecture`: Confirmed 24-layer shared-weight Universal Transformer (`total_ut_steps = 4`).
-3. `3_genuine_recurrent_execution`: Confirmed `4,744` real recurrent core calls across `504` records.
-4. `4_real_hidden_state_capture`: Verified finite norms and distinct step snapshots across all records.
-5. `5_shared_weights`: Confirmed single shared `model.layers` parameter group across recurrent steps.
-6. `6_branch_isolation`: Verified distinct branch hidden states and zero cross-contamination prior to visit.
-7. `7_visited_state_computation`: Verified distinct SHA-256 hashes (`receiving_state_hash != visit_state_hash`, `normal_update_hash != visit_update_hash`, `receiving_state_hash != post_receiving_state_hash`) across all active excursions.
-8. `8_noop_intervention_equivalence`: Confirmed exact identity under $\alpha=0, \beta=0, A=B$.
-9. `9_deterministic_replay`: Live hardware replay on `arith_test_003` reproduced `S0` (`42`, `8` calls, `gold_logprob = -1.2393`) and intervention (`48`, `14` calls) within `0.0` difference.
-10. `10_no_ground_truth_leakage`: Zero forbidden identifiers across `action_space.py`, `features.py`, `learned_policy.py`, and `policies.py`.
-11. `11_train_test_split_separation`: Zero template or prompt overlap between `train`/`validation` and `test`.
-12. `12_honest_compute_accounting`: Exact accounting of shared pre-fork steps, donor branch steps, excursion visit steps, and controller overhead.
+Parallel selection caveat: all historical P0/P1 total-selection costs are unverified, including rows whose selected-output ledger sums happen to match. The 71/81 counts describe arithmetic mismatches, not the full scope of uncertain parallel execution.

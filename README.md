@@ -1,87 +1,65 @@
-# TEBDIL — Cooperative Latent Excursions for Recurrent Reasoning
+# TEBDİL — Self-Directed Latent Relocation for Recurrent Reasoning
 
-Open-source research platform investigating inference-time **cooperative latent excursions** in recurrent/looped language models (`ByteDance/Ouro-1.4B-Thinking`).
+**Visit another latent region. Compute there. Bring the update back.**
 
----
+TEBDİL investigates whether a recurrent language model can recover from an unproductive reasoning trajectory through temporary latent excursions. It uses the real, open-weight `ByteDance/Ouro-1.4B-Thinking` model with shared weights and instrumented hidden-state access.
 
-## 1. Overview
+[Open the research observatory](https://alperkartkaya.github.io/tebdil/) · [Findings](docs/findings.md) · [Reproduce](docs/reproduction.md)
 
-When a looped language model iterates a shared recurrent core $F_{\theta, t}$ across $T$ latent steps, an individual trajectory $A$ may progress along an ineffective reasoning route. **TEBDIL** forks a co-evolving latent trajectory $B$ after the first recurrent step, temporarily visits $B$'s bounded neighborhood $H_t^{\mathrm{visit}} = H_t^A + \alpha_{\mathrm{eff}}(H_t^B - H_t^A)$ at an intermediate step $t_{\mathrm{visit}}$, evaluates the nonlinear recurrent transition $V_t^{\mathrm{visit}} = F_{\theta, t}(H_t^{\mathrm{visit}}) - H_t^{\mathrm{visit}}$ there, and transports the local update direction back to $A$:
+## What changes inside the model?
 
-$$H_{t+1}^{A'} = H_t^A + (1 - \beta) V_t^A + \beta V_t^{\mathrm{visit}}$$
+A receiving trajectory A temporarily visits a bounded neighborhood toward donor B. The model computes its genuine recurrent update at that visit state, then transfers the update to A. A continues; it is **not replaced by B**.
 
-This repository provides:
-1. **Instrumented LoopLM Runtime (`tebdil.models`):** Stepwise `OuroRecurrentAdapter` with verified `0.0` logit discrepancy against `ByteDance/Ouro-1.4B-Thinking` (`rev: 3aaa2224253a92ca45cf2e3d427c360e1ef9c93d`), plus a fast pure-PyTorch `ToyRecurrentAdapter` for CPU CI tests.
-2. **Cooperative Latent Excursion & Control Engine (`tebdil.core`):** Branch forking, norm-bounded perturbations, excursion-and-return, curvature residual decomposition ($C_t$), label-free adaptive triggering (`E2`), and matched-compute controls (`S0`, `S1`, `P0`, `P1`, `M0`, `M1`, `R0`, `C0`, `E0`, `E1`, `E2`).
-3. **Verifiable Evaluation Suite (`tebdil.tasks`, `tebdil.evaluation`, `tebdil.analysis`):** Split-isolated problem generators and formal validators for **Arithmetic**, **Boolean Logic / 2-SAT**, and **Weighted Graph Shortest Path**, with paired bootstrap confidence intervals, exact McNemar tests, and Pareto frontier analysis.
-4. **TEBDIL Observatory (`ui/app.py`):** Interactive Streamlit + Plotly interface inspecting real trajectory traces, full-dimensional step divergence, curvature $\|C_t\|_F$, rescue/degradation outcomes, and 2D PCA projections.
+$$V_t^{\mathrm{visit}} = F_{\theta,t}(H_t^{\mathrm{visit}})-H_t^{\mathrm{visit}},\qquad H_{t+1}^{A'}=H_t^A+(1-\beta)V_t^A+\beta V_t^{\mathrm{visit}}$$
 
----
+This is the full-scope, unprojected return formula. Scoped and coordinate-projected variants restrict the returned correction; see [methods](docs/methods.md) and the [implementation](src/tebdil/core/excursions.py).
 
-## 2. Key Empirical Results (`ByteDance/Ouro-1.4B-Thinking`)
+- **Mechanism:** real Ouro recurrence, independent branch states, bounded visit and return, no-op and isolation tests.
+- **Decision:** E1 uses a fixed schedule; E2 uses heuristic rules. E3 uses a trained action scorer, with hand-written feasibility gates in gated variants. These are not interchangeable claims of autonomy.
+- **Evaluation:** paired arithmetic, logic and graph tasks; baseline recurrence, parallel trajectories, state/update mixing and random controls.
+- **Public experience:** recorded experiments and explicitly illustrative diagrams. GitHub Pages does not run a GPU inference backend.
 
-### Held-Out Test Split (`configs/phase4_adaptive.yaml`, $n=36$ paired instances across 3 task families & 2 seeds)
+## What does the evidence show?
 
-| Method | Description | Accuracy | Paired Diff vs `S0` | 95% Bootstrap CI | Rescue Rate | Degradation Rate | Mean $\|C_t\|_F$ | Mean Calls |
-|---|---|---|---|---|---|---|---|---|
-| `S0` | Standard single trajectory ($T=4$) | `22.22%` | `0.00%` | `[0.00%, 0.00%]` | `0.00%` (0/28) | `0.00%` (0/8) | `0.00` | `7.33` |
-| `S1` | Extended single trajectory ($T=7$) | `22.22%` | `0.00%` | `[0.00%, 0.00%]` | `0.00%` (0/28) | `0.00%` (0/8) | `0.00` | `12.83` |
-| `P0` | Parallel 2-branch, label-free margin selection | `22.22%` | `0.00%` | `[0.00%, 0.00%]` | `0.00%` (0/28) | `0.00%` (0/8) | `0.00` | `12.83` |
-| `P1` | Parallel 2-branch, **oracle best-of-2** (upper bound) | `25.00%` | `+2.78%` | `[0.00%, +8.33%]` | `3.57%` (1/28) | `0.00%` (0/8) | `0.00` | `12.83` |
-| `M1` | Direct linear update mixing ($C_t = 0$) | `25.00%` | `+2.78%` | `[0.00%, +8.33%]` | `3.57%` (1/28) | `0.00%` (0/8) | `0.00` | `12.83` |
-| `E1` | Fixed-schedule cooperative latent excursion | `27.78%` | `+5.56%` | `[0.00%, +13.89%]` | `7.14%` (2/28) | `0.00%` (0/8) | `45.83` | `14.67` |
-| `E2` | **Adaptive label-free excursion (Pareto-optimal)** | **`27.78%`** | **`+5.56%`** | `[0.00%, +13.89%]` | **`7.14%` (2/28)** | **`0.00%` (0/8)** | `20.22` | **`14.03`** |
+The static export contains **2,866 trace records across eight runs**, not 2,866 independent problems. Each controller/fresh evaluation uses **18 problems × 3 seeds = 54 method-instance pairs**. Repeated seeds are not independent problem samples.
 
----
+On fresh templates, S0 scores **27.78%**, fixed excursions E1 **33.33%**, gated E3_mlp **27.78%**, and ungated E3_mlp **31.48%**. Ungated E3 rescues **2/39** failed baseline instances with **0/15** degradations. Its problem-cluster 95% difference interval is **[0.00, +9.26] percentage points**, with problem-level exact sign test **p = 0.5**. These small exploratory results do not establish generalization or superiority over mixing baselines.
 
-## 3. Quick Start & CLI Usage
+Compute is reported, but comparisons are not uniformly compute-matched. Historical parallel records have ledger mismatches; several earlier runs lack token ledgers. The current audit **fails closed**, rather than reusing historical `all_passed` flags. [Full findings and limitations](docs/findings.md).
+
+## Run the static observatory
+
+No checkpoint, backend, or raw `results/` directory is needed to serve the committed export:
 
 ```bash
-# 1. Install locked environment
-uv sync
-
-# 2. Run unit and invariant tests (no GPU/checkpoint download required)
-.venv/bin/pytest -q
-
-# 3. Inspect hardware and pinned Ouro checkpoint configuration
-.venv/bin/python -m tebdil.cli inspect-model --model ByteDance/Ouro-1.4B-Thinking
-
-# 4. Verify exact stepwise adapter equivalence (max_abs_diff == 0.0)
-.venv/bin/python -m tebdil.cli validate-adapter --config configs/phase1_smoke.yaml
-
-# 5. Run individual experimental phases
-.venv/bin/python -m tebdil.cli run --config configs/phase1_smoke.yaml
-.venv/bin/python -m tebdil.cli run --config configs/phase2_recovery.yaml
-.venv/bin/python -m tebdil.cli run --config configs/phase3_ablations.yaml
-.venv/bin/python -m tebdil.cli run --config configs/phase4_adaptive.yaml
-
-# 6. Aggregate paired statistics and Pareto frontier into reports/final_results.json
-.venv/bin/python -m tebdil.cli analyze --runs results/ --output reports/
-
-# 7. Launch Interactive Academic Landing Page UI (http://127.0.0.1:8080)
-.venv/bin/python scripts/build_landing_data.py
-.venv/bin/python -m tebdil.cli serve-site --host 127.0.0.1 --port 8080
-
-# 8. Launch Streamlit Observatory UI
-.venv/bin/streamlit run ui/app.py
+python3 scripts/build_landing_data.py --check
+python3 -m http.server 8080 --directory site
+# Open http://localhost:8080
 ```
 
----
+The export check validates checksums, record pairing and disclosed ledger gaps. It does not rerun model inference.
 
-## 4. Documentation and Reports
+For research development:
 
-- **Architecture & Invariants:** [docs/architecture.md](file:///Users/alperkartkaya/Documents/tebdil/docs/architecture.md)
-- **Methodology & Controls:** [docs/methods.md](file:///Users/alperkartkaya/Documents/tebdil/docs/methods.md)
-- **Reproduction Guide:** [docs/reproduction.md](file:///Users/alperkartkaya/Documents/tebdil/docs/reproduction.md)
-- **Limitations & Scope:** [docs/limitations.md](file:///Users/alperkartkaya/Documents/tebdil/docs/limitations.md)
-- **Literature Matrix:** [reports/literature_matrix.md](file:///Users/alperkartkaya/Documents/tebdil/reports/literature_matrix.md)
-- **Decision Log:** [reports/decision_log.md](file:///Users/alperkartkaya/Documents/tebdil/reports/decision_log.md)
-- **Experiment Registry:** [reports/experiment_registry.md](file:///Users/alperkartkaya/Documents/tebdil/reports/experiment_registry.md)
-- **Phase Reports:** [Phase 0](file:///Users/alperkartkaya/Documents/tebdil/reports/phase0_compatibility_report.md) · [Phase 1](file:///Users/alperkartkaya/Documents/tebdil/reports/phase1_report.md) · [Phase 2](file:///Users/alperkartkaya/Documents/tebdil/reports/phase2_report.md) · [Phase 3](file:///Users/alperkartkaya/Documents/tebdil/reports/phase3_report.md) · [Phase 4 & 5](file:///Users/alperkartkaya/Documents/tebdil/reports/phase4_report.md) · [Final Report](file:///Users/alperkartkaya/Documents/tebdil/reports/final_report.md)
-- **Aggregated Metrics JSON:** [reports/final_results.json](file:///Users/alperkartkaya/Documents/tebdil/reports/final_results.json)
+```bash
+uv sync --locked
+.venv/bin/pytest -q -m "not real_model"
+# Requires the pinned checkpoint already cached locally:
+.venv/bin/pytest -q -m real_model
+```
 
----
+Fresh local verification passed **68 tests, including real Ouro integration**; see the [scientific verification record](reports/mvp_scientific_verification.md) for replay scope and historical-audit failures. CUDA behavior and a full experiment rerun are not implied.
 
-## 5. License
+Rebuilding the export with `python scripts/build_landing_data.py` requires local raw experiment inputs. Those `results/` files are ignored by Git and are not supplied by a clean clone. See the [reproduction guide](docs/reproduction.md) before running research scripts.
 
-Licensed under [Apache-2.0](file:///Users/alperkartkaya/Documents/tebdil/LICENSE). The underlying `ByteDance/Ouro-1.4B-Thinking` model is licensed under Apache-2.0 by ByteDance.
+## Research layers
+
+- [Architecture](docs/architecture.md), [methods](docs/methods.md), [methodology](docs/methodology.md), [limitations](docs/limitations.md)
+- [Current findings](docs/findings.md), [final report](reports/final_report.md), [aggregated historical results](reports/final_results.json)
+- [Model provenance](site/static/evidence/model_provenance.json), [controller checkpoint](site/static/evidence/tebdil_mlp_v1.json), [split manifest](site/static/evidence/split_manifest.json)
+- [References and installed skills](reports/references_and_skills.md), [design contract](DESIGN.md)
+- Local advanced inspection: `.venv/bin/streamlit run ui/app.py` (requires local raw results; not the public Pages application).
+
+Licensed under [Apache-2.0](LICENSE). Ouro checkpoint terms are published by ByteDance under Apache-2.0.
+
+Parallel selection caveat: all historical P0/P1 total-selection costs are unverified, including rows whose selected-output ledger sums happen to match. The 71/81 counts describe arithmetic mismatches, not the full scope of uncertain parallel execution.
