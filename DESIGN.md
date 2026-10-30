@@ -19,7 +19,9 @@ One continuous selectable sequence: Problem, Mechanism, Decision, Experiment, Ev
 Mechanism before metrics. One primary message per panel. Recorded facts and illustrative diagrams are different layers. Negative results remain visible. No absent telemetry becomes a fabricated zero.
 
 ## Visual language
-Deep navy `#0b111b`, surface `#131d2b`, line `#344256`, text `#edf1f7`, muted `#a8b6c9`. Recipient cyan `#74d5e8`, donor amber `#efbd73`, excursion violet `#b8a2ef`; line patterns and names duplicate color meaning. System sans for prose and platform monospace for formulas/data. 4/8/16/24/40px spacing, compact 6px corners, no shadows. Left-aligned reading, split diagram/annotation, responsive stacked comparisons. Motion only on deliberate selection; reduced motion respected.
+Preserve the original RecursiveMAS-inspired academic project-page identity, restored at the user's request (2026-10-30). Reference: https://recursivemas.github.io/ and TEBDIL's own pre-refactor `fd074b8:site/index.html`. White `#ffffff`, slate surface `#f8fafc`, line `#e2e8f0`, ink `#0f172a`, secondary text `#475569`. Indigo `#4338ca` and sky accents define the centered project title; a soft tinted grid hero and dark resource pills retain the existing identity. No dark observatory redesign.
+
+Recipient indigo `#4338ca`, donor dark amber `#92400e`, excursion violet `#7c3aed`; darker tones keep diagram text readable on light surfaces. Names and line patterns duplicate color meaning. SVG uses the same CSS tokens as the interface. Platform sans and monospace avoid remote font dependencies. 4/8/16/24/40px spacing, rounded 12–18px panels, subtle diagram shadows. Centered academic introduction, left-aligned research content and responsive split comparisons. Retain the five-step flow and scientific corrections; do not restore unsupported old claims or decorative controls. Reduced motion respected.
 
 ## Components
 Native links/buttons/selects/details, selectable journey, schematic SVG, per-step telemetry, paired outputs, results table, provenance downloads. CSS owns tokens; one JS state object owns selection; generated manifest owns dataset labels/statistics.

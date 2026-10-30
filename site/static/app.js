@@ -300,10 +300,10 @@
     const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
     const x = (v) => 48 + (v - minX) / (maxX - minX || 1) * 600;
     const y = (v) => 215 - (v - minY) / (maxY - minY || 1) * 175;
-    const colors = {A:"#74d5e8", B:"#efbd73", C:"#b8a2ef"};
-    svg.innerHTML = '<text x="10" y="20" fill="#a8b6c9" font-size="12">PC2</text><text x="660" y="247" fill="#a8b6c9" font-size="12">PC1</text>' + branches.map(([branch, points]) => {
+    const colors = {A:"var(--a)", B:"var(--b)", C:"var(--visit)"};
+    svg.innerHTML = '<text x="10" y="20" fill="var(--muted)" font-size="12">PC2</text><text x="660" y="247" fill="var(--muted)" font-size="12">PC1</text>' + branches.map(([branch, points]) => {
       const valid = points.filter((p) => p.length >= 2 && p.every(Number.isFinite));
-      const color = colors[branch] || "#edf1f7";
+      const color = colors[branch] || "var(--text)";
       return `<polyline points="${valid.map((p) => `${x(p[0])},${y(p[1])}`).join(" ")}" fill="none" stroke="${color}" stroke-width="2" ${branch === "A" ? "" : 'stroke-dasharray="5 5"'}/>` + valid.map((p, i) => `<circle cx="${x(p[0])}" cy="${y(p[1])}" r="${i + 1 === state.step ? 6 : 4}" fill="${color}"/><text x="${x(p[0]) + 8}" y="${y(p[1]) - 8}" fill="${color}" font-size="11">${esc(branch)} #${i + 1}</text>`).join("");
     }).join("");
     $("projectionNote").textContent = `Recorded token 1 only. ${r.pca_explained_variance?.length >= 2 ? `PC1 ${pct(r.pca_explained_variance[0])}, PC2 ${pct(r.pca_explained_variance[1])} explained variance.` : "Explained variance unavailable."} Points are recorded branch samples; visit geometry is deliberately omitted.`;
@@ -332,24 +332,24 @@
       mix: ["Direct state mixing", "Replace A with a blend of A and B, then continue from that blended state. There is no return to A’s original anchor."],
     };
     const [title, description] = descriptions[mode];
-    const node = (x, y, w, label, sub, color = "#74d5e8") => `<rect x="${x}" y="${y}" width="${w}" height="64" rx="6" class="node" style="stroke:${color}"/><text x="${x + w / 2}" y="${y + 27}" text-anchor="middle" class="label" style="fill:${color}">${label}</text><text x="${x + w / 2}" y="${y + 47}" text-anchor="middle" class="sub-label">${sub}</text>`;
+    const node = (x, y, w, label, sub, color = "var(--a)") => `<rect x="${x}" y="${y}" width="${w}" height="64" rx="6" class="node" style="stroke:${color}"/><text x="${x + w / 2}" y="${y + 27}" text-anchor="middle" class="label" style="fill:${color}">${label}</text><text x="${x + w / 2}" y="${y + 47}" text-anchor="middle" class="sub-label">${sub}</text>`;
     const line = (path, color, dashed = false) => `<path d="${path}" fill="none" stroke="${color}" stroke-width="2" ${dashed ? 'stroke-dasharray="6 5"' : ""} marker-end="url(#arrow)"/>`;
-    let diagram = `<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#a8b6c9"/></marker></defs><title id="mechanismTitle">${title}</title><desc id="mechanismDesc">${description}</desc>`;
-    diagram += node(24, 34, 150, "Receiving A", "original anchor") + node(24, 210, 150, "Donor B", "same model weights", "#efbd73");
+    let diagram = `<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--muted)"/></marker></defs><title id="mechanismTitle">${title}</title><desc id="mechanismDesc">${description}</desc>`;
+    diagram += node(24, 34, 150, "Receiving A", "original anchor") + node(24, 210, 150, "Donor B", "same model weights", "var(--b)");
     if (mode === "excursion") {
-      diagram += node(280, 34, 180, "Normal update", "V(A) = F(A) − A") + node(280, 185, 180, "Temporary visit", "H_visit = A + α_eff(B−A)", "#b8a2ef") + node(540, 185, 150, "Compute there", "V_visit = F(visit) − visit", "#b8a2ef") + node(694, 34, 165, "Return to A", "A′ = A + weighted update");
-      diagram += line("M174 66 H280", "#74d5e8") + line("M174 242 H230 V217 H280", "#efbd73", true) + line("M99 98 V160 H370 V185", "#b8a2ef", true) + line("M460 217 H540", "#b8a2ef") + line("M615 185 V130 H776 V98", "#b8a2ef", true) + line("M460 66 H694", "#74d5e8");
+      diagram += node(280, 34, 180, "Normal update", "V(A) = F(A) − A") + node(280, 185, 180, "Temporary visit", "H_visit = A + α_eff(B−A)", "var(--visit)") + node(540, 185, 150, "Compute there", "V_visit = F(visit) − visit", "var(--visit)") + node(694, 34, 165, "Return to A", "A′ = A + weighted update");
+      diagram += line("M174 66 H280", "var(--a)") + line("M174 242 H230 V217 H280", "var(--b)", true) + line("M99 98 V160 H370 V185", "var(--visit)", true) + line("M460 217 H540", "var(--visit)") + line("M615 185 V130 H776 V98", "var(--visit)", true) + line("M460 66 H694", "var(--a)");
       diagram += '<text x="540" y="49" class="sub-label">(1−β) V(A)</text><text x="672" y="120" class="sub-label">β V_visit returns</text>';
     } else if (mode === "switch") {
-      diagram += node(620, 210, 210, "Continue as B", "A is not the receiving anchor", "#efbd73") + line("M174 242 H620", "#efbd73");
+      diagram += node(620, 210, 210, "Continue as B", "A is not the receiving anchor", "var(--b)") + line("M174 242 H620", "var(--b)");
       diagram += '<text x="290" y="72" class="sub-label">A stops here. No excursion-and-return.</text>';
     } else {
-      diagram += node(330, 120, 190, "Mixed state", "H_mix = (1−α)A + αB", "#b8a2ef") + node(660, 120, 170, "Continue from mix", "F(H_mix)", "#b8a2ef");
-      diagram += line("M174 66 H250 V142 H330", "#74d5e8") + line("M174 242 H250 V164 H330", "#efbd73", true) + line("M520 152 H660", "#b8a2ef");
+      diagram += node(330, 120, 190, "Mixed state", "H_mix = (1−α)A + αB", "var(--visit)") + node(660, 120, 170, "Continue from mix", "F(H_mix)", "var(--visit)");
+      diagram += line("M174 66 H250 V142 H330", "var(--a)") + line("M174 242 H250 V164 H330", "var(--b)", true) + line("M520 152 H660", "var(--visit)");
     }
     $("mechanismDiagram").innerHTML = diagram;
     $("mechanismExplanation").textContent = description;
-    $("mechanismCaption").textContent = `${title}. Schematic positions encode computation order, not latent distance. Recipient A is cyan; donor B amber; temporary computation violet and dashed.`;
+    $("mechanismCaption").textContent = `${title}. Schematic positions encode computation order, not latent distance. Recipient A is indigo; donor B amber; temporary computation violet and dashed.`;
     all("[data-mechanism]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.mechanism === mode)));
   }
 

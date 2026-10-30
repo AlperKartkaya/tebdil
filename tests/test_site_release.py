@@ -111,6 +111,23 @@ def test_journey_has_five_accessible_linked_panels() -> None:
     assert len(selected) == 1
 
 
+def test_original_light_academic_identity_and_shared_diagram_colors() -> None:
+    html = INDEX.read_text(encoding="utf-8")
+    css = (SITE / "static/style.css").read_text(encoding="utf-8")
+    script = (SITE / "static/app.js").read_text(encoding="utf-8")
+    assert 'class="hero-banner"' in html
+    assert 'class="pub-links"' in html
+    assert "TEBDİL: Self-Directed Latent Excursions" in html
+    assert "color-scheme:light" in css
+    for token, color in {
+        "bg": "#ffffff", "text": "#0f172a", "muted": "#475569",
+        "a": "#4338ca", "b": "#92400e", "visit": "#7c3aed",
+    }.items():
+        assert f"--{token}:{color}" in css
+    for token in ("a", "b", "visit", "muted"):
+        assert f"var(--{token})" in script, "SVGs must follow the light interface palette"
+
+
 def test_primary_controls_and_states_are_present() -> None:
     parser = parse_site()
     required = {

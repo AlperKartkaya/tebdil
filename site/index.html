@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#0b111b">
+  <meta name="theme-color" content="#4338ca">
   <meta name="description" content="TEBDİL research observatory. Inspect real Ouro recordings of latent excursion-and-return, controller decisions, and paired experimental evidence.">
   <title>TEBDİL — Research observatory</title>
   <link rel="icon" href="static/favicon.svg" type="image/svg+xml">
@@ -13,20 +13,27 @@
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to research experience</a>
-<header class="site-header shell">
+<header class="hero-banner">
+<div class="site-header shell">
   <a class="wordmark" href="./" aria-label="TEBDİL home">TEBDİL<span class="wordmark-dot" aria-hidden="true">.</span></a>
   <span class="header-note">Research observatory</span>
   <a href="https://github.com/AlperKartkaya/tebdil">Source &amp; methods</a>
-</header>
-<main id="main" class="shell" tabindex="-1">
-  <section class="intro" aria-labelledby="intro-title">
-    <div><p class="mode"><span aria-hidden="true">◉</span> Recorded experiments · Ouro-1.4B</p>
-      <h1 id="intro-title">Borrow the update.<br>Keep the trajectory.</h1>
-    </div>
-    <div class="intro-copy"><p>Can a model reason better by briefly computing somewhere else in its latent state space?</p>
-      <p class="muted">TEBDİL tests excursion-and-return inside one recurrent language model. Real computation. Inspectable evidence. No inference runs in your browser.</p>
+</div>
+  <section class="intro shell" aria-labelledby="intro-title">
+    <p class="mode">Latent trajectory intervention · Recurrent language models</p>
+    <h1 id="intro-title">TEBDİL: Self-Directed Latent Excursions<br> for Recurrent Reasoning</h1>
+    <p class="pub-subtitle">Borrow the update. Keep the trajectory.</p>
+    <p class="intro-copy">Temporarily visit another latent state, compute a recurrent update there, and return it to the receiving trajectory.</p>
+    <p class="recording-note">Recorded experiments · ByteDance/Ouro-1.4B-Thinking · No inference runs in your browser</p>
+    <div class="pub-links" aria-label="Project resources">
+      <a class="pub-btn" href="https://github.com/AlperKartkaya/tebdil">Code</a>
+      <a class="pub-btn" href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/methodology.md">Methodology</a>
+      <a class="pub-btn" href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/reproduction.md">Reproduce</a>
+      <a class="pub-btn" href="https://github.com/AlperKartkaya/tebdil/blob/main/CITATION.cff">Cite</a>
     </div>
   </section>
+</header>
+<main id="main" class="shell" tabindex="-1">
   <nav class="journey" aria-label="Research journey" role="tablist">
     <button id="tab-problem" role="tab" data-view="problem" aria-selected="true" aria-controls="view-problem"><span>01</span> The problem</button>
     <button id="tab-mechanism" role="tab" data-view="mechanism" aria-selected="false" aria-controls="view-mechanism" tabindex="-1"><span>02</span> The mechanism</button>
@@ -46,7 +53,7 @@
   </div>
   <section id="view-problem" class="view" role="tabpanel" aria-labelledby="tab-problem">
     <div class="split intro-panel">
-      <div class="reading"><p class="section-kicker">The research question</p><h2>More steps do not<br>guarantee a better answer.</h2>
+      <div class="reading"><p class="section-kicker">The research question</p><h2>More steps do not<br> guarantee a better answer.</h2>
         <p>A recurrent model refines hidden states using the same shared weights. An unproductive trajectory can stay unproductive.</p>
         <p class="muted">Instead of only adding depth or selecting another branch, TEBDİL asks: can a useful update come back?</p>
         <button class="primary" data-go="mechanism">See excursion-and-return</button>
