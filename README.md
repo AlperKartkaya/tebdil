@@ -37,6 +37,11 @@ follow-up now preserves three EOS-completed pilot continuations and real call
 ledgers; its separate post-hoc scoring distinguishes answer-format failures from
 mathematical errors. See [point B verification](reports/trajectory_verification.md).
 
+A separate [fixed-prefix operator diagnostic](reports/operator_controls_verification.md)
+now checks E1 against update mixing and output-matched random directions in FP32/BF16.
+Its 306 real recurrent calls verify the bounded mechanism, not a reasoning gain.
+Historical R0 is input-offset-matched noise, not an output-matched control.
+
 ## Run the static observatory
 
 No checkpoint, backend, or raw `results/` directory is needed to serve the committed export:

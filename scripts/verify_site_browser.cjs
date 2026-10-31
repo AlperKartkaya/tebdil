@@ -25,6 +25,10 @@ const base=process.env.SITE_URL||'http://127.0.0.1:8093/';
  const scoringResponse=await page.request.get(new URL(await contract.locator('a[href="static/evidence/ouro_completion_scoring.json"]').getAttribute('href'),base).href);
  assert(scoringResponse.ok());const scoring=await scoringResponse.json();
  assert.equal(scoring.posthoc,true);assert.equal(scoring.records.length,3);
+ const operatorResponse=await page.request.get(new URL(await contract.locator('a[href="static/evidence/ouro_operator_controls.json"]').getAttribute('href'),base).href);
+ assert(operatorResponse.ok());const operators=await operatorResponse.json();
+ assert.equal(operators.all_checks_passed,true);assert.equal(operators.actual_recurrent_calls,306);
+ assert.equal(operators.conditions.length,12);assert(operators.conditions.every(c=>Object.values(c.checks).every(Boolean)));
  await contract.screenshot({path:'/tmp/tebdil-generation-evidence.png'});
  await contract.locator('summary').press('Enter');
  await page.screenshot({path:'/tmp/tebdil-final-desktop-hero.png'});
@@ -57,6 +61,7 @@ const base=process.env.SITE_URL||'http://127.0.0.1:8093/';
   const narrative=await page.locator('#stageStepNarrative').innerText();
   if(method==='C0')assert(narrative.includes('No update returns to A'));
   if(method==='M1')assert(narrative.includes('does not evaluate'));
+  if(method==='R0'){assert(narrative.includes('Input-noise'));assert((await page.locator('#liveFormulaPill').textContent()).includes('F(A + ε)'));}
   if(['M0','M1','C0','R0'].includes(method))assert((await page.locator('#telemetryGrid').innerText()).includes('Not measured'));
  }
  await page.selectOption('#methodSelect','S1');

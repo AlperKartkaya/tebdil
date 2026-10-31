@@ -8,7 +8,7 @@ uncommitted controller, counterfactual and report artifacts are not inputs to th
 |---|---|---|
 | A. Ouro execution contract | Per-depth real-checkpoint state/gate/logit parity; masks/positions; both readouts; FP32/BF16 diagnostic; documentation and Pages evidence | Complete: `e0728b3`; [CI/deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41219360287) and public browser checks passed |
 | B. Trajectory semantics | Explicit token/depth and prefix contracts; baseline-generation calibration | Complete: `22cc752`, 122 tests including real Ouro; [CI/deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41239947652) and full public browser checks passed |
-| C. Operator controls | Correctly named input noise; output-matched controls; algebraic invariants; fixed-prefix residual study | Not started |
+| C. Operator controls | Correctly named input noise; output-matched controls; algebraic invariants; fixed-prefix residual study | Real study complete (306 calls); release checks pending |
 | D. Normalization diagnostics | Explicit radial/directional and norm-preserving ablations | Not started |
 | E. Controller evaluation | Unshaped and heuristic controls only after intervention utility is established | Not started |
 | Publication package | Frozen held-out campaign, complete costs and immutable reproducible evidence | Not started |

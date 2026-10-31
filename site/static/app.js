@@ -19,7 +19,7 @@
     E3_t2_1donor:["Budgeted learned control","Offline-trained MLP + heuristic gates"],
     EXIT_2:["Fixed early exit","Fixed schedule"], RAND_CTRL:["Random control","Random actions; not learned"],
     H_budget:["Budget heuristic","Hand-set adaptive rules; not learned"], G_gate_only:["Gate-only controller","Hand-set rules; no learned scorer"],
-    R0:["Norm-matched random noise","Negative control"], E0:["Random-direction excursion","Negative control"],
+    R0:["Input-offset-matched noise","Input perturbation; not output-matched"], E0:["Random-direction excursion","Negative control"],
     C0:["Visit without return","Visited state replaces receiving anchor"],
     E1_no_curv:["Excursion without residual","Visited response measured; nonlinear residual removed"],
     E1_rand_curv:["Randomized residual","Visited residual replaced before transfer"],
@@ -218,10 +218,10 @@
     const d=decision(),entry=token();
     const action=(d?.action_type||entry?.controller_action_type||"").toUpperCase();
     if(action==="EXIT")return {kind:"exit",labels:["Receiving A","Controller: EXIT","Later recurrence bypassed","Readout at this depth"],note:"Recorded EXIT decision. Later recurrent states are not fabricated.",formula:"EXIT → readout"};
-    if(row.method==="M0")return {kind:"mix",labels:["Receiving A + donor","Direct hidden-state mix","Compute F(mixed state)","Continue from mixture"],note:"Direct state mixing permanently changes the anchor; it is not excursion-and-return.",formula:"H_mix = (1−α)A + αB"};
-    if(row.method==="M1")return {kind:"mix",labels:["Endpoint A and donor","Mix endpoint updates","Apply linear update to A","Continue from A"],note:"Linear update mixing does not evaluate the recurrent transition at a visited state.",formula:"A′ = A + (1−αβ)V(A) + αβV(B)"};
+    if(row.method==="M0")return {kind:"mix",labels:["Receiving A + donor","Direct hidden-state mix","Compute F(mixed state)","Continue from mixture"],note:"Direct state mixing permanently changes the anchor; it is not excursion-and-return.",formula:"H_mix = A + (αβ)_eff(B − A)"};
+    if(row.method==="M1")return {kind:"mix",labels:["Endpoint A and donor","Mix endpoint updates","Apply linear update to A","Continue from A"],note:"Linear update mixing does not evaluate the recurrent transition at a visited state.",formula:"A′ = A + (1−α_eff β)V(A) + α_eff βV(B)"};
     if(row.method==="C0")return {kind:"switch",labels:["Receiving A","Visit toward donor","Compute F(visit)","Continue from visit"],note:"Visit-without-return replaces the receiving anchor. No update returns to A.",formula:"H′ = F(H_visit)"};
-    if(row.method==="R0")return {kind:"noise",labels:["Receiving A","Norm-matched noise","Perturbed normal update","Continue perturbed"],note:"Random-noise control; no donor visit or return is implied.",formula:"A′ = F(A) + ε"};
+    if(row.method==="R0")return {kind:"noise",labels:["Receiving A","Input-offset-matched noise","Compute F(A + noise)","Continue perturbed"],note:"Input-noise control: ‖ε‖ = β × clipped visit-offset norm before casting; not output-correction matched. No donor visit or return is implied.",formula:"A′ = F(A + ε)"};
     if(["P0","P1"].includes(row.method))return {kind:"parallel",labels:["Independent A and B","Run both branches","Select an output","Selected readout"],note:`${row.method} selects between independent trajectories. It does not transfer an update; total selection cost is unverified.`,formula:"independent branches → selection"};
     if(["S0","S1","EXIT_2"].includes(row.method)||action==="CONTINUE"&&!tel)return {kind:"normal",labels:["Receiving A","Normal recurrent update","Continue A","Readout"],note:action==="CONTINUE"?"Recorded CONTINUE decision. No outgoing excursion is recorded at this step.":"Ordinary recurrence; no intervention is implied.",formula:"A′ = F(A)"};
     if(!tel)return {kind:"unavailable",labels:["Receiving A",`Step ${state.step}`,"No outgoing visit recorded","No return claimed"],note:"No outgoing excursion telemetry exists at the selected token and step. Absence is not shown as a zero-valued visit.",formula:"telemetry unavailable"};
@@ -230,7 +230,7 @@
     const alpha=tel.effective_alpha;const beta=tel.beta;
     const note=row.method==="E0"?"Random-direction visited-state transition; the visit does not point toward the donor state."
       :row.method==="E1_no_curv"?"Visited response measured; the nonlinear residual is removed before transfer."
-      :row.method==="E1_rand_curv"?"Visited response measured; its residual is replaced with a norm-matched random direction."
+      :row.method==="E1_rand_curv"?"Visited response measured; its full residual norm is matched before scope/projection and dtype casting."
       :"Recorded visited-state transition. The computed update returns to receiving trajectory A.";
     return {kind:"excursion",labels:["Receiving A",`Temporary visit · α_eff=${num(alpha,2)}`,"Compute F(visit) − visit",`Return update · β=${num(beta,2)}`],note:`${note}${tel.clipped?" Trust-region clipping changed the effective visit strength.":""}`,formula:"A′ = A + (1−β)V(A) + βV(visit)"};
   }

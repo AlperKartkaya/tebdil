@@ -964,6 +964,8 @@
         <p><b>Branch lifetime:</b> A and donor branches re-fork inside each generated token's recurrent unroll. Hidden states do not persist across output tokens. Equal token positions can have different generated prefixes.</p>
         <p><b>Baseline calibration, not a new benchmark:</b> on three fixed pilot problems, raw prompts scored 1/3 with either a 2- or 64-token budget. Chat formatting produced reasoning but all three responses were unfinished at 128 tokens. All three longer native continuations reached EOS (437, 483 and 1,514 tokens). Prose answers fail the original whole-response integer rule; a separate post-hoc format diagnostic recognizes two answers and leaves the graph response unrecognized. This is not a TEBDİL comparison; historical scores remain unchanged.</p>
         <p><a href="static/evidence/ouro_baseline_calibration.json">Pilot calibration: raw outputs, token prefixes &amp; measured calls</a> · <a href="static/evidence/ouro_baseline_completion.json">Native completion: raw outputs &amp; call ledger</a> · <a href="static/evidence/ouro_completion_scoring.json">Post-hoc format diagnostic</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/trajectory_semantics.md">Trajectory and generation contract</a></p>
+        <p><b>Operator controls:</b> twelve fixed-prefix Ouro conditions (306 measured recurrent calls) verify excursion-and-return and donor isolation. The E1-minus-mixing residual identity holds within FP32 error; BF16 casting introduces visible deviations. Output-matched random directions and residual-scale sweeps do not establish a reasoning benefit. Historical R0 matches input offset, not output correction.</p>
+        <p><a href="static/evidence/ouro_operator_controls.json">Fixed-prefix controls, norms &amp; costs</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/reports/operator_controls_verification.md">Operator verification &amp; limitations</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/operator_controls_protocol.md">Frozen diagnostic design</a></p>
       </details>
     </div>
   </div>
@@ -1245,7 +1247,7 @@
           $$H_{t+1}^{A'}(E_1) \;=\; \underbrace{H_t^A + (1-\alpha_{\mathrm{eff}}\beta)V_t^A + \alpha_{\mathrm{eff}}\beta V_t^B}_{\text{Linear Update Mixing } M_1(\gamma=\alpha_{\mathrm{eff}}\beta)} \;+\; \beta C_t$$
         </div>
         <div class="insight-box" style="margin-top: 0.8rem;">
-          <b>Algebraic implication:</b> For full-scope, ungated transfer in the donor direction, local affinity implies $C_t \equiv 0$ and equivalence to $M_1$ at the same effective $\alpha$. The identity does not apply unchanged to random-direction, masked, or gated variants. The graph case below contrasts recorded outputs; one case is not a causal proof.
+          <b>Algebraic implication:</b> For full-scope, ungated transfer in the donor direction, local affinity implies $C_t \equiv 0$ and equivalence to $M_1$ at the same effective $\alpha$. This is an exact-arithmetic statement; quantization can move the actual visit off the endpoint segment. The identity does not apply unchanged to random-direction, masked, projected, or gated variants. The graph case below contrasts recorded outputs; one case is not a causal proof.
         </div>
       </div>
 
@@ -1255,11 +1257,11 @@
           Control 2 &mdash; Directional Specificity of $C_t$
         </h4>
         <p style="color: var(--rm-sub); font-size: 0.92rem; line-height: 1.6;">
-          Is the benefit of $C_t$ merely an artifact of injecting extra vector norm at step $t{=}2$? We test two norm-matched directional controls in Phase 3:
+          Is the benefit of $C_t$ merely an artifact of injecting extra vector norm at step $t{=}2$? Phase 3 tests two directional controls, matched before scope/projection and final dtype casting, not necessarily at the applied output:
         </p>
         <div class="eq-block">
-          $$E_1^{\text{rand-curv}}:\quad V_t^{\text{synth}} = \big[(1-\alpha)V_t^A + \alpha V_t^B\big] + \frac{\|C_t\|_F}{\|u\|_F}\,u$$
-          $$E_0:\quad H_t^{\text{visit,rand}} = H_t^A + \alpha \|H_t^B - H_t^A\|_F \frac{w}{\|w\|_F}$$
+          $$E_1^{\text{rand-curv}}:\quad V_t^{\text{synth}} = \big[(1-\alpha_{\mathrm{eff}})V_t^A + \alpha_{\mathrm{eff}} V_t^B\big] + \frac{\|C_t\|_F}{\|u\|_F}\,u$$
+          $$E_0:\quad H_t^{\text{visit,rand}} = H_t^A + \alpha_{\mathrm{eff}} \|H_t^B - H_t^A\|_F \frac{w}{\|w\|_F}$$
         </div>
         <div class="insight-box" style="margin-top: 0.8rem;">
           <b>Read the paired outcomes:</b> The exported Phase 3 recording includes both rescues and degradations. Its fixed and randomized-residual methods have the same aggregate accuracy, despite different per-problem outcomes. Residual magnitude alone does not establish a reasoning benefit; inspect the paired control table and raw traces.
@@ -1310,9 +1312,9 @@
       <div class="pattern-card">
         <div class="pattern-icon ic-dis"><i class="fas fa-dice"></i></div>
         <h4>Noise &amp; Direction Controls</h4>
-        <p>Rule out generic stochastic regularisation by matching exact update shift norms ($R_0$) or visit offset norm ($E_0$).</p>
+        <p>Compare input-offset-matched noise ($R_0$) with random-direction visits ($E_0$). Neither alone isolates the applied output-correction norm.</p>
         <div class="pattern-roles">
-          <span class="role-chip">R0: Norm-Matched Noise</span>
+          <span class="role-chip">R0: Input-Matched Noise</span>
           <span class="role-chip">E0: Random-Dir Excursion</span>
         </div>
       </div>
@@ -1336,7 +1338,7 @@
           <tr>
             <th>Code</th>
             <th>Category</th>
-            <th>State Update Equation at Step $t=2$</th>
+            <th>Full-scope, ungated equations at $t=2$ (before casting)</th>
             <th>Compute accounting</th>
             <th>Comparison purpose</th>
           </tr>
@@ -1346,13 +1348,13 @@
           <tr><td><b>S1</b></td><td><span class="pat-tag pat-seq">Compute</span></td><td>5 recurrent steps ($T{=}5$ via extra final block evaluation)</td><td>See selected recording ledger</td><td>Extra recurrent depth on a single trajectory</td></tr>
           <tr><td><b>P0</b></td><td><span class="pat-tag pat-seq">Ensemble</span></td><td>Independent branches (recording-dependent); confidence-based selection</td><td>Unverified selection cost</td><td>Independent parallel trajectories without interaction</td></tr>
           <tr><td><b>P1</b></td><td><span class="pat-tag pat-seq">Oracle</span></td><td>$\arg\max_{y \in \{y^A, y^B, \ldots\}} \mathbb{I}[y = y^*]$ (uses gold label)</td><td>Unverified selection cost</td><td>Upper bound of non-interacting branch selection (recording-dependent)</td></tr>
-          <tr><td><b>M0</b></td><td><span class="pat-tag pat-mix">Linear</span></td><td>$H_3^{M_0} = F_{\theta,2}((1-\gamma)H_2^A + \gamma H_2^B)$ (continues from the interpolated state)</td><td>See selected recording ledger</td><td>Direct state interpolation without anchor return</td></tr>
-          <tr><td><b>M1</b></td><td><span class="pat-tag pat-mix">Linear</span></td><td>$H_3^{M_1} = H_2^A + (1-\alpha\beta)V_2^A + \alpha\beta V_2^B$</td><td>See selected recording ledger</td><td>Linear combination of endpoint updates ($C_2 = 0$)</td></tr>
-          <tr><td><b>C0</b></td><td><span class="pat-tag pat-mix">Topology</span></td><td>$H_3^{C_0} = H_2^{\mathrm{visit}} + V_2^{\mathrm{visit}}$ (no return to $H_2^A$)</td><td>See selected recording ledger</td><td>Necessity of returning update vector to $H_2^A$</td></tr>
-          <tr><td><b>R0</b></td><td><span class="pat-tag pat-dis">Noise</span></td><td>$H_3^{R_0} = H_3^A + \|\Delta^{\mathrm{visit}}_2\|_F \cdot u / \|u\|_F$</td><td>See selected recording ledger</td><td>Generic norm-matched random state perturbation</td></tr>
-          <tr><td><b>E0</b></td><td><span class="pat-tag pat-dis">Direction</span></td><td>Excursion to $H_2^A + \alpha\|H_2^B - H_2^A\|_F \cdot w / \|w\|_F$</td><td>See selected recording ledger</td><td>Visited-state evaluation in a random direction</td></tr>
+          <tr><td><b>M0</b></td><td><span class="pat-tag pat-mix">Linear</span></td><td>$H_3^{M_0} = F_{\theta,2}((1-\gamma)H_2^A + \gamma H_2^B)$ ($\gamma$ is the clipped effective $\alpha\beta$; continues from the interpolated state)</td><td>See selected recording ledger</td><td>Direct state interpolation without anchor return</td></tr>
+          <tr><td><b>M1</b></td><td><span class="pat-tag pat-mix">Linear</span></td><td>$H_3^{M_1} = H_2^A + (1-\alpha_{\mathrm{eff}}\beta)V_2^A + \alpha_{\mathrm{eff}}\beta V_2^B$</td><td>See selected recording ledger</td><td>Mix endpoint updates without evaluating the visited response</td></tr>
+          <tr><td><b>C0</b></td><td><span class="pat-tag pat-mix">Topology</span></td><td>$H_3^{C_0} = H_2^{\mathrm{visit}} + V_2^{\mathrm{visit}}$ (no return to $H_2^A$)</td><td>See selected recording ledger</td><td>Contrast continuing from the visit with returning its update</td></tr>
+          <tr><td><b>R0</b></td><td><span class="pat-tag pat-dis">Noise</span></td><td>$H_3^{R_0} = F_2(H_2^A + \varepsilon),\; \|\varepsilon\|_F = \beta\|\Delta^{\mathrm{visit}}_2\|_F$</td><td>See selected recording ledger</td><td>Input-offset-matched noise before recurrence; not output-matched</td></tr>
+          <tr><td><b>E0</b></td><td><span class="pat-tag pat-dis">Direction</span></td><td>Excursion to $H_2^A + \alpha_{\mathrm{eff}}\|H_2^B - H_2^A\|_F \cdot w / \|w\|_F$</td><td>See selected recording ledger</td><td>Visited-state evaluation in a random direction</td></tr>
           <tr><td><b>E1_no_curv</b></td><td><span class="pat-tag pat-del">Ablation</span></td><td>$H_3 = H_2^A + (1-\beta)V_2^A + \beta(V_2^{\mathrm{visit}} - C_2)$</td><td>See selected recording ledger</td><td>Tests the algebraic residual removal against $M_1$</td></tr>
-          <tr><td><b>E1_rand_curv</b></td><td><span class="pat-tag pat-del">Ablation</span></td><td>Replaces $C_2$ with random vector of identical norm $\|C_2\|_F$</td><td>See selected recording ledger</td><td>Tests whether $C_2$ direction (not just norm) matters</td></tr>
+          <tr><td><b>E1_rand_curv</b></td><td><span class="pat-tag pat-del">Ablation</span></td><td>Replaces $C_2$ with pre-cast random vector of identical norm $\|C_2\|_F$</td><td>See selected recording ledger</td><td>Tests whether $C_2$ direction (not just norm) matters</td></tr>
           <tr class="row-ours"><td><b>E1 (Ours)</b></td><td><span class="pat-tag pat-del">TEBDİL</span></td><td>$H_3^{A'} = H_2^A + (1-\beta)V_2^A + \beta V_2^{\mathrm{visit}}$ (configured strengths in manifest; effective strengths in telemetry)</td><td>See selected recording ledger</td><td>Excursion-and-return anchored at the receiving state</td></tr>
           <tr class="row-ours"><td><b>E2 (Ours)</b></td><td><span class="pat-tag pat-del">TEBDİL</span></td><td>Heuristic uncertainty, stability, donor, and budget checks; see recorded decision</td><td>See selected recording ledger</td><td>Label-free uncertainty-gated excursion</td></tr>
         </tbody>

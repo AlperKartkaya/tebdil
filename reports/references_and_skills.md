@@ -80,3 +80,15 @@ K-Dense attribution: Timothy Kassis, Vinayak Agarwal, Yuhuan He, Darshil Patel a
 ## Deployment references
 
 The Pages verify/package/deploy jobs follow [GitHub's custom workflow requirements](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages). Checkout/setup-uv pins follow [Astral's official GitHub integration guide](https://docs.astral.sh/uv/guides/integration/github/). Deployment credentials are limited to packaging/deployment jobs; PR verification has read-only contents access. The workflow was inspected locally, not executed on GitHub during this refactor.
+
+## Gate C application (2026-10-31)
+
+Recovered the loopback XERJ node without altering another project's server.
+`tebdilcontract` searches located `build_visit_state` and R0; the index explicitly
+warned it predates gate B, so current files and all new code were read directly.
+`mvpouro` and `mvpaim` searches reconfirmed the recurrent normalization boundary
+and run/context/step identity pattern. No new dependency or upstream code copy.
+Statistical-analysis guidance fixed sampling units/design before observations and
+prevented inferential claims from twelve dependent conditions. Frontend/accessibility
+guidance preserved the original page hierarchy, expandable evidence and keyboard
+controls; webapp-testing guidance supplies fresh browser verification.

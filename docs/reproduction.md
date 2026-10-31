@@ -103,3 +103,21 @@ Building without `--check` requires all eight raw run directories plus controlle
 ```
 
 This advanced tool expects local raw results. It is separate from the static public observatory; no public live inference service is configured.
+
+## 7. Fixed-prefix operator controls (gate C)
+
+Uses the committed gate B pilot prefixes, pinned cached checkpoint and tokenizer.
+The [frozen protocol](operator_controls_protocol.md) defines the complete paired
+design. This does not run free generation or train/evaluate a controller.
+
+```bash
+uv run python scripts/verify_operator_controls.py --output /tmp/ouro-controls-new.json
+```
+
+The output and adjacent `.jsonl` must not exist. The script hashes the checkpoint
+and source before execution, journals every condition, counts real boundary-norm
+calls independently, and rejects source changes during the run. The recorded MPS
+run took about one minute; other hardware can differ. FP32/BF16 results are device-
+dependent diagnostics, not bitwise cross-device guarantees. Both reference
+construction and continuation costs are reported; do not treat shared-work probes
+as independently executed compute-matched benchmarks. Historical results are untouched.

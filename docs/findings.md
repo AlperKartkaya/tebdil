@@ -99,3 +99,14 @@ The observatory retains all eight experiments, including donor selection and sel
 See [reproduction](reproduction.md), [methods](methods.md), [limitations](limitations.md), and [final report](../reports/final_report.md).
 
 Parallel selection caveat: all historical P0/P1 total-selection costs are unverified, including rows whose selected-output ledger sums happen to match. The 71/81 counts describe arithmetic mismatches, not the full scope of uncertain parallel execution.
+
+## Fixed-prefix mechanism follow-up (gate C)
+
+Twelve dependent conditions on three reused pilot prefixes verify the return formula,
+branch isolation and actual checkpoint execution (306 recurrent calls). FP32 E1 − M1
+matches beta C within 0.000016 Frobenius norm; BF16 output casting increases the
+identity error to 0.597–0.900. Random-output matching reports realized norm error,
+not an assumption of exact BF16 equality. Residual magnitude/direction has no
+consistent first-answer-token likelihood advantage over matched random controls.
+This surrogate is not completed-answer accuracy or evidence of a reasoning gain.
+See [raw observations and limits](../reports/operator_controls_verification.md).

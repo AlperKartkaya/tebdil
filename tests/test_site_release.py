@@ -288,6 +288,8 @@ const decision = () => null;
 const token = () => null;
 const telemetry = () => null;
 eval(source.slice(start, end).trim() + `
+const noise = mechanism({method:"R0"}, null);
+if (noise.formula !== "A′ = F(A + ε)" || !/input/i.test(noise.note)) throw new Error("R0 must label actual input noise");
 for (const method of ["M0", "M1", "C0", "R0", "P0", "P1", "S0"]) {
   const model = mechanism({method}, null);
   if (model.kind === "excursion" || /computed update returns|return update/i.test(model.note)) {
@@ -578,3 +580,49 @@ assert(!target.innerHTML.includes('Compute V(visit)'));assert(target.innerHTML.i
 """
     completed = subprocess.run(["node", "-e", script], cwd=ROOT, capture_output=True, text=True, check=False)
     assert completed.returncode == 0, completed.stderr
+
+
+def test_fixed_prefix_operator_evidence_is_separate_and_cost_reconciled() -> None:
+    from tebdil.core.state import hash_tensor
+    import torch
+
+    path = ROOT / 'reports/ouro_operator_controls.json'
+    raw = path.read_bytes()
+    report = json.loads(raw)
+    public = SITE / 'static/evidence' / path.name
+    assert public.read_bytes() == raw
+    assert report['all_checks_passed']
+    assert report['independent_prefixes'] == 3
+    assert report['cache_mode'] == 'disabled' and report['readout_mode'] == 'last_step'
+    assert len(report['conditions']) == 12
+    assert len(report['preparation']) == 6
+    for source, digest in {**report['source_sha256'], **report['input_sha256']}.items():
+        assert hashlib.sha256((ROOT / source).read_bytes()).hexdigest() == digest, source
+    journal = [json.loads(line) for line in path.with_suffix('.jsonl').read_text().splitlines()]
+    assert journal[0]['event'] == 'start'
+    assert journal[0]['source_sha256'] == report['source_sha256']
+    observed = [{k: v for k, v in r.items() if k != 'event'} for r in journal if r['event'] == 'condition']
+    assert observed == report['conditions']
+    physical = sum(r['physical_calls'] for r in journal if r['event'] == 'dtype_calls')
+    accounted = sum(r['recurrent_calls'] for r in report['preparation'])
+    pilots = json.loads((ROOT / 'reports/ouro_baseline_calibration.json').read_text())['records']
+    ids = {r['problem_id']: r['prompt_token_ids'] for r in pilots if r['prompt_format'] == 'chat'}
+    for condition in report['conditions']:
+        assert all(condition['checks'].values())
+        assert condition['prompt_token_ids'] == ids[condition['problem_id']]
+        assert condition['prefix_sha256'] == hash_tensor(torch.tensor([condition['prompt_token_ids']]), 64)
+        assert condition['first_answer_token_id'] == condition['answer_token_ids'][0]
+        measurements = condition['measurements']
+        assert len(measurements) == 14
+        assert len({r['method'] for r in measurements}) == 14
+        assert all(r['continuation_recurrent_calls'] == 1 for r in measurements)
+        assert sum('target_output_norm' in r for r in measurements) == 6
+        for measurement in measurements:
+            if 'target_output_norm' in measurement:
+                error = abs(measurement['realized_output_norm'] - measurement['target_output_norm']) / max(measurement['target_output_norm'], 1e-12)
+                assert math.isclose(measurement['relative_norm_error'], error, abs_tol=1e-12)
+        cost = condition['construction_and_reference_recurrent_calls'] + sum(r['continuation_recurrent_calls'] for r in measurements)
+        assert cost == condition['total_recurrent_calls']
+        accounted += cost
+    assert physical == accounted == report['actual_recurrent_calls'] == 306
+    assert any(e['source'] == 'reports/ouro_operator_controls.json' for e in load_manifest()['evidence'])

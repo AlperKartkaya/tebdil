@@ -26,7 +26,7 @@ The identity cases α=0, β=0, or identical A/B (without a random-direction over
 
 $$C=V_{\mathrm{visit}}-[(1-\alpha_{\mathrm{eff}})V_A+\alpha_{\mathrm{eff}}V_B].$$
 
-For full-scope unprojected transfer, excursion differs from the corresponding linear update mixture by βC. Under masks/projections/gates, use the applied correction above; the full norm of C is not the applied correction norm. The recorded `curvature_frob` measures the full response before those restrictions. It does not identify an attractor basin.
+For full-scope, ungated, unprojected transfer in exact arithmetic, excursion differs from the corresponding linear update mixture by βC, using the effective clipped alpha. Affine transitions give C = 0 only if the actual visit lies on the full endpoint segment; dtype casting can move it off that segment. The gate C diagnostic records pre-/post-cast identity errors separately. Under masks/projections/gates, use the applied correction above; the full norm of C is not the applied correction norm. The recorded `curvature_frob` measures the full response before those restrictions. It does not identify an attractor basin.
 
 ## Controls distinguish the mechanism
 
@@ -37,14 +37,30 @@ For full-scope unprojected transfer, excursion differs from the corresponding li
 | M0 | Mix hidden states, then continue from that mixture |
 | M1 | Mix ordinary update vectors; never evaluate a visited state |
 | C0 | Compute at the visit and continue from it; do not return |
-| R0 | Apply norm-matched random noise, not a visited update |
+| R0 | Evaluate F(A + ε), with pre-cast input-noise norm β × clipped visit-offset norm; **not output-matched** |
 | E0 | Visit along a seeded random direction, then return |
 | E1 / E2 | Fixed / heuristic adaptive excursion-and-return |
 | E1_no_curv | Compute the visit but remove its nonlinear residual before return |
-| E1_rand_curv | Replace the nonlinear residual with norm-matched random residual |
+| E1_rand_curv | Replace C by random noise matched to the full residual norm **before** return masking, projection and casting |
 
 These are local ablations, not proof that any term is universally necessary. Historical control telemetry sometimes contains placeholder zeros; the observatory does not present those as measured curvature. [Controls source](../src/tebdil/core/controls.py).
 
 ## Execution and visualization boundaries
 
 Forked states clone branch context; current Ouro execution disables KV caching rather than sharing cache state. Identity and donor-isolation checks include real-checkpoint integration. PCA depicts only recorded last-token branch samples in independently fitted axes. The observatory withholds reconstructed visit geometry and later-token projections without matching data. See [methodology](methodology.md), [limitations](limitations.md), and [reproduction](reproduction.md).
+
+## Fixed-prefix output controls
+
+Gate C adds an analysis-only `build_output_matched_random_state`: it draws seeded
+noise in the configured scope with norm equal to the **actual reference-minus-base
+output displacement**, then refreshes readout history and native gate. FP32 target
+norm matching precedes casting; realized BF16 errors are explicitly reported. A
+zero displacement returns an isolated clone. No transition occurs in this helper,
+but computing its reference is not free. It is not a new scheduler method.
+
+M1 now refreshes its native gate at the mixed output rather than retaining the
+ordinary A gate. Last-step hidden states and all historical recordings are unchanged;
+future native-gate readouts use the corrected history.
+
+See the [frozen diagnostic protocol](operator_controls_protocol.md) and
+[verification record](../reports/operator_controls_verification.md).

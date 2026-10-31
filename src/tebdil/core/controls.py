@@ -118,13 +118,16 @@ def execute_update_mixing_step(
         v_a * (1.0 - scope_mask) + v_mix * scope_mask
     )
     h_a_prime = (h_a_f + combined_update).to(dtype=state_a.hidden.dtype)
+    gate_history = next_a_normal.gate_history
+    if gate_history and hasattr(adapter, "compute_gate"):
+        gate_history = gate_history[:-1] + (adapter.compute_gate(h_a_prime),)
 
     next_a = BranchState(
         branch_id=state_a.branch_id,
         recurrent_step=next_a_normal.recurrent_step,
         hidden=h_a_prime,
         context=next_a_normal.context,
-        gate_history=next_a_normal.gate_history,
+        gate_history=gate_history,
         hidden_history=state_a.hidden_history + (h_a_prime,),
     )
     telemetry = ExcursionTelemetry(
@@ -212,7 +215,11 @@ def execute_norm_matched_random_perturbation_step(
     config: ExcursionConfig,
     seed: int = 42,
 ) -> tuple[BranchState, BranchState, ExcursionTelemetry]:
-    """R0: Norm-matched random perturbation to H_t^A prior to F_t evaluation (no donor direction)."""
+    """R0: Input noise of norm beta * clipped_visit_norm, then F_t(A + noise).
+
+    Historical name retained for compatibility. This does not match the output
+    correction norm of an excursion and does not transport a visited update.
+    """
     adapter.validate_compatibility(state_a, state_b)
     step = state_a.recurrent_step
     dist, rel_dist, cos_sim = compute_branch_similarity(state_a.hidden, state_b.hidden)
@@ -264,6 +271,48 @@ def execute_norm_matched_random_perturbation_step(
         post_finite=check_tensor_finite(next_a.hidden),
     )
     return next_a, next_b, telemetry
+
+
+@torch.no_grad()
+def build_output_matched_random_state(
+    adapter: RecurrentAdapter,
+    normal_state: BranchState,
+    reference_state: BranchState,
+    config: ExcursionConfig,
+    seed: int = 42,
+) -> BranchState:
+    """Analysis-only random output displacement matching reference-minus-normal.
+
+    Requires an already computed reference intervention at the same depth/context.
+    No recurrent call is made: reference cost must be reported separately. Norms
+    match in FP32 before casting; callers must measure realized low-precision error.
+    """
+    adapter.validate_compatibility(normal_state, reference_state)
+    if not all(check_tensor_finite(s.hidden) for s in (normal_state, reference_state)):
+        raise ValueError("Output matching requires finite hidden states")
+    base = normal_state.hidden.detach().float()
+    target_norm = torch.linalg.vector_norm(reference_state.hidden.detach().float() - base)
+    if not torch.isfinite(target_norm).item():
+        raise ValueError("Output matching requires a finite displacement norm")
+    result = normal_state.clone()
+    if target_norm.item() == 0.0:
+        return result
+    mask = build_scope_mask(
+        base.shape, config.token_scope, base.device, torch.float32, config.selected_positions,
+    )
+    generator = torch.Generator(device="cpu").manual_seed(int(seed))
+    noise = torch.randn(base.shape, generator=generator, dtype=torch.float32).to(base.device) * mask
+    noise_norm = torch.linalg.vector_norm(noise)
+    if noise_norm.item() == 0.0:
+        raise ValueError("Output matching requires a nonempty token scope")
+    result.hidden = (base + noise * (target_norm / noise_norm)).to(normal_state.hidden.dtype)
+    if not check_tensor_finite(result.hidden):
+        raise ValueError("Output matching produced a nonfinite state after casting")
+    if result.hidden_history:
+        result.hidden_history = result.hidden_history[:-1] + (result.hidden,)
+    if result.gate_history and hasattr(adapter, "compute_gate"):
+        result.gate_history = result.gate_history[:-1] + (adapter.compute_gate(result.hidden),)
+    return result
 
 
 def execute_random_direction_excursion_step(

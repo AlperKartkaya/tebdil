@@ -149,7 +149,7 @@ def run_scheduled_trajectory(
       - P1: Independent N branches (returns all branch logits; caller may apply oracle check)
       - M0: Direct state averaging at visit_step
       - M1: Direct update mixing at visit_step
-      - R0: Norm-matched random perturbation at visit_step
+      - R0: Input-offset-matched random noise before transition at visit_step
       - C0: Visit without return at visit_step
       - E0: Excursion toward random direction at visit_step
       - E1: Fixed-schedule cooperative latent excursion toward donor B
