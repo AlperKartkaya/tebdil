@@ -1,6 +1,7 @@
 # Point B — trajectory semantics and baseline calibration
 
-2026-10-31. **Local verification complete; Pages deployment verification pending.**
+2026-10-31. **Complete: code, documentation, deployment and public browser checks passed.**
+Implementation: `22cc752`; [CI and Pages deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41239947652).
 Point A remains separately verified in `e0728b3` and [deployment 41219360287](https://github.com/AlperKartkaya/tebdil/actions/runs/41219360287).
 
 ## Implementation
@@ -62,7 +63,7 @@ real cached baseline ran. No upstream cache implementation was patched.
   reconcile inference/scoring calls, match the completion journal to final JSON,
   verify source and input identities, and reproduce post-hoc parsing independently.
 - Scoped Ruff (`E4,E7,E9,F`), JavaScript syntax, TypeScript and export hashes/pairing pass.
-- Full Chromium verification at `/tebdil/`: all eight recorded datasets, three demo
+- Full Chromium verification locally and on the public GitHub Pages `/tebdil/` URL: all eight recorded datasets, three demo
   cases, downloads, evidence links, keyboard, failure/retry/checksum handling pass.
   New native and post-hoc JSON downloads are checked separately. No page errors,
   failed normal requests, external runtime dependencies or overflow at widths
@@ -81,4 +82,7 @@ Historical raw-prompt interventions cannot be fairly compared with this longer
 native generation as an efficacy result. CUDA, native caching, branch-safe caching,
 and a complete new held-out campaign are unverified.
 
-Point C is not started until the Pages deployment and public browser checks pass.
+Pages deployment and the full public browser checks passed. Point B is closed
+for this bounded semantics/pilot-calibration scope; point C may now begin.
+A comparison against `6fe919e` also confirms that the export manifest is append-only:
+every existing run metric, evidence entry and artifact identity is unchanged.
