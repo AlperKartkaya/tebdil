@@ -672,3 +672,62 @@ def test_normalization_evidence_binds_native_boundaries_and_ablations() -> None:
     assert accounted == 246
     assert any(e['source'] == 'reports/ouro_normalization.json' for e in load_manifest()['evidence'])
     assert '246 measured recurrent boundaries' in INDEX.read_text()
+
+
+def test_completed_answer_smoke_is_frozen_replayable_and_separate_from_efficacy() -> None:
+    import torch
+    from tebdil.core.state import hash_tensor
+    from tebdil.evaluation.completion import score_completion, summarize_completions, validate_task_manifest
+    from tebdil.tasks.completion import extract_completed_integer
+
+    path = ROOT / 'reports/ouro_completed_answer_smoke.json'
+    report = json.loads(path.read_text())
+    assert (SITE / 'static/evidence' / path.name).read_bytes() == path.read_bytes()
+    assert report['all_checks_passed'] and all(report['checks'].values())
+    assert report['protocol'] == 'completed_answer_v1' and report['cache_mode'] == 'disabled'
+    assert report['model_revision'] == '3aaa2224253a92ca45cf2e3d427c360e1ef9c93d'
+    assert report['recurrent_depth'] == 4 and report['max_output_tokens'] == 2048
+    for source, digest in report['source_sha256'].items():
+        assert hashlib.sha256((ROOT / source).read_bytes()).hexdigest() == digest
+    manifest = json.loads((ROOT / 'configs/completion_v1_tasks.json').read_text())
+    validate_task_manifest(manifest)
+    dev = {r['problem_id']: r for r in manifest['partitions']['development']}
+    assert [r['problem_id'] for r in report['records']] == manifest['smoke_problem_ids']
+    for record in report['records']:
+        assert record['split'] == 'development' and record['method'] == 'S0'
+        assert record['prompt'] == dev[record['problem_id']]['prompt']
+        assert record['gold_answer'] == dev[record['problem_id']]['gold_answer']
+        tokens = record['generated_token_ids']
+        assert record['completed'] == (tokens[-1] == report['eos_token_id'])
+        assert record['completed'], 'Gate 1 still needs a genuinely completed smoke'
+        assert report['eos_token_id'] not in tokens[:-1]
+        answer = extract_completed_integer(record['decoded_text_with_special_tokens'], report['eos_token'], completed=True)
+        assert record['extracted_answer'] == answer
+        assert record['format_valid'] == (answer is not None)
+        assert record['format_valid'], 'Gate 1 needs a recognized completed answer'
+        assert {k: record[k] for k in ('status', 'is_correct')} == score_completion(record, record['gold_answer'])
+        assert record['recurrent_block_calls'] == len(tokens) * 4
+        assert len(record['token_ledger']) == len(tokens)
+        for k, entry in enumerate(record['token_ledger']):
+            prefix = record['prompt_token_ids'] + tokens[:k]
+            assert entry['prefix_length'] == entry['processed_sequence_length'] == len(prefix)
+            assert entry['prefix_token_ids_sha256'] == hash_tensor(torch.tensor([prefix]), 64)
+            assert entry['calls_before'] == k * 4 and entry['recurrent_block_calls'] == 4
+            assert 'processed_input_ids' not in entry
+        assert record['recurrent_token_positions'] == sum(e['prefix_length'] * 4 for e in record['token_ledger'])
+    assert report['summary'] == summarize_completions(report['records'])
+    assert report['actual_recurrent_calls'] == report['summary']['recurrent_block_calls']
+    events = [json.loads(line) for line in path.with_suffix('.jsonl').read_text().splitlines()]
+    assert events[0]['event'] == 'start' and events[-1]['event'] == 'finish'
+    assert events[0]['source_sha256'] == report['source_sha256']
+    assert [e['record'] for e in events if e['event'] == 'completion'] == report['records']
+    assert events[-1]['summary'] == report['summary']
+    assert any(e['source'] == 'reports/ouro_completed_answer_smoke.json' for e in load_manifest()['evidence'])
+
+
+def test_completed_answer_evidence_stays_in_existing_disclosure() -> None:
+    html = INDEX.read_text()
+    assert 'Frozen completed-answer protocol' in html
+    assert 'not an intervention-accuracy result' in html
+    assert 'static/evidence/ouro_completed_answer_smoke.json' in html
+    assert 'docs/completed_answer_protocol.md' in html

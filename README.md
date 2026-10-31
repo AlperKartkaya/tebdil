@@ -46,6 +46,11 @@ The [normalization diagnostic](reports/normalization_verification.md) adds radia
 tangential and norm-preserved controls with 246 real boundary observations. Equal
 norms do not eliminate logit sensitivity; no completed-answer benefit follows.
 
+The next [completed-answer gate](docs/completed_answer_protocol.md) freezes one
+prompt/stopping/parser contract and separate development/reserved test questions.
+Its [verification record](reports/completed_answer_verification.md) distinguishes
+pipeline smoke validation from a future intervention-accuracy comparison.
+
 ## Run the static observatory
 
 No checkpoint, backend, or raw `results/` directory is needed to serve the committed export:

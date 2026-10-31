@@ -122,3 +122,11 @@ is not completed-answer utility, a semantic-manifold result or a causal explanat
 of historical token-scope outcomes. BF16 preservation errors reach 0.2420% under
 the weighted metric; small-radius effects are not precision-robust by default.
 [Raw observations, full ablations and limitations](../reports/normalization_verification.md).
+
+## Shared completed-answer evaluation
+
+The next gate freezes one chat/stopping/scoring contract and development/reserved
+test inputs before new model observations. Unfinished and malformed attempts stay
+in the denominator. Its development smoke tests the instrument, not intervention
+utility. [Protocol](completed_answer_protocol.md) and
+[execution status](../reports/completed_answer_verification.md).

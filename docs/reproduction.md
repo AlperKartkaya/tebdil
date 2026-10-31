@@ -135,3 +135,20 @@ parity are recorded for each call; all reference and continuation costs reconcil
 The completed Apple MPS run took about 49 seconds. The output is a sensitivity
 diagnostic, not a generation benchmark. Native normalization and historical results
 are unchanged; BF16 rescaling is only approximately norm-preserving after casting.
+
+## 9. Shared completed-answer evaluation (gate 1)
+
+```bash
+uv run pytest -q tests/test_completed_answer_protocol.py
+uv run python scripts/verify_completed_answer.py --output /tmp/completed-answer-new.json
+```
+
+The [frozen v1 protocol](completed_answer_protocol.md) uses the existing native
+cache-free generator and final-integer parser. It executes only the preselected
+first development arithmetic question, not the reserved test set. A 2048-token
+ceiling is not a guaranteed completion or a compute-matched intervention budget.
+Both output and sibling journal must be new. All checkpoint/tokenizer/config and
+source hashes are checked, and the physical call counters must agree. RSS/MPS
+memory values are after-run snapshots, not peak measurements. See the
+[verification record](../reports/completed_answer_verification.md) before making
+any claim about completion or deployment. This does not rerun historical phases.

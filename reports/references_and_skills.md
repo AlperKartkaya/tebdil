@@ -99,3 +99,15 @@ prefixes versus twelve repeated conditions and prevents efficacy claims from
 logit sensitivity. Frontend/accessibility guidance keeps the existing design and
 puts detailed normalization evidence in its existing disclosure. No new skill,
 dependency, upstream code copy or native normalization change.
+
+## Completed-answer gate 1
+
+Reused the project's already-verified `native_generate` rather than adding another
+inference engine; existing `completed_final_integer_v1` remains unchanged. The
+statistical-analysis skill informed partition freezing, denominator retention and
+the explicit separation of smoke validation from efficacy/statistical support.
+Ponytail guidance kept this to a record validator/scorer and native baseline script,
+without a new framework/dependency. Webapp-testing guidance applies to the existing
+keyboard/disclosure/download/responsive browser matrix; public verification is
+reported separately from local tests. No new skill installation or upstream code
+copy was needed; prior reference revisions/licenses above remain unchanged.

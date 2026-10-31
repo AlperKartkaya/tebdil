@@ -10,6 +10,7 @@ uncommitted controller, counterfactual and report artifacts are not inputs to th
 | B. Trajectory semantics | Explicit token/depth and prefix contracts; baseline-generation calibration | Complete: `22cc752`, 122 tests including real Ouro; [CI/deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41239947652) and full public browser checks passed |
 | C. Operator controls | Correctly named input noise; output-matched controls; algebraic invariants; fixed-prefix residual study | Complete: `65cd09b`, 135 tests including real Ouro; [CI/deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41241237400), public hashes and full browser checks passed |
 | D. Normalization diagnostics | Explicit radial/directional and norm-preserving ablations | Complete: `43e807d`, 142 tests including real Ouro; [CI/deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41242354541), public hashes and full browser checks passed |
+| Completed-answer gate 1 | Frozen prompt/stopping/scoring; real baseline smoke; docs and Pages | In progress: implementation `54b3381`; no intervention/test-set execution |
 | E. Controller evaluation | Unshaped and heuristic controls only after intervention utility is established | Prerequisite unmet: C/D establish sensitivity, not completed-answer utility; no new controller evaluation |
 | Publication package | Frozen held-out campaign, complete costs and immutable reproducible evidence | Not started |
 
