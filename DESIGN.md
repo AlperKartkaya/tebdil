@@ -1,7 +1,7 @@
 # Design
 
 ## Source of truth
-Active, 2026-10-30. Public static observatory in `site/`; Python research engine remains independent. Evidence: README, architecture/methodology/limitations, current HTML/JS, recorded summaries and token ledgers, pinned Ouro source. Streamlit remains an advanced local tool, not a live backend for Pages.
+Active, 2026-10-31. Public static observatory in `site/`; Python research engine remains independent. Evidence: README, architecture/methodology/limitations, current HTML/JS, recorded summaries and token ledgers, pinned Ouro source. Streamlit remains an advanced local tool, not a live backend for Pages.
 
 ## Brand
 A restrained research instrument: precise, curious, transparent. No artificial latent landscapes, promotional metrics, glow, or decorative inference controls.
@@ -13,18 +13,16 @@ Explain visit–compute–return in 30 seconds; inspect a real recorded decision
 New visitors understand the invention. Researchers inspect actual steps, methods, costs, configs, and source records.
 
 ## Information architecture
-One continuous selectable sequence: Problem, Mechanism, Decision, Experiment, Evidence. Keep current recording selection across sections. Technical detail lives in native expandable sections. Preserve existing anchor/query links where practical through explicit aliases.
+The actual `fd074b8` academic page is the baseline, not the rejected five-panel rewrite. Preserve the original sections and anchors in order: top, demo, abstract, architecture, theory, patterns, results, scaling, case-study, examples, roadmap, bibtex. Preserve the floating contents menu, centered publication header, four metrics, four-column experiment stage, adjacent PCA/telemetry panels, dark output terminal, research tables, heatmap, dark case cards, trace explorer, and citation.
 
 ## Design principles
-Mechanism before metrics. One primary message per panel. Recorded facts and illustrative diagrams are different layers. Negative results remain visible. No absent telemetry becomes a fabricated zero.
+Correct the original page rather than reinterpret it. The original inline CSS is frozen by a SHA-256 regression test. `static/style.css` contains only targeted accessibility, loading, and responsive repairs. Keep negative results visible and distinguish measured evidence from schematic diagrams. Never turn absent telemetry into a fabricated zero.
 
 ## Visual language
-Preserve the original RecursiveMAS-inspired academic project-page identity, restored at the user's request (2026-10-30). Reference: https://recursivemas.github.io/ and TEBDIL's own pre-refactor `fd074b8:site/index.html`. White `#ffffff`, slate surface `#f8fafc`, line `#e2e8f0`, ink `#0f172a`, secondary text `#475569`. Indigo `#4338ca` and sky accents define the centered project title; a soft tinted grid hero and dark resource pills retain the existing identity. No dark observatory redesign.
-
-Recipient indigo `#4338ca`, donor dark amber `#92400e`, excursion violet `#7c3aed`; darker tones keep diagram text readable on light surfaces. Names and line patterns duplicate color meaning. SVG uses the same CSS tokens as the interface. Platform sans and monospace avoid remote font dependencies. 4/8/16/24/40px spacing, rounded 12–18px panels, subtle diagram shadows. Centered academic introduction, left-aligned research content and responsive split comparisons. Retain the five-step flow and scientific corrections; do not restore unsupported old claims or decorative controls. Reduced motion respected.
+Keep the original RecursiveMAS-inspired layout, fonts, spacing, indigo/sky hero, resource pills, light research sections, and dark terminal/case studies. Original Inter and JetBrains Mono fonts, Bulma, icons, and MathJax are pinned and hosted locally. Asset sources and licenses are documented in `reports/original_asset_sources.md`. No new palette or page-wide reskin.
 
 ## Components
-Native links/buttons/selects/details, selectable journey, schematic SVG, per-step telemetry, paired outputs, results table, provenance downloads. CSS owns tokens; one JS state object owns selection; generated manifest owns dataset labels/statistics.
+Existing HTML/CSS/vanilla JS. One recorded-data selection drives the original stage, exact snapshot telemetry, final terminal output, and provenance downloads. All eight recording sets are selectable; methods and token/step options derive from their actual traces. Original case-card buttons and explorer rows open the matching recorded example.
 
 ## Accessibility
 WCAG 2.2 AA target, not certification. Skip link, landmarks, logical headings, labeled selects, native controls, visible focus, 44px touch targets. Step buttons use pressed state; tables have captions. SVG has text alternatives. Never color-only outcomes.

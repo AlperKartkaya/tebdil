@@ -1,131 +1,1668 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>TEBDİL — Cooperative Latent Excursions for Recurrent Reasoning</title>
+  <meta name="description" content="TEBDİL (Cooperative Latent Excursions for Recurrent Reasoning): Inference-time cross-trajectory latent midpoint excursions in looped language models (ByteDance/Ouro-1.4B-Thinking).">
+  <meta name="keywords" content="looped language models, recurrent transformer, Universal Transformer, latent reasoning, Ouro-1.4B-Thinking, cooperative latent excursion, TEBDIL, nonlinear curvature">
+  <meta name="author" content="TEBDİL Research Platform">
+  <meta name="language" content="English">
   <meta name="theme-color" content="#4338ca">
-  <meta name="description" content="TEBDİL research observatory. Inspect real Ouro recordings of latent excursion-and-return, controller decisions, and paired experimental evidence.">
-  <title>TEBDİL — Research observatory</title>
+
   <link rel="icon" href="static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="static/vendor/bulma/bulma.min.css">
+  <link rel="stylesheet" href="static/vendor/fontawesome/fontawesome.min.css">
+  <link rel="stylesheet" href="static/vendor/fontawesome/solid.min.css">
+  <link rel="stylesheet" href="static/vendor/fonts/fonts.css">
+
+  <!-- MathJax for inline and display LaTeX -->
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="static/vendor/mathjax/tex-svg.js" defer></script>
+
+  <style>
+    :root {
+      --rm-primary: #4338ca;          /* indigo-700 */
+      --rm-primary-soft: #6366f1;     /* indigo-500 */
+      --rm-accent: #0ea5e9;           /* sky-500 */
+      --rm-accent-warm: #f59e0b;      /* amber-500 */
+      --rm-violet: #7c3aed;           /* violet-600 */
+      --rm-rose: #e11d48;             /* rose-600 */
+      --rm-emerald: #059669;          /* emerald-600 */
+      --rm-ink: #0f172a;
+      --rm-sub: #475569;
+      --rm-line: #e2e8f0;
+      --rm-bg-soft: #f8fafc;
+      --rm-bg-tint: linear-gradient(180deg, #f5f3ff 0%, #eef2ff 100%);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: #fff;
+      color: var(--rm-ink);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .section { padding: 3rem 1.5rem; }
+    section[id] { scroll-margin-top: 28px; }
+
+    /* ====== HERO ====== */
+    .hero-banner {
+      position: relative;
+      padding: 4.2rem 1.5rem 3rem;
+      background:
+        radial-gradient(1200px 500px at 10% -10%, rgba(99,102,241,0.18), transparent 60%),
+        radial-gradient(800px 400px at 100% 0%, rgba(14,165,233,0.18), transparent 60%),
+        linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      overflow: hidden;
+      border-bottom: 1px solid var(--rm-line);
+    }
+    .hero-banner::before {
+      content: ""; position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(15,23,42,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15,23,42,0.04) 1px, transparent 1px);
+      background-size: 36px 36px;
+      mask-image: radial-gradient(ellipse at 50% 30%, black 30%, transparent 80%);
+      -webkit-mask-image: radial-gradient(ellipse at 50% 30%, black 30%, transparent 80%);
+      pointer-events: none;
+    }
+    .hero-banner > .container { position: relative; }
+    .pub-eyebrow {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.35rem 0.95rem; border-radius: 999px;
+      background: rgba(99,102,241,0.10);
+      color: var(--rm-primary);
+      font-weight: 600; font-size: 0.85rem; letter-spacing: 0.04em;
+      border: 1px solid rgba(99,102,241,0.25);
+    }
+    .pub-title {
+      font-weight: 800 !important;
+      letter-spacing: -0.025em;
+      background: linear-gradient(120deg, #1e1b4b 0%, #4338ca 45%, #0ea5e9 100%);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-top: 0.9rem !important; margin-bottom: 0.55rem !important;
+      font-size: clamp(1.85rem, 4.1vw, 3.15rem) !important;
+      line-height: 1.12 !important;
+    }
+    .pub-subtitle {
+      color: var(--rm-sub); font-weight: 500;
+      max-width: 900px; margin: 0 auto 1rem;
+      font-size: 1.08rem; line-height: 1.55;
+    }
+    .pub-venue {
+      display: flex; align-items: center; justify-content: center; gap: 0.9rem;
+      margin: 1.2rem auto 0; max-width: 720px;
+      color: var(--rm-sub); font-size: 1.02rem; font-weight: 600;
+    }
+    .pub-venue-line {
+      flex: 1 1 auto; height: 1px; max-width: 120px;
+      background: linear-gradient(90deg, transparent, rgba(67,56,202,0.35));
+    }
+    .pub-venue-line:last-child { background: linear-gradient(90deg, rgba(67,56,202,0.35), transparent); }
+    .pub-venue-text { display: inline-flex; align-items: center; gap: 0.45rem; white-space: nowrap; color: var(--rm-primary); }
+    .pub-venue-ico { display: inline-flex; align-items: center; color: var(--rm-accent-warm); font-size: 1rem; }
+
+    .pub-affil {
+      color: var(--rm-sub); font-size: 0.92rem; margin-top: 0.55rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .pub-links { margin-top: 1.35rem; display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center; }
+    .pub-btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.55rem 1.1rem; border-radius: 999px;
+      background: #0f172a; color: #fff !important; font-weight: 600;
+      font-size: 0.92rem; text-decoration: none;
+      box-shadow: 0 4px 14px rgba(15,23,42,0.18);
+      transition: transform 0.2s ease, background 0.2s ease;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .pub-btn:hover { transform: translateY(-2px); background: var(--rm-primary); }
+    .pub-btn .icon {
+      width: 1.15rem; min-width: 1.15rem; height: 1.15rem;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .pub-btn.brand-demo .icon { color: #38bdf8; }
+    .pub-btn.brand-theory .icon { color: #a78bfa; }
+    .pub-btn.brand-results .icon { color: #34d399; }
+    .pub-btn.brand-case .icon { color: #fbbf24; }
+    .pub-btn.brand-roadmap .icon { color: #fb7185; }
+
+    /* ====== KEY METRIC PILLS ====== */
+    .metrics-strip {
+      display: grid; grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 1rem; margin-top: 2.2rem;
+    }
+    @media (max-width: 768px) { .metrics-strip { grid-template-columns: repeat(2, 1fr); } }
+    .metric-card {
+      background: #fff; border: 1px solid var(--rm-line); border-radius: 18px;
+      padding: 1.1rem 1.15rem; text-align: center;
+      box-shadow: 0 4px 14px rgba(15,23,42,0.04);
+      transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+    }
+    .metric-card:hover { transform: translateY(-4px); box-shadow: 0 14px 30px rgba(67,56,202,0.12); border-color: rgba(67,56,202,0.35); }
+    .metric-num {
+      font-size: 2rem; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(120deg, #4338ca, #0ea5e9);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-variant-numeric: tabular-nums;
+      display: inline-block;
+    }
+    .metric-label { color: var(--rm-sub); font-size: 0.84rem; font-weight: 500; margin-top: 0.2rem; line-height: 1.35; }
+    .metric-sub { color: #64748b; font-size: 0.74rem; font-family: 'JetBrains Mono', monospace; margin-top: 0.25rem; }
+
+    /* ====== SECTION TITLES ====== */
+    .rm-section-title {
+      font-weight: 800 !important; letter-spacing: -0.015em;
+      color: var(--rm-ink); position: relative; display: inline-block;
+    }
+    .rm-section-title::after {
+      content: ""; display: block; height: 4px; width: 56px; margin: 0.55rem auto 0;
+      border-radius: 4px; background: linear-gradient(90deg, var(--rm-primary), var(--rm-accent));
+    }
+    .rm-eyebrow {
+      color: var(--rm-primary); font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.18em;
+      font-size: 0.78rem; margin-bottom: 0.35rem; display: block;
+    }
+    .rm-section-sub { color: var(--rm-sub); max-width: 880px; margin: 0.75rem auto 0; line-height: 1.6; }
+
+    /* ====== TABLE OF CONTENTS ====== */
+    .toc-section {
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      z-index: 40;
+      width: 184px;
+      padding: 0;
+      pointer-events: none;
+    }
+    .toc-rail {
+      position: relative;
+      overflow: hidden;
+      border-radius: 20px;
+      border: 1px solid rgba(226,232,240,0.92);
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.90)),
+        rgba(255,255,255,0.90);
+      box-shadow: 0 18px 42px rgba(15,23,42,0.10);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      pointer-events: auto;
+      max-height: calc(100vh - 2rem);
+    }
+    .toc-rail::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 3px;
+      background: linear-gradient(180deg, var(--rm-primary), var(--rm-accent), var(--rm-accent-warm));
+    }
+    .toc-inner { display: flex; flex-direction: column; padding: 0.75rem; }
+    .toc-head {
+      display: flex; align-items: center; gap: 0.55rem;
+      width: 100%; padding: 0; border: 0; background: transparent;
+      color: var(--rm-ink); font-family: inherit; cursor: pointer;
+    }
+    .toc-badge {
+      width: 34px; height: 34px; border-radius: 12px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: #0f172a; color: #fff;
+      box-shadow: 0 10px 22px rgba(15,23,42,0.16);
+    }
+    .toc-title { font-size: 0.9rem; font-weight: 800; flex: 1; text-align: left; }
+    .toc-expand {
+      width: 26px; height: 26px; border-radius: 9px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--rm-primary); background: rgba(99,102,241,0.10);
+      font-size: 0.74rem; transition: transform 0.22s ease;
+    }
+    .toc-rail:not(.is-collapsed) .toc-expand {
+      transform: rotate(180deg); background: var(--rm-primary); color: #fff;
+    }
+    .toc-links {
+      display: flex; flex-direction: column; gap: 0.35rem;
+      overflow-y: auto; max-height: calc(100vh - 6.3rem);
+      padding: 0.65rem 0.05rem 0.1rem; margin-top: 0.6rem;
+      border-top: 1px solid rgba(148,163,184,0.24);
+      transition: max-height 0.24s ease, opacity 0.18s ease;
+    }
+    .toc-rail.is-collapsed .toc-links {
+      max-height: 0; overflow: hidden; opacity: 0; pointer-events: none;
+      margin-top: 0; padding-top: 0; padding-bottom: 0; border-top-color: transparent;
+    }
+    .toc-link {
+      display: inline-flex; align-items: center; gap: 0.42rem;
+      min-height: 33px; padding: 0.44rem 0.6rem;
+      border-radius: 11px; border: 1px solid rgba(226,232,240,0.92);
+      background: rgba(255,255,255,0.82); color: #334155;
+      font-size: 0.78rem; font-weight: 700; text-decoration: none;
+      transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease;
+    }
+    .toc-link i { color: var(--rm-primary); width: 1rem; text-align: center; font-size: 0.76rem; }
+    .toc-link:hover { transform: translateX(2px); border-color: rgba(99,102,241,0.35); color: var(--rm-primary); }
+    .toc-link.is-active {
+      background: linear-gradient(120deg, var(--rm-primary), var(--rm-accent));
+      color: #fff; border-color: transparent;
+      box-shadow: 0 8px 18px rgba(67,56,202,0.22);
+    }
+    .toc-link.is-active i { color: #fff; }
+    @media (max-width: 1180px) { .toc-section { display: none; } }
+
+    /* ====== PLAYGROUND BANNER ====== */
+    .playground-note {
+      position: relative; overflow: hidden; border-radius: 22px;
+      border: 1px solid rgba(67,56,202,0.22);
+      background: linear-gradient(135deg, rgba(67,56,202,0.09), rgba(14,165,233,0.11)), #fff;
+      box-shadow: 0 18px 42px rgba(15,23,42,0.06);
+      padding: 1.15rem 1.35rem;
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    }
+    .playground-note::before {
+      content: ""; position: absolute; inset: 0 auto 0 0; width: 6px;
+      background: linear-gradient(180deg, var(--rm-primary), var(--rm-accent));
+    }
+    .playground-note-main { display: flex; align-items: center; gap: 1rem; }
+    .playground-note-icon {
+      width: 46px; height: 46px; border-radius: 14px;
+      background: #0f172a; color: #38bdf8;
+      display: inline-flex; align-items: center; justify-content: center;
+      flex: 0 0 auto; font-size: 1.15rem;
+    }
+    .playground-note-label {
+      display: block; color: var(--rm-primary); font-size: 0.72rem;
+      font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+    }
+    .playground-note h3 { margin: 0; color: var(--rm-ink); font-size: 1.15rem; font-weight: 800; }
+    .playground-note p { margin: 0.2rem 0 0; color: var(--rm-sub); font-size: 0.9rem; }
+
+    /* ====== INTERACTIVE STAGE (RECURSIVEMAS ANIMATION STYLE) ====== */
+    .stage-card {
+      background: #ffffff;
+      border: 1px solid var(--rm-line);
+      border-radius: 24px;
+      box-shadow: 0 16px 44px rgba(15, 23, 42, 0.08);
+      padding: 1.6rem 1.8rem 1.8rem;
+      margin-top: 1.1rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .stage-toolbar {
+      display: flex; flex-wrap: wrap; gap: 0.85rem;
+      align-items: center; justify-content: space-between;
+      padding-bottom: 1.1rem; border-bottom: 1px solid var(--rm-line);
+    }
+    .stage-controls-left, .stage-controls-right {
+      display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center;
+    }
+    .stage-select-group {
+      display: flex; flex-direction: column; gap: 0.2rem;
+    }
+    .stage-select-group label {
+      font-size: 0.7rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.12em; color: var(--rm-sub);
+    }
+    .stage-select {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem; font-weight: 600;
+      padding: 0.45rem 0.75rem; border-radius: 10px;
+      border: 1.5px solid #cbd5e1; background: #f8fafc; color: var(--rm-ink);
+      cursor: pointer;
+    }
+    .stage-select:focus { outline: none; border-color: var(--rm-primary); background: #fff; }
+
+    .round-badge-live {
+      background: linear-gradient(135deg, #4338ca, #7c3aed);
+      color: #fff; padding: 0.55rem 1.1rem; border-radius: 12px;
+      font-size: 0.95rem; font-weight: 800; letter-spacing: 0.02em;
+      box-shadow: 0 4px 14px rgba(67, 56, 202, 0.28);
+      display: inline-flex; align-items: center; gap: 0.5rem;
+    }
+    .stage-btn {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.5rem 0.9rem; border-radius: 10px;
+      border: 1.5px solid #cbd5e1; background: #fff; color: var(--rm-ink);
+      font-weight: 700; font-size: 0.82rem; cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    .stage-btn:hover { border-color: var(--rm-primary); color: var(--rm-primary); transform: translateY(-1px); }
+    .stage-btn.is-primary {
+      background: #0f172a; color: #fff; border-color: #0f172a;
+    }
+    .stage-btn.is-primary:hover { background: var(--rm-primary); border-color: var(--rm-primary); color: #fff; }
+    .step-pill-bar {
+      display: inline-flex; background: #f1f5f9; padding: 0.22rem; border-radius: 11px; gap: 0.2rem;
+    }
+    .step-pill {
+      border: 0; background: transparent; padding: 0.35rem 0.68rem;
+      border-radius: 8px; font-family: 'JetBrains Mono', monospace;
+      font-size: 0.76rem; font-weight: 700; color: var(--rm-sub); cursor: pointer;
+    }
+    .step-pill.is-active {
+      background: #fff; color: var(--rm-primary);
+      box-shadow: 0 2px 8px rgba(15,23,42,0.10);
+    }
+
+    .question-box-live {
+      margin: 1rem 0;
+      background: #f8fafc;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .question-box-live .qb-title {
+      background: linear-gradient(135deg, #1e1b4b, #312e81);
+      color: #fff; padding: 0.55rem 1rem;
+      font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;
+    }
+    .question-box-live .qb-body {
+      padding: 0.85rem 1.1rem; font-size: 0.92rem; line-height: 1.55; color: #1e293b;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .stage-grid {
+      display: grid; grid-template-columns: 1.45fr 1fr; gap: 1.25rem; align-items: stretch;
+    }
+    @media (max-width: 1024px) { .stage-grid { grid-template-columns: 1fr; } }
+
+    .svg-canvas-box {
+      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      border: 1px solid var(--rm-line); border-radius: 16px;
+      padding: 0.75rem; position: relative;
+      display: flex; flex-direction: column; justify-content: space-between;
+    }
+    .pca-and-metrics-col {
+      display: flex; flex-direction: column; gap: 0.9rem;
+    }
+    .mini-panel {
+      background: #f8fafc; border: 1px solid var(--rm-line); border-radius: 16px;
+      padding: 0.9rem 1rem;
+    }
+    .mini-panel-title {
+      font-size: 0.75rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.12em; color: var(--rm-primary); margin-bottom: 0.5rem;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+
+    .telemetry-kv-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.55rem;
+    }
+    .t-kv {
+      background: #fff; border: 1px solid var(--rm-line); border-radius: 10px;
+      padding: 0.5rem 0.65rem;
+    }
+    .t-kv .k { font-size: 0.7rem; color: var(--rm-sub); font-weight: 600; }
+    .t-kv .v {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.92rem;
+      font-weight: 800; color: var(--rm-ink); margin-top: 0.1rem;
+    }
+
+    .output-terminal {
+      margin-top: 1.1rem;
+      background: #0f172a; color: #e2e8f0;
+      border-radius: 14px; padding: 1rem 1.2rem;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.83rem;
+      line-height: 1.65; box-shadow: 0 10px 26px rgba(15,23,42,0.16);
+    }
+    .output-terminal-head {
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.55rem; margin-bottom: 0.65rem;
+      font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.12em; color: #38bdf8; font-weight: 700;
+    }
+    .method-badges-bar {
+      display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.65rem;
+    }
+    .m-chip {
+      padding: 0.28rem 0.65rem; border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; font-weight: 700;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .m-chip.pass { background: rgba(16,185,129,0.18); color: #6ee7b7; border-color: rgba(16,185,129,0.4); }
+    .m-chip.fail { background: rgba(244,63,94,0.18); color: #fda4af; border-color: rgba(244,63,94,0.4); }
+    .m-chip.active-method { outline: 2px solid #38bdf8; outline-offset: 1px; }
+
+    /* ====== ABSTRACT ====== */
+    .abstract-box {
+      background: var(--rm-bg-tint);
+      border: 1px solid #ddd6fe;
+      border-radius: 22px;
+      padding: 2rem 2.2rem;
+      box-shadow: 0 10px 30px rgba(67,56,202,0.06);
+      position: relative;
+    }
+    .abstract-box::before {
+      content: "TL;DR"; position: absolute; top: -12px; left: 22px;
+      background: linear-gradient(120deg, var(--rm-primary), var(--rm-violet));
+      color: #fff; padding: 0.25rem 0.75rem; border-radius: 999px;
+      font-weight: 700; font-size: 0.72rem; letter-spacing: 0.16em;
+    }
+    .abstract-box p { color: #1f2937; line-height: 1.75; margin-bottom: 0.85rem; }
+    .abstract-box p:last-child { margin-bottom: 0; }
+    .highlight-pill {
+      display: inline-block; padding: 0.05rem 0.55rem;
+      background: rgba(245,158,11,0.18); color: #92400e;
+      border-radius: 6px; font-weight: 700;
+    }
+    .highlight-pill.acc { background: rgba(16,185,129,0.18); color: #065f46; }
+    .highlight-pill.speed { background: rgba(14,165,233,0.18); color: #075985; }
+    .highlight-pill.curv { background: rgba(124,58,237,0.16); color: #5b21b6; }
+
+    /* ====== ARCHITECTURE & FIGURES ====== */
+    .figure-card {
+      background: #fff; border: 1px solid var(--rm-line); border-radius: 22px;
+      padding: 1.5rem; box-shadow: 0 10px 30px rgba(15,23,42,0.04);
+      margin: 0 auto;
+    }
+    .figure-caption {
+      margin-top: 0.95rem; font-size: 0.92rem; color: var(--rm-sub); text-align: center; line-height: 1.6;
+    }
+    .figure-caption b { color: var(--rm-ink); }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    @media (max-width: 980px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    .arch-block {
+      margin-top: 2.5rem; padding-top: 2rem;
+      border-top: 1px dashed #e2e8f0;
+    }
+    .arch-block:first-of-type { margin-top: 0.5rem; padding-top: 0; border-top: none; }
+    .arch-step {
+      display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.1rem;
+    }
+    .arch-step-num {
+      display: inline-flex; align-items: center;
+      padding: 0.25rem 0.75rem; border-radius: 999px;
+      background: linear-gradient(120deg, var(--rm-primary), var(--rm-violet));
+      color: #fff; font-weight: 700; font-size: 0.76rem;
+      letter-spacing: 0.16em; text-transform: uppercase;
+    }
+    .arch-step-title {
+      font-weight: 800; color: var(--rm-ink);
+      font-size: 1.45rem; letter-spacing: -0.01em; margin: 0;
+    }
+    .arch-row {
+      display: grid; grid-template-columns: 1.05fr 0.95fr;
+      gap: 1.5rem; align-items: start;
+    }
+    @media (max-width: 980px) { .arch-row { grid-template-columns: 1fr; } }
+    .arch-text p { color: #1f2937; line-height: 1.7; margin-bottom: 0.7rem; }
+    .arch-text code {
+      background: #eef2ff; color: var(--rm-primary);
+      padding: 0.08rem 0.4rem; border-radius: 5px; font-weight: 600;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.86em;
+    }
+
+    .link-card {
+      background: #fff; border: 1px solid var(--rm-line);
+      border-radius: 14px; padding: 0.95rem 1.1rem;
+      margin-top: 0.85rem; box-shadow: 0 4px 14px rgba(15,23,42,0.04);
+    }
+    .link-card-head {
+      display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.45rem;
+    }
+    .link-badge {
+      padding: 0.2rem 0.65rem; border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.76rem;
+      font-weight: 700; color: #fff;
+    }
+    .link-badge.in  { background: linear-gradient(135deg, #4338ca, #6366f1); }
+    .link-badge.out { background: linear-gradient(135deg, #0ea5e9, #6366f1); }
+    .link-badge.curv { background: linear-gradient(135deg, #7c3aed, #ec4899); }
+    .link-card-sub { color: var(--rm-sub); font-size: 0.84rem; font-weight: 600; }
+
+    .eq-block {
+      background: #fff; border: 1px solid var(--rm-line); border-radius: 14px;
+      padding: 0.85rem 1.1rem; box-shadow: 0 4px 14px rgba(15,23,42,0.03);
+      overflow-x: auto; margin: 0.6rem 0;
+    }
+    .insight-box {
+      border-left: 4px solid var(--rm-violet);
+      background: #fafaff;
+      padding: 0.95rem 1.15rem;
+      border-radius: 12px;
+      color: #1f2937;
+      font-size: 0.93rem;
+      line-height: 1.6;
+    }
+    .insight-box b { color: var(--rm-violet); }
+
+    /* ====== PATTERN / CONTROL CARDS ====== */
+    .pattern-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.1rem; margin-top: 1.6rem;
+    }
+    @media (max-width: 1100px) { .pattern-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 600px)  { .pattern-grid { grid-template-columns: 1fr; } }
+    .pattern-card {
+      background: #fff; border: 1px solid var(--rm-line); border-radius: 18px;
+      padding: 1.35rem; transition: transform 0.22s ease, box-shadow 0.22s ease;
+      box-shadow: 0 4px 14px rgba(15,23,42,0.04);
+      display: flex; flex-direction: column;
+    }
+    .pattern-card:hover { transform: translateY(-4px); box-shadow: 0 18px 40px rgba(67,56,202,0.12); }
+    .pattern-icon {
+      width: 42px; height: 42px; border-radius: 12px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 1.05rem; font-weight: 700; margin-bottom: 0.75rem;
+    }
+    .ic-seq { background: linear-gradient(135deg, #4338ca, #6366f1); }
+    .ic-mix { background: linear-gradient(135deg, #059669, #10b981); }
+    .ic-dis { background: linear-gradient(135deg, #f59e0b, #ef4444); }
+    .ic-del { background: linear-gradient(135deg, #0ea5e9, #6366f1); }
+    .pattern-card h4 { font-weight: 800; font-size: 1.02rem; margin-bottom: 0.35rem; color: var(--rm-ink); }
+    .pattern-card p { color: var(--rm-sub); font-size: 0.89rem; line-height: 1.55; margin-bottom: 0.7rem; }
+    .pattern-roles { margin-top: auto; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .role-chip {
+      padding: 0.18rem 0.55rem; border-radius: 6px;
+      background: #eef2ff; color: var(--rm-primary);
+      font-family: 'JetBrains Mono', monospace; font-size: 0.74rem; font-weight: 700;
+    }
+
+    /* ====== TABLES ====== */
+    .rm-table-wrap {
+      overflow-x: auto; border-radius: 18px; border: 1px solid var(--rm-line);
+      background: #fff; box-shadow: 0 10px 24px rgba(15,23,42,0.04);
+    }
+    table.rm-table {
+      width: 100%; border-collapse: collapse; font-size: 0.89rem;
+    }
+    table.rm-table thead {
+      background: linear-gradient(180deg, #eef2ff 0%, #ede9fe 100%);
+    }
+    table.rm-table th {
+      padding: 0.8rem 0.85rem; text-align: center;
+      font-weight: 700; color: #312e81;
+      border-bottom: 2px solid #ddd6fe;
+    }
+    table.rm-table th:first-child, table.rm-table td:first-child { text-align: left; }
+    table.rm-table td {
+      padding: 0.68rem 0.85rem; text-align: center; color: #1f2937;
+      border-bottom: 1px solid var(--rm-line);
+      font-variant-numeric: tabular-nums;
+    }
+    table.rm-table tr:last-child td { border-bottom: none; }
+    table.rm-table tbody tr:hover { background: #f8fafc; }
+    table.rm-table .row-ours {
+      background: linear-gradient(90deg, rgba(99,102,241,0.11), rgba(14,165,233,0.07));
+      font-weight: 700;
+    }
+    table.rm-table .row-ours td { color: #312e81; }
+    table.rm-table .group-head td {
+      background: #f1f5f9; color: var(--rm-sub); font-weight: 700;
+      font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.14em;
+      text-align: center; padding: 0.42rem;
+    }
+    .delta-up { color: #059669; font-weight: 700; }
+    .delta-down { color: #b91c1c; font-weight: 700; }
+    .pat-tag {
+      display: inline-block; padding: 0.22rem 0.6rem; border-radius: 7px;
+      font-weight: 700; font-size: 0.8rem; font-family: 'JetBrains Mono', monospace;
+    }
+    .pat-seq { background: rgba(99,102,241,0.12); color: #4338ca; }
+    .pat-mix { background: rgba(16,185,129,0.13); color: #047857; }
+    .pat-dis { background: rgba(245,158,11,0.16); color: #b45309; }
+    .pat-del { background: rgba(14,165,233,0.13); color: #0369a1; }
+
+    /* ====== GAIN CARDS ====== */
+    .gain-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.1rem; margin-top: 1.4rem;
+    }
+    @media (max-width: 900px) { .gain-grid { grid-template-columns: 1fr; } }
+    .gain-card {
+      background: #fff; border: 1px solid var(--rm-line); border-radius: 18px;
+      padding: 1.35rem; position: relative; overflow: hidden;
+    }
+    .gain-card::before {
+      content: ""; position: absolute; inset: 0 0 auto 0; height: 4px;
+      background: linear-gradient(90deg, var(--rm-primary), var(--rm-accent));
+    }
+    .gain-card .num {
+      font-size: 2.2rem; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(120deg, var(--rm-primary), var(--rm-accent));
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .gain-card h5 { font-weight: 800; margin-top: 0.2rem; color: var(--rm-ink); }
+    .gain-card p { color: var(--rm-sub); font-size: 0.9rem; line-height: 1.55; margin-top: 0.25rem; }
+
+    /* ====== CASE STUDY (DARK SECTION) ====== */
+    .rm-bg-soft { background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); }
+    .rm-bg-tint { background: linear-gradient(180deg, #f5f3ff 0%, #eef2ff 100%); }
+    .rm-bg-dark { background: linear-gradient(180deg, #0f172a 0%, #1e1b4b 100%); color: #e0e7ff; }
+    .rm-bg-dark .rm-section-title { color: #fff; }
+    .rm-bg-dark .rm-section-sub { color: #c7d2fe; }
+    .rm-bg-dark .rm-eyebrow { color: #a5b4fc; }
+
+    .case-studies { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.1rem; }
+    @media (max-width: 1100px) { .case-studies { grid-template-columns: 1fr; } }
+    .case-card {
+      border-radius: 20px; padding: 1.35rem;
+      border: 1px solid var(--rm-line); background: #fff;
+      box-shadow: 0 8px 22px rgba(15,23,42,0.12);
+      display: flex; flex-direction: column; gap: 0.65rem;
+      position: relative; overflow: hidden; color: var(--rm-ink);
+    }
+    .case-card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 5px; }
+    .case-card.r1::before { background: linear-gradient(90deg, #6366f1, #10b981); }
+    .case-card.r2::before { background: linear-gradient(90deg, #7c3aed, #0ea5e9); }
+    .case-card.r3::before { background: linear-gradient(90deg, #f43f5e, #f59e0b); }
+    .case-tag {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.25rem 0.65rem; border-radius: 999px;
+      font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 0.76rem;
+      width: fit-content;
+    }
+    .case-card.r1 .case-tag { background: rgba(16,185,129,0.14); color: #065f46; }
+    .case-card.r2 .case-tag { background: rgba(99,102,241,0.14); color: #3730a3; }
+    .case-card.r3 .case-tag { background: rgba(244,63,94,0.12); color: #9f1239; }
+    .case-body {
+      font-size: 0.84rem; line-height: 1.6; color: #1f2937;
+      background: #f8fafc; border-radius: 12px; padding: 0.85rem 0.95rem;
+      border: 1px dashed #cbd5e1; font-family: 'JetBrains Mono', monospace;
+    }
+    .case-answer {
+      font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 0.82rem;
+      padding: 0.42rem 0.7rem; border-radius: 10px; width: fit-content; margin-top: auto;
+    }
+    .case-card.r1 .case-answer, .case-card.r2 .case-answer {
+      background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;
+    }
+    .case-card.r3 .case-answer {
+      background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;
+    }
+
+    /* ====== HEATMAP GRID ====== */
+    .heatmap-grid {
+      display: grid; grid-template-columns: 90px repeat(4, 1fr); gap: 0.45rem;
+      margin-top: 1rem; font-family: 'JetBrains Mono', monospace;
+    }
+    .hm-cell {
+      border-radius: 10px; padding: 0.65rem 0.5rem; text-align: center;
+      font-size: 0.82rem; font-weight: 700; border: 1px solid rgba(15,23,42,0.08);
+      transition: transform 0.15s ease;
+    }
+    .hm-cell:hover { transform: scale(1.03); z-index: 2; }
+    .hm-head {
+      background: #f1f5f9; color: #334155; font-weight: 800; font-size: 0.78rem;
+      display: flex; align-items: center; justify-content: center; border-radius: 10px; padding: 0.5rem;
+    }
+
+    /* ====== BIBTEX ====== */
+    .bibtex-box {
+      background: #0f172a; color: #e2e8f0; border-radius: 18px;
+      padding: 1.5rem 1.6rem; font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem; overflow-x: auto; position: relative;
+      box-shadow: 0 18px 40px rgba(15,23,42,0.18);
+    }
+    .bibtex-box pre {
+      background: transparent !important; color: inherit !important;
+      margin: 0 !important; padding: 0 !important; white-space: pre; line-height: 1.75;
+    }
+    .bibtex-copy {
+      position: absolute; top: 1rem; right: 1rem;
+      background: rgba(255,255,255,0.1); color: #e2e8f0;
+      padding: 0.45rem 0.8rem; border-radius: 10px; cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.16); font-size: 0.78rem; font-weight: 600;
+    }
+    .bibtex-copy:hover { background: rgba(255,255,255,0.2); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, ::before, ::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
   <link rel="stylesheet" href="static/style.css">
-  <script src="static/tebdil_data.js" defer></script>
-  <script src="static/app.js" defer></script>
 </head>
 <body>
-<a class="skip-link" href="#main">Skip to research experience</a>
-<header class="hero-banner">
-<div class="site-header shell">
-  <a class="wordmark" href="./" aria-label="TEBDİL home">TEBDİL<span class="wordmark-dot" aria-hidden="true">.</span></a>
-  <span class="header-note">Research observatory</span>
-  <a href="https://github.com/AlperKartkaya/tebdil">Source &amp; methods</a>
-</div>
-  <section class="intro shell" aria-labelledby="intro-title">
-    <p class="mode">Latent trajectory intervention · Recurrent language models</p>
-    <h1 id="intro-title">TEBDİL: Self-Directed Latent Excursions<br> for Recurrent Reasoning</h1>
-    <p class="pub-subtitle">Borrow the update. Keep the trajectory.</p>
-    <p class="intro-copy">Temporarily visit another latent state, compute a recurrent update there, and return it to the receiving trajectory.</p>
-    <p class="recording-note">Recorded experiments · ByteDance/Ouro-1.4B-Thinking · No inference runs in your browser</p>
-    <div class="pub-links" aria-label="Project resources">
-      <a class="pub-btn" href="https://github.com/AlperKartkaya/tebdil">Code</a>
-      <a class="pub-btn" href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/methodology.md">Methodology</a>
-      <a class="pub-btn" href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/reproduction.md">Reproduce</a>
-      <a class="pub-btn" href="https://github.com/AlperKartkaya/tebdil/blob/main/CITATION.cff">Cite</a>
-    </div>
-  </section>
-</header>
-<main id="main" class="shell" tabindex="-1">
-  <nav class="journey" aria-label="Research journey" role="tablist">
-    <button id="tab-problem" role="tab" data-view="problem" aria-selected="true" aria-controls="view-problem"><span>01</span> The problem</button>
-    <button id="tab-mechanism" role="tab" data-view="mechanism" aria-selected="false" aria-controls="view-mechanism" tabindex="-1"><span>02</span> The mechanism</button>
-    <button id="tab-decision" role="tab" data-view="decision" aria-selected="false" aria-controls="view-decision" tabindex="-1"><span>03</span> The decision</button>
-    <button id="tab-experiment" role="tab" data-view="experiment" aria-selected="false" aria-controls="view-experiment" tabindex="-1"><span>04</span> The experiment</button>
-    <button id="tab-evidence" role="tab" data-view="evidence" aria-selected="false" aria-controls="view-evidence" tabindex="-1"><span>05</span> The evidence</button>
-  </nav>
-  <noscript><p class="notice">JavaScript is needed to select recordings. The mechanism below remains readable. <a href="https://github.com/AlperKartkaya/tebdil/tree/main/docs">Read the research documentation</a>.</p></noscript>
-  <div id="dataControls" class="record-controls" hidden>
-    <div class="selectors">
-      <label>Recorded experiment<select id="runSelect"></select></label>
-      <label>Problem &amp; seed<select id="caseSelect" disabled></select></label>
-      <label>Comparison with baseline<select id="methodSelect" disabled></select></label>
-    </div>
-    <p id="loadStatus" class="muted small" role="status" aria-live="polite">Select a recorded experiment to inspect.</p>
-    <button id="retryLoad" class="small-button" hidden>Retry recording</button>
-  </div>
-  <section id="view-problem" class="view" role="tabpanel" aria-labelledby="tab-problem">
-    <div class="split intro-panel">
-      <div class="reading"><p class="section-kicker">The research question</p><h2>More steps do not<br> guarantee a better answer.</h2>
-        <p>A recurrent model refines hidden states using the same shared weights. An unproductive trajectory can stay unproductive.</p>
-        <p class="muted">Instead of only adding depth or selecting another branch, TEBDİL asks: can a useful update come back?</p>
-        <button class="primary" data-go="mechanism">See excursion-and-return</button>
-      </div>
-      <figure class="instrument problem-instrument">
-        <div class="figure-top"><span>Ordinary recurrence</span><span class="tag">Illustrative explanation</span></div>
-        <div class="recurrence" aria-label="One receiving trajectory advances through three shared recurrent computations">
-          <span class="state-node">H<sub>t</sub><small>State A</small></span><span class="transition">F<small>refine</small></span>
-          <span class="state-node">H<sub>t+1</sub><small>State A</small></span><span class="transition">F<small>refine</small></span>
-          <span class="state-node">H<sub>t+2</sub><small>State A</small></span>
-        </div>
-        <div class="instrument-note"><span class="cyan">One model. One path.</span><p>Continuing computation is not evidence of reasoning recovery.</p></div>
-        <figcaption>Schematic only. Positions are not latent coordinates; no answer or probability is implied.</figcaption>
-      </figure>
-    </div>
-    <div class="bottom-line"><strong>The invention is update transport, not branch selection.</strong><span>Visit another state. Compute there. Return to A.</span></div>
-  </section>
-  <section id="view-mechanism" class="view" role="tabpanel" aria-labelledby="tab-mechanism" hidden>
-    <div class="section-heading"><div><p class="section-kicker">What changes inside the model?</p><h2>A visit, not a switch.</h2></div><span class="tag">Illustrative explanation · not a latent projection</span></div>
-    <div class="segmented" role="group" aria-label="Compare computational mechanisms">
-      <button data-mechanism="switch" aria-pressed="false">Trajectory switching</button>
-      <button data-mechanism="mix" aria-pressed="false">Direct state mixing</button>
-      <button data-mechanism="excursion" aria-pressed="true">Excursion-and-return</button>
-    </div>
-    <figure class="instrument mechanism-figure"><div class="diagram-scroll"><svg id="mechanismDiagram" viewBox="0 0 880 310" role="img" aria-labelledby="mechanismTitle mechanismDesc"><title id="mechanismTitle">Excursion-and-return</title><desc id="mechanismDesc">A temporary visit is formed toward donor B. The shared recurrent model computes there, and its update returns to receiving state A.</desc></svg></div><figcaption id="mechanismCaption">The receiving state remains the anchor. Only the computed update is transported.</figcaption></figure>
-    <div class="mechanism-reading"><p id="mechanismExplanation"></p><button class="text-button" data-go="decision">Inspect a recorded decision</button></div>
-    <details><summary>Mathematical operator &amp; implementation boundaries</summary>
-      <div class="detail-grid"><div><p>Let F be one genuine shared recurrent transition, including normalization. Let V(H) = F(H) − H.</p><pre>H_visit = H_A + α_eff (H_B − H_A)
-H_A′ = H_A + (1 − β)V(H_A) + βV(H_visit)</pre><p class="small muted">Full-scope formula shown. Trust-region clipping changes α_eff; token masks and projected variants apply additional restrictions.</p></div>
-      <div><p>Unlike direct mixing, the returned state is anchored at H_A, not H_visit or H_B.</p><p class="small muted">Recorded curvature is the full-response residual V(H_visit) − [(1−α_eff)V(H_A)+α_eff V(H_B)]. Scoped transfer may use only part of it. This is not a claim about a geometric basin.</p><a href="https://github.com/AlperKartkaya/tebdil/blob/main/src/tebdil/core/excursions.py">Read the excursion operator</a></div></div>
-    </details>
-  </section>
-  <section id="view-decision" class="view" role="tabpanel" aria-labelledby="tab-decision" hidden>
-    <div class="section-heading"><div><p class="section-kicker">Who chooses the computation?</p><h2>Control is a testable policy.</h2></div><p id="policyKind" class="tag">Choose a recording</p></div>
-    <p class="reading muted">Fixed schedules, adaptive rules, and trained policies are different. The selected method determines which runs here.</p>
-    <div id="decisionContent" class="data-dependent" hidden>
-      <div class="decision-rail" aria-label="Available controller actions"><div data-action="CONTINUE"><b>CONTINUE</b><p>Advance normally.</p></div><div data-action="EXCURSION"><b>EXCURSION</b><p>Choose donor and strength.</p></div><div data-action="EXIT"><b>EXIT</b><p>Read out at this depth.</p></div></div>
-      <div id="decisionReadout" class="instrument decision-readout"></div>
-      <details><summary>Observable features, action scores &amp; policy limits</summary><p class="small muted">Offline training can use verified outcomes. Inference observes state features, not the gold answer. Predicted advantage scores are not probabilities. The gated MLP also uses hand-set receiving-logit margin/entropy gates, not Ouro’s native exit gate.</p><pre id="decisionDetails"></pre><a href="https://github.com/AlperKartkaya/tebdil/blob/main/src/tebdil/controller/learned_policy.py">Controller implementation</a></details>
-    </div>
-  </section>
-  <section id="view-experiment" class="view" role="tabpanel" aria-labelledby="tab-experiment" hidden>
-    <div class="section-heading"><div><p class="section-kicker">What happened in this recording?</p><h2>One problem. Paired outcomes.</h2></div><span class="tag">Recorded experiment · not live inference</span></div>
-    <div id="experimentContent" class="data-dependent" hidden>
-      <details class="prompt" open><summary>Task prompt &amp; verified target</summary><p id="problemPrompt"></p><p id="goldAnswer" class="cyan"></p></details>
-      <div class="paired-outputs"><article class="output-panel"><h3>Ordinary recurrence <code>S0</code></h3><div id="baselineOutput"></div></article><article class="output-panel active-output"><h3 id="methodHeading">Selected method</h3><div id="methodOutput"></div></article></div>
-      <p id="outcomeNote" class="notice"></p>
-      <div class="section-heading compact"><h3>Inside the selected recurrent step</h3><span id="stepContext" class="small muted"></span></div>
-      <div id="stepTelemetry" class="telemetry"></div>
-      <figure class="instrument"><div class="figure-top"><span id="recordedStepTitle">Recorded computation</span><span class="tag">Schematic anchored to selected telemetry</span></div><div id="recordedMechanism" class="recorded-mechanism"></div><figcaption id="recordedStepNote"></figcaption></figure>
-      <details><summary>Per-token compute ledger</summary><div class="table-scroll"><table><caption>Measured recurrent-block calls by generated token. Scoring calls and wall time are separate.</caption><thead><tr><th>Token</th><th>Decision</th><th>Donor</th><th>α / β</th><th>Shared</th><th>A</th><th>Donor</th><th>Visit</th><th>Continue</th><th>Total</th></tr></thead><tbody id="ledgerRows"></tbody></table></div><p id="ledgerNote" class="small muted"></p></details>
-      <details><summary>Recorded latent-state projection</summary><p class="small muted">PCA of last-token hidden states, fitted separately for each recorded method. Axes are not comparable across methods. Projection can hide distance; no attractor or semantic interpretation follows.</p><figure><svg id="projection" viewBox="0 0 720 260" role="img" aria-label="Recorded last-token state projection"></svg><figcaption id="projectionNote"></figcaption></figure></details>
-      <details><summary>Raw selected trace &amp; provenance</summary><p><a id="downloadTrace" download="tebdil-trace.json">Download selected trace JSON</a> · <a id="downloadRun" download>Download complete recording</a> · <a id="downloadConfig">Execution manifest</a></p><pre id="rawTrace"></pre></details>
-    </div>
-  </section>
-  <div id="tokenControls" class="token-controls" hidden><label>Generated token<select id="tokenSelect" disabled></select></label><label>Recurrent step<select id="stepSelect" disabled></select></label><p class="muted small">Selection is shared between decision and experiment. Recurrent steps are not output tokens.</p></div>
-  <section id="view-evidence" class="view" role="tabpanel" aria-labelledby="tab-evidence" hidden>
-    <div class="section-heading"><div><p class="section-kicker">Does it help?</p><h2>Evidence, not a victory lap.</h2></div><span class="tag">Exploratory research</span></div>
-    <p id="evidenceConclusion" class="reading"></p><p id="sampleNote" class="muted small"></p><p id="integrityNote" class="notice"></p>
-    <div class="table-scroll"><table id="resultsTable"><caption>Paired results vs ordinary recurrence. Intervals resample problem clusters, not individual seeds.</caption><thead><tr><th>Method</th><th>Accuracy</th><th>Δ vs S0</th><th>95% cluster CI</th><th>Rescued / wrong</th><th>Degraded / correct</th><th>Mean calls</th></tr></thead><tbody id="resultRows"></tbody></table></div>
-    <details><summary>What these results do and do not support</summary><div class="detail-grid"><div><h3>Implemented &amp; observable</h3><p>Real checkpoint execution, hidden-state interventions, excursion-and-return, heuristic adaptive control, and offline-trained controller inference.</p><h3>Observed, not established</h3><p>Some recorded trajectories recover; others do not. Fresh-template results do not establish a general advantage over parallel or mixing baselines.</p></div><div><h3>Statistical limits</h3><p>Small generated task sets, repeated seeds, exploratory method comparisons, no multiplicity correction. Zero inside a confidence interval means improvement is unresolved, not disproved.</p><h3>Compute limits</h3><p>Calls include donor and visit work but are not equal FLOPs for varying sequence lengths. These are not strict compute-matched tests. Missing, inconsistent, and reference-only execution ledgers are flagged; those costs are not verified.</p></div></div></details>
-    <details><summary>Model, training &amp; artifact provenance</summary><p class="small muted">Hashes bind exported files to this snapshot, not to an independent certification. Historical audit reports are preserved unchanged; their pass flags do not override the current ledger warning.</p><p class="mono wrap">ByteDance/Ouro-1.4B-Thinking<br>Revision: 3aaa2224253a92ca45cf2e3d427c360e1ef9c93d</p><ul id="evidenceLinks" class="evidence-links"></ul><p id="runHash" class="mono small wrap"></p></details>
-    <details><summary>Reproduce &amp; inspect the research</summary><p>Serve the committed static export without a GPU. Model replay is a separate Python operation requiring the pinned checkpoint.</p><pre>python3 -m http.server 8080 --directory site
-python3 scripts/build_landing_data.py --check
+<a class="skip-link" href="#main-content">Skip to recorded experiment</a>
 
-# In the locked Python research environment:
-uv sync --locked
-uv run pytest -q -m "not real_model"
-uv run pytest -q -m real_model</pre><p><a href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/reproduction.md">Full reproduction guide</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/limitations.md">Limitations</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/reports/references_and_skills.md">References &amp; tools</a></p></details>
-  </section>
-  <nav class="journey-footer" aria-label="Continue the research journey"><button id="previousView" class="text-button" disabled>Previous</button><span id="journeyPosition" class="muted small">1 of 5</span><button id="nextView" class="text-button">Next: The mechanism</button></nav>
+<!-- ============================================================
+     HERO BANNER
+============================================================ -->
+<section class="hero-banner" id="top">
+  <div class="container is-max-desktop has-text-centered">
+    <span class="pub-eyebrow">
+      <i class="fas fa-route"></i>
+      Inference-Time Latent Trajectory Intervention &middot; Looped Language Models
+    </span>
+    <h1 class="title pub-title">TEBDİL: Self-Directed &amp; Cooperative Latent Excursions<br> for Recurrent Reasoning</h1>
+    <p class="pub-subtitle">
+      Recorded Inference-Time Excursion-and-Return, Donor Selection, and Controller Decisions in a Recurrent Language Model
+    </p>
+
+    <div class="pub-venue">
+      <span class="pub-venue-line" aria-hidden="true"></span>
+      <span class="pub-venue-text">
+        <span class="pub-venue-ico" aria-hidden="true"><i class="fas fa-microchip"></i></span>
+        <span>Backbone: ByteDance/Ouro-1.4B-Thinking (24L &times; 4 Recurrent UT Steps)</span>
+      </span>
+      <span class="pub-venue-line" aria-hidden="true"></span>
+    </div>
+
+    <div class="pub-affil">
+      <span>Pinned model revision: <code>3aaa2224253a92ca45cf2e3d427c360e1ef9c93d</code> &nbsp;&middot;&nbsp; Recorded experiment replay &nbsp;&middot;&nbsp; Not live inference</span>
+    </div>
+
+    <div class="pub-links">
+      <a href="#demo" class="pub-btn brand-demo">
+        <span class="icon"><i class="fas fa-play-circle"></i></span><span>Recorded Experiment</span>
+      </a>
+      <a href="#architecture" class="pub-btn">
+        <span class="icon"><i class="fas fa-project-diagram"></i></span><span>Mechanism &amp; Controller</span>
+      </a>
+      <a href="#theory" class="pub-btn brand-theory">
+        <span class="icon"><i class="fas fa-bolt"></i></span><span>Curvature Theory ($C_t$)</span>
+      </a>
+      <a href="#results" class="pub-btn brand-results">
+        <span class="icon"><i class="fas fa-chart-line"></i></span><span>Phase 1&ndash;8 Results</span>
+      </a>
+      <a href="#case-study" class="pub-btn brand-case">
+        <span class="icon"><i class="fas fa-microscope"></i></span><span>Case Replays</span>
+      </a>
+      <a href="#roadmap" class="pub-btn brand-roadmap">
+        <span class="icon"><i class="fas fa-flag-checkered"></i></span><span>Audit &amp; Roadmap</span>
+      </a>
+      <a href="#bibtex" class="pub-btn">
+        <span class="icon"><i class="fas fa-quote-right"></i></span><span>Cite</span>
+      </a>
+    </div>
+
+    <!-- Headline metrics driven by real Phase 7-8, Phase 5, and Phase 3 results -->
+    <div class="metrics-strip">
+      <div class="metric-card">
+        <div class="metric-num" data-target="--">&mdash;</div>
+        <div class="metric-label">Selected Recording Accuracy</div>
+        <div class="metric-sub">Loaded from the selected recorded artifact</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-num" data-target="--">&mdash;</div>
+        <div class="metric-label">Recorded Recurrent Calls</div>
+        <div class="metric-sub">Unverified costs are labeled, not estimated</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-num" data-target="--">&mdash;</div>
+        <div class="metric-label">Rescue / Degradation</div>
+        <div class="metric-sub">Paired with ordinary recurrence on the same instance</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-num" data-target="8">8</div>
+        <div class="metric-label">Recorded Experiment Sets</div>
+        <div class="metric-sub">Exploratory evidence with explicit provenance</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     FLOATING TABLE OF CONTENTS
+============================================================ -->
+<section class="section toc-section" aria-label="Section navigation">
+  <nav class="toc-rail" id="tocRail" aria-label="Contents">
+    <div class="toc-inner">
+      <button class="toc-head" id="tocToggle" type="button" aria-expanded="true" aria-controls="tocLinks">
+        <span class="toc-badge" aria-hidden="true"><i class="fas fa-list-ul"></i></span>
+        <span class="toc-title">Contents</span>
+        <span class="toc-expand" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+      </button>
+      <div class="toc-links" id="tocLinks">
+        <a class="toc-link is-active" href="#demo"><i class="fas fa-play-circle"></i><span>Recorded Stage</span></a>
+        <a class="toc-link" href="#abstract"><i class="fas fa-align-left"></i><span>Abstract</span></a>
+        <a class="toc-link" href="#architecture"><i class="fas fa-project-diagram"></i><span>Architecture</span></a>
+        <a class="toc-link" href="#theory"><i class="fas fa-bolt"></i><span>Theory ($C_t$)</span></a>
+        <a class="toc-link" href="#patterns"><i class="fas fa-layer-group"></i><span>12 Controls</span></a>
+        <a class="toc-link" href="#results"><i class="fas fa-chart-line"></i><span>Main Results</span></a>
+        <a class="toc-link" href="#scaling"><i class="fas fa-th"></i><span>Grid &amp; Scope</span></a>
+        <a class="toc-link" href="#case-study"><i class="fas fa-sync-alt"></i><span>Case Studies</span></a>
+        <a class="toc-link" href="#examples"><i class="fas fa-table"></i><span>Trace Explorer</span></a>
+        <a class="toc-link" href="#roadmap"><i class="fas fa-flag-checkered"></i><span>Paper Roadmap</span></a>
+        <a class="toc-link" href="#bibtex"><i class="fas fa-quote-right"></i><span>Cite</span></a>
+      </div>
+    </div>
+  </nav>
+</section>
+
+<main id="main-content" tabindex="-1">
+
+<!-- ============================================================
+     INTERACTIVE STAGE (RECURSIVEMAS-STYLE RECORDED TRACE REPLAY)
+============================================================ -->
+<section class="section" id="demo" style="padding-top: 1.5rem; padding-bottom: 1.8rem;">
+  <div class="container is-max-desktop">
+    <div class="playground-note">
+      <div class="playground-note-main">
+        <span class="playground-note-icon" aria-hidden="true"><i class="fas fa-wave-square"></i></span>
+        <div>
+          <span class="playground-note-label">Interactive Recorded Replay &middot; Ouro-1.4B-Thinking Telemetry</span>
+          <h3>Watch TEBDİL Cooperative Latent Excursions Step-by-Step</h3>
+          <p>Select a recorded problem and method below. Inspect the recorded controller action and, when an excursion occurred, the visit&ndash;compute&ndash;return path. This replay does not run the model in your browser.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage-card">
+      <div class="stage-toolbar">
+        <div class="stage-controls-left">
+          <div class="round-badge-live" id="stageStepBadge">
+            <i class="fas fa-sync-alt"></i>
+            <span id="stageStepLabel">Loading recorded computation</span>
+          </div>
+          <div class="step-pill-bar" role="group" aria-label="Recurrent steps">
+            <button type="button" class="step-pill" data-step="1">t=1 Fork</button>
+            <button type="button" class="step-pill is-active" data-step="2">t=2 Excursion</button>
+            <button type="button" class="step-pill" data-step="3">t=3 Return</button>
+            <button type="button" class="step-pill" data-step="4">t=4 Readout</button>
+          </div>
+          <button type="button" class="stage-btn is-primary" id="playLoopBtn">
+            <i class="fas fa-play" id="playLoopIcon"></i>
+            <span id="playLoopText">Auto-Loop</span>
+          </button>
+        </div>
+
+        <div class="stage-controls-right">
+          <div class="stage-select-group">
+            <label for="runSelect">Recorded experiment</label>
+            <select id="runSelect" class="stage-select"></select>
+          </div>
+          <div class="stage-select-group">
+            <label for="caseSelect">Curated &amp; Benchmark Instances</label>
+            <select id="caseSelect" class="stage-select"></select>
+          </div>
+          <div class="stage-select-group">
+            <label for="methodSelect">Active Method</label>
+            <select id="methodSelect" class="stage-select"></select>
+          </div>
+        </div>
+      </div>
+
+      <p id="loadStatus" class="recording-status" role="status" aria-live="polite">Loading recorded data. No model runs in this browser.</p>
+      <button id="retryLoad" type="button" class="stage-btn" hidden>Retry recording</button>
+      <div class="stage-controls-right" style="margin:.8rem 0">
+        <div class="stage-select-group"><label for="tokenSelect">Generated token</label><select id="tokenSelect" class="stage-select" disabled></select></div>
+        <div class="stage-select-group"><label for="stepSelect">Recurrent step</label><select id="stepSelect" class="stage-select" disabled></select></div>
+      </div>
+      <noscript><p>JavaScript enables recorded replay. The research sections remain readable. <a href="https://github.com/AlperKartkaya/tebdil">Source and reproduction</a>.</p></noscript>
+      <!-- Prompt & ground truth header -->
+      <div class="question-box-live">
+        <div class="qb-title">
+          <span id="liveProblemHeader">Select a recorded problem</span>
+          <span id="liveGoldBadge" style="background: rgba(255,255,255,0.16); padding: 0.15rem 0.6rem; border-radius: 6px;">Gold answer: loading</span>
+        </div>
+        <div class="qb-body" id="livePromptBody">Loading prompt...</div>
+      </div>
+
+      <!-- Main interactive visual stage: Left = Recurrent Loop Diagram, Right = 2D PCA + Telemetry -->
+      <div class="stage-grid">
+        <div class="svg-canvas-box">
+          <div class="mini-panel-title">
+            <span><i class="fas fa-project-diagram"></i> Recurrent Computation Graph ($T = 4$ Universal Transformer Steps)</span>
+            <span id="liveFormulaPill" style="font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:#4338ca;">$H_3^{A'} = H_2^A + (1-\beta)V_2^A + \beta V_2^{\mathrm{visit}}$</span>
+          </div>
+          <svg role="img" aria-label="Recorded recurrent computation, schematic not latent coordinates" id="excursionStageSvg" viewBox="0 0 680 320" style="width:100%; height:auto; overflow:visible;"></svg>
+          <div id="stageStepNarrative" style="margin-top:0.55rem; padding:0.65rem 0.85rem; background:#eef2ff; border-radius:10px; font-size:0.83rem; color:#1e1b4b; line-height:1.5;"></div>
+        </div>
+
+        <div class="pca-and-metrics-col">
+          <div class="mini-panel">
+            <div class="mini-panel-title">
+              <span><i class="fas fa-compass"></i> Recorded 2D PCA Latent Projection</span>
+              <span id="pcaVarLabel" style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:#64748b;">Explained Var: --</span>
+            </div>
+            <svg role="img" aria-label="Recorded last-token PCA projection" id="pcaPlotSvg" viewBox="0 0 380 175" style="width:100%; height:auto; background:#fff; border:1px solid #e2e8f0; border-radius:10px;"></svg>
+            <p id="pcaNote" class="pca-note">PCA is fitted separately for each recorded method. Axes are not comparable; projection does not establish a basin or semantic interpretation. No visit geometry is invented.</p>
+          </div>
+
+          <div class="mini-panel">
+            <div class="mini-panel-title">
+              <span><i class="fas fa-tachometer-alt"></i> Step-by-Step Latent Telemetry</span>
+              <span id="telemetryStepTag" style="font-family:'JetBrains Mono',monospace; font-size:0.72rem;">Step 2</span>
+            </div>
+            <p id="policyKind" class="pca-note"></p>
+            <div class="telemetry-kv-grid" id="telemetryGrid"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Output Terminal comparing all methods on the selected problem -->
+      <div class="output-terminal">
+        <div class="output-terminal-head">
+          <span><i class="fas fa-terminal"></i> Decoded Output &amp; Cross-Method Comparison on Selected Instance</span>
+          <span id="terminalCallCost">Recorded cost: loading</span>
+        </div>
+        <div id="terminalMainText" style="color:#f8fafc;"></div>
+        <div class="method-badges-bar" id="terminalMethodBadges"></div>
+      </div>
+      <details class="recording-evidence"><summary>Selected trace, execution manifest &amp; provenance</summary>
+        <p><a id="downloadTrace" download>Download selected trace</a> · <a id="downloadRun" download>Complete recording</a> · <a id="downloadConfig">Execution manifest</a></p>
+        <p>Counts include donor and visit work, not equivalent FLOPs. Scoring calls and wall time are separate. Parallel-selection ledgers are unverified; selected-output calls are not the total cost of all candidates. Gold-answer scores are evaluation diagnostics, never controller inputs.</p>
+        <pre id="selectedTraceJson"></pre>
+        <ul id="evidenceLinks"></ul>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     ABSTRACT
+============================================================ -->
+<section class="section rm-bg-soft" id="abstract">
+  <div class="container is-max-desktop">
+    <div class="has-text-centered" style="margin-bottom: 1.6rem;">
+      <span class="rm-eyebrow">Overview</span>
+      <h2 class="title is-3 rm-section-title">Abstract &amp; Core Research Question</h2>
+    </div>
+    <div class="abstract-box">
+      <p>
+        Recurrent language models repeatedly apply shared weights to a continuous hidden state before decoding. More recurrence does not guarantee recovery when an intermediate trajectory is unproductive, and independent branches do not exchange latent updates.
+      </p>
+      <p>
+        TEBDİL asks whether a receiving trajectory can temporarily visit toward a donor state, execute the genuine shared recurrent transition there, and return the computed update without permanently switching trajectories. The receiving state remains the anchor.
+      </p>
+      <p>
+        The recorded methods include fixed schedules, heuristic adaptive rules, and offline-trained scorers. The default learned controllers use hand-set margin and entropy eligibility gates; the explicitly ungated ablation disables them, and their action scores are not calibrated probabilities. At inference time these policies use recorded state features, not gold answers. Results below are exploratory: they show individual recoveries and failures, but do not establish a general advantage over parallel, mixing, or random controls. Experiment selectors, trace downloads, uncertainty intervals, cost warnings, and provenance expose what each artifact supports.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     ARCHITECTURE & MECHANISM
+============================================================ -->
+<section class="section" id="architecture">
+  <div class="container is-max-desktop">
+    <div class="has-text-centered" style="margin-bottom: 1.5rem;">
+      <span class="rm-eyebrow">Architecture &amp; Formulation</span>
+      <h2 class="title is-3 rm-section-title">TEBDİL at a Glance</h2>
+      <p class="rm-section-sub">
+        Unlike multi-agent systems that pass text or train external adapter modules, TEBDİL operates
+        <b>entirely inside a single frozen looped language model</b> by exploiting the nonlinear vector field
+        of its shared recurrent transition operator $F_{\theta,t}$. Numeric values retained in the diagrams
+        are labeled historical snapshots; the selected recording and provenance determine current evidence.
+      </p>
+    </div>
+
+    <!-- Part 1: Ouro Sandwich RMSNorm Contraction -->
+    <div class="arch-block">
+      <div class="arch-step">
+        <span class="arch-step-num">Part 1</span>
+        <h3 class="arch-step-title">Ouro Recurrence &amp; Observed Perturbation Scope</h3>
+      </div>
+      <div class="arch-row">
+        <div class="arch-text">
+          <p>
+            In <code>ByteDance/Ouro-1.4B-Thinking</code>, each Universal Transformer recurrent step $t \in \{0,1,2,3\}$
+            passes the hidden state $H_t \in \mathbb{R}^{L \times 2048}$ through all <b>24 shared decoder layers</b>
+            followed by final RMSNorm. Each decoder layer applies <b>4 Sandwich RMSNorm operations</b>
+            (<code>input_layernorm</code>, <code>input_layernorm_2</code>,
+            <code>post_attention_layernorm</code>, <code>post_attention_layernorm_2</code>), totaling <b>96 layer-level RMSNorm normalizations</b>, plus the final RMSNorm.
+          </p>
+          <div class="link-card">
+            <div class="link-card-head">
+              <span class="link-badge in">Last-Token Scope ($\eta \le 0.05$)</span>
+              <span class="link-card-sub">Historical nine-problem scope subset</span>
+            </div>
+            <p>
+              Perturbing only the final token leaves the prefix unchanged at the fork. In the historical nine-problem
+              schedule/scope subset, $t_{\mathrm{visit}}=2$ last-token transfer records mean residual norm $0.944$ and accuracy $11.11\%$.
+              This observation does not identify normalization or attention as its cause.
+            </p>
+          </div>
+          <div class="link-card">
+            <div class="link-card-head">
+              <span class="link-badge out">Full-Sequence Scope ($\eta = 0.25$, $\tau = 0.35$)</span>
+              <span class="link-card-sub">Sustained Recorded Branch Separation</span>
+            </div>
+            <p>
+              A full-sequence perturbation changes more than the final token. In the same nine-problem subset,
+              $t_{\mathrm{visit}}=2$ full-scope transfer records mean residual norm $41.7568$ and accuracy $22.22\%$.
+              These descriptive scope results are available in the schedule-ablation artifact below.
+            </p>
+          </div>
+        </div>
+
+        <div class="figure-card">
+          <svg viewBox="0 0 460 285" style="width:100%; height:auto;">
+            <defs>
+              <linearGradient id="gIndigo" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#4338ca"/>
+                <stop offset="100%" stop-color="#6366f1"/>
+              </linearGradient>
+              <linearGradient id="gSky" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#0ea5e9"/>
+                <stop offset="100%" stop-color="#38bdf8"/>
+              </linearGradient>
+            </defs>
+            <rect x="10" y="10" width="440" height="265" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+            <text x="230" y="34" text-anchor="middle" font-size="12" font-weight="800" fill="#1e1b4b">Ouro-1.4B Shared Recurrent Step F_θ,t (96 Sandwich RMSNorms)</text>
+
+            <!-- 24 Decoder block stack -->
+            <rect x="30" y="48" width="400" height="72" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+            <text x="45" y="68" font-size="11" font-weight="700" fill="#334155">24 &times; OuroDecoderLayer (Shared Weights across t = 0, 1, 2, 3)</text>
+            <rect x="45" y="78" width="82" height="28" rx="6" fill="#eef2ff" stroke="#818cf8"/>
+            <text x="86" y="96" text-anchor="middle" font-size="9.5" font-weight="700" fill="#4338ca">In RMSNorm</text>
+            <rect x="137" y="78" width="96" height="28" rx="6" fill="#eef2ff" stroke="#818cf8"/>
+            <text x="185" y="96" text-anchor="middle" font-size="9.5" font-weight="700" fill="#4338ca">Attn + PostNorm</text>
+            <rect x="243" y="78" width="88" height="28" rx="6" fill="#eef2ff" stroke="#818cf8"/>
+            <text x="287" y="96" text-anchor="middle" font-size="9.5" font-weight="700" fill="#4338ca">In FFN Norm</text>
+            <rect x="341" y="78" width="76" height="28" rx="6" fill="#eef2ff" stroke="#818cf8"/>
+            <text x="379" y="96" text-anchor="middle" font-size="9.5" font-weight="700" fill="#4338ca">Post FFN Norm</text>
+
+            <!-- Contraction comparison bars -->
+            <text x="35" y="146" font-size="11" font-weight="700" fill="#0f172a">Historical Nine-Problem Scope Comparison at Visit Step 2:</text>
+
+            <rect x="35" y="158" width="390" height="46" rx="9" fill="#fff1f2" stroke="#fda4af"/>
+            <text x="48" y="176" font-size="10.5" font-weight="700" fill="#9f1239">last_token scope (L=1 perturbed):</text>
+            <text x="48" y="194" font-size="10" font-family="JetBrains Mono, monospace" fill="#be123c">Mean ||C₂||_F = 0.944  |  Acc = 11.11%  |  n = 9</text>
+            <rect x="340" y="168" width="14" height="24" rx="4" fill="#f43f5e"/>
+
+            <rect x="35" y="214" width="390" height="48" rx="9" fill="#ecfdf5" stroke="#6ee7b7"/>
+            <text x="48" y="232" font-size="10.5" font-weight="700" fill="#065f46">full sequence scope (all L tokens perturbed, η=0.25):</text>
+            <text x="48" y="250" font-size="10" font-family="JetBrains Mono, monospace" fill="#047857">Mean ||C₂||_F = 41.7568 | Acc = 22.22% | n = 9</text>
+            <rect x="340" y="224" width="72" height="24" rx="4" fill="url(#gIndigo)"/>
+          </svg>
+          <p class="figure-caption">
+            <b>Sandwich RMSNorm Contraction vs. Token Scope.</b> Full-sequence perturbation at $t{=}1$ generates $44\times$ larger nonlinear excursion curvature $\|C_2\|_F$ at $t{=}2$ than last-token perturbation and doubles accuracy on the Phase 3 ablation subset.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Part 2: Four-Step Cooperative Latent Excursion Operator -->
+    <div class="arch-block">
+      <div class="arch-step">
+        <span class="arch-step-num">Part 2</span>
+        <h3 class="arch-step-title">The Cooperative Latent Excursion Operator ($E_1$)</h3>
+      </div>
+      <div class="grid-2">
+        <div class="link-card" style="margin-top:0;">
+          <div class="link-card-head">
+            <span class="link-badge in">Step A &middot; Midpoint Probe</span>
+            <span class="link-card-sub">Cross-Trajectory Interpolation at $t=2$</span>
+          </div>
+          <p style="font-size:0.92rem; color:#334155;">
+            Given primary state $H_t^A$ and perturbed donor state $H_t^B$, TEBDİL constructs a temporary visit state
+            toward the donor. A trust-region clip may replace the requested $\alpha$ with an effective $\alpha_{\mathrm{eff}}$, after which the shared recurrent operator $F_{\theta,t}$ is evaluated:
+          </p>
+          <div class="eq-block">
+            $$H_t^{\mathrm{visit}} = H_t^A + \alpha_{\mathrm{eff}}(H_t^B - H_t^A)$$
+            $$V_t^{\mathrm{visit}} = F_{\theta,t}\!\left(H_t^{\mathrm{visit}},\; x,\; \mathcal{C}_t\right) - H_t^{\mathrm{visit}}$$
+          </div>
+        </div>
+
+        <div class="link-card" style="margin-top:0;">
+          <div class="link-card-head">
+            <span class="link-badge out">Step B &middot; Anchored Return</span>
+            <span class="link-card-sub">Transfer the visited update, not the donor state</span>
+          </div>
+          <p style="font-size:0.92rem; color:#334155;">
+            The trust region clips the visit offset, producing $\alpha_{\mathrm{eff}}$; it does not normalize or clip the visited update.
+            For full-scope, ungated transfer, the computed update returns to the receiving anchor with weight $\beta$:
+          </p>
+          <div class="eq-block">
+            $$H_{t+1}^{A'} = H_t^A + V_t^A + \beta\big(V_t^{\mathrm{visit}}-V_t^A\big)$$
+            <p>Scoped, coordinate-restricted, and native-gated variants further mask or scale the transferred correction. Unstable interventions fall back to ordinary recurrence; inspect the selected trace.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="insight-box" style="margin-top: 1rem;">
+        <b>Why Return to $H_t^A$ Instead of Staying at $H_t^{\mathrm{visit}}$ ($C_0$)?</b>
+        In our Phase 3 ablation, staying at the midpoint without returning ($C_0$: $H_{t+1}^{C_0} = H_t^{\mathrm{visit}} + V_t^{\mathrm{visit}}$)
+        changes the receiving anchor rather than transporting an update. The recorded <code>graph_validation_002</code> comparison can be inspected below.
+        An anchored return is a distinct operator, not a guarantee of preserving answer correctness.
+      </div>
+    </div>
+
+    <!-- Part 3: Label-Free Adaptive Trigger Policy (E2) -->
+    <div class="arch-block">
+      <div class="arch-step">
+        <span class="arch-step-num">Part 3</span>
+        <h3 class="arch-step-title">Label-Free Adaptive Excursion Policy ($E_2$)</h3>
+      </div>
+      <div class="arch-row">
+        <div class="arch-text">
+          <p>
+            Unconditional excursion ($E_1$) applies $\beta{=}0.5$ on every problem instance—even when Branch $A$ is already highly confident,
+            risking unnecessary compute or over-excursion. Our adaptive policy $E_2$ projects intermediate state $H_2^A$ through the native
+            readout head $g_\phi(H_2^A)$ at step $t{=}2$ and computes two <b>strictly label-free</b> uncertainty signals:
+          </p>
+          <div class="eq-block">
+            $$m_t^A = z_{(1)}^A - z_{(2)}^A \quad (\text{Top-2 Logit Margin}), \qquad \mathcal{H}_t^A = -\sum_{v \in V} p_t^A(v)\log p_t^A(v)$$
+          </div>
+          <p>
+            The current $E_2$ heuristic requires:
+            (1) low margin and high entropy ($m_2^A \le 0.70$ and $\mathcal{H}_2^A \ge 1.20$), and
+            (2) a finite, stable donor whose relative branch divergence lies inside the configured trust window $\frac{\|H_2^A - H_2^B\|_F}{\|H_2^A\|_F} \in [0.002,\; 0.65]$.
+            Budget, stability, and donor checks can also reject a visit. Exact thresholds and decisions belong to each recording's manifest and trace, not a universal learned rule. Skipping the visit avoids that evaluation, not all donor cost.
+          </p>
+        </div>
+        <div class="figure-card">
+          <h4 style="font-weight:800; font-size:1rem; color:var(--rm-ink); margin-bottom:0.65rem;">
+            <i class="fas fa-shield-halved" style="color:var(--rm-emerald); margin-right:0.4rem;"></i>
+            Runtime Label-Access Check &amp; Recorded Cost
+          </h4>
+          <p style="font-size:0.88rem; color:var(--rm-sub); line-height:1.6;">
+            Enforced by automated unit test <code>tests/test_no_label_leakage.py</code>:
+            the core and controller runtime modules are scanned for forbidden gold-label and validator references.
+            This check does not establish benchmark independence or exclude every possible leakage path.
+          </p>
+          <div id="controllerComparisonSummary" class="eq-block" style="font-family:'JetBrains Mono',monospace; font-size:0.8rem; background:#f8fafc;">Recorded controller summaries load from the export manifest. See the results tables for uncertainty and provenance.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Part 4: Self-Directed Learned Meta-Controller (E3_ridge, E3_mlp), Multi-Donor Selection, Selective Transfer -->
+    <div class="arch-block">
+      <div class="arch-step">
+        <span class="arch-step-num">Part 4</span>
+        <h3 class="arch-step-title">Self-Directed Latent Relocation Controller ($\pi_\psi$: $E_3$, $D_{\text{nearest}}$, $E_1^{\text{subspace}}$)</h3>
+      </div>
+      <div class="arch-row">
+        <div class="arch-text">
+          <p>
+            Beyond hand-tuned heuristics ($E_2$), TEBDİL trains a lightweight meta-controller $\pi_\psi(s_2)$ on counterfactual
+            trajectory rollouts from an explicit training split. Training problem IDs, action counts, split checks, and checkpoint provenance are exposed in the exported counterfactual artifacts
+            to predict the compute-penalized advantage over $\mathcal{A} = \{\text{CONTINUE}, \text{EXCURSION}(d, \alpha, \beta), \text{EXIT}\}$:
+          </p>
+          <div class="eq-block">
+            $$J(s_t,a) = R_{\mathrm{task}}(s_t,a)-\lambda_{\mathrm{cost}}\frac{C(a)}{\max(1,C_{\mathrm{ref}})}$$
+            <p>Offline task reward combines correctness, bounded log-probability shaping, degradation penalties, and optional state/action shaping. These use gold labels only during counterfactual training; coefficients and shaping variants are recorded with the checkpoint.</p>
+          </div>
+          <p>
+            At test time, $\pi_\psi$ uses checkpoint-defined state-action features $\phi(s_t,a)$:
+            current uncertainty, observed trajectory changes, donor statistics, budget/depth, and candidate intervention parameters.
+            The trained scorer ranks eligible actions. Default gated variants add hand-set margin/entropy rules for <code>EXIT</code> and <code>EXCURSION</code>; the explicitly ungated ablation removes these rules. The gates are heuristic, not learned; inference does not read the gold answer.
+          </p>
+        </div>
+        <div class="figure-card">
+          <h4 style="font-weight:800; font-size:1rem; color:var(--rm-ink); margin-bottom:0.65rem;">
+            <i class="fas fa-brain" style="color:var(--rm-primary); margin-right:0.4rem;"></i>
+            Historical Phase 5&ndash;8 Recorded Snapshots
+          </h4>
+          <p style="font-size:0.88rem; color:var(--rm-sub); line-height:1.6;">
+            &bull; <b>3-Branch Donor Selection (Phase 5):</b> Compare <code>D_nearest</code> against other donor rules and the gold-informed <code>D_oracle</code> upper bound in the manifest-backed Phase 5 table. An oracle match on a small recording is not evidence of general optimality.<br>
+            &bull; <b>Coordinate-Restricted Transfer (Phase 6):</b> <code>E1_subspace</code> restricts correction coordinates; it is not a learned SVD subspace. The recorded comparison is exploratory.<br>
+            &bull; <b>Learned MLP Controller (Phase 7&ndash;8):</b> Inspect its recorded accuracy, rescues, degradations, and execution cost in the manifest-backed summary above. A learned scorer with heuristic gates is not an end-to-end learned policy; lower cost is not guaranteed.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     THEORETICAL INSIGHTS
+============================================================ -->
+<section class="section rm-bg-tint" id="theory">
+  <div class="container is-max-desktop">
+    <div class="has-text-centered" style="margin-bottom: 1.5rem;">
+      <span class="rm-eyebrow">How Excursion-and-Return Differs from Linear Mixing</span>
+      <h2 class="title is-3 rm-section-title">Theoretical &amp; Mechanistic Insights</h2>
+      <p class="rm-section-sub">
+        What mathematically distinguishes TEBDİL ($E_1$) from simply averaging the hidden states ($M_0$) or
+        averaging the individual update vectors ($M_1$) of two trajectories?
+      </p>
+    </div>
+
+    <div class="grid-2">
+      <div class="figure-card">
+        <h4 style="font-weight: 800; color: var(--rm-ink); margin-bottom: 0.5rem;">
+          <i class="fas fa-bezier-curve" style="color: var(--rm-violet); margin-right: 0.4rem;"></i>
+          Decomposition 1 &mdash; Nonlinear Update Residual
+        </h4>
+        <p style="color: var(--rm-sub); font-size: 0.92rem; line-height: 1.6;">
+          Define the <b>nonlinear excursion curvature residual</b> $C_t$ at step $t$ as the deviation of the midpoint transition vector from the convex combination of endpoint transition vectors:
+        </p>
+        <div class="eq-block">
+          $$C_t \;\triangleq\; V_t^{\mathrm{visit}} - \Big[(1-\alpha_{\mathrm{eff}})V_t^A + \alpha_{\mathrm{eff}}V_t^B\Big]$$
+          $$H_{t+1}^{A'}(E_1) \;=\; \underbrace{H_t^A + (1-\alpha_{\mathrm{eff}}\beta)V_t^A + \alpha_{\mathrm{eff}}\beta V_t^B}_{\text{Linear Update Mixing } M_1(\gamma=\alpha_{\mathrm{eff}}\beta)} \;+\; \beta C_t$$
+        </div>
+        <div class="insight-box" style="margin-top: 0.8rem;">
+          <b>Algebraic implication:</b> For full-scope, ungated transfer in the donor direction, local affinity implies $C_t \equiv 0$ and equivalence to $M_1$ at the same effective $\alpha$. The identity does not apply unchanged to random-direction, masked, or gated variants. The graph case below contrasts recorded outputs; one case is not a causal proof.
+        </div>
+      </div>
+
+      <div class="figure-card">
+        <h4 style="font-weight: 800; color: var(--rm-ink); margin-bottom: 0.5rem;">
+          <i class="fas fa-compass-drafting" style="color: var(--rm-accent); margin-right: 0.4rem;"></i>
+          Control 2 &mdash; Directional Specificity of $C_t$
+        </h4>
+        <p style="color: var(--rm-sub); font-size: 0.92rem; line-height: 1.6;">
+          Is the benefit of $C_t$ merely an artifact of injecting extra vector norm at step $t{=}2$? We test two norm-matched directional controls in Phase 3:
+        </p>
+        <div class="eq-block">
+          $$E_1^{\text{rand-curv}}:\quad V_t^{\text{synth}} = \big[(1-\alpha)V_t^A + \alpha V_t^B\big] + \frac{\|C_t\|_F}{\|u\|_F}\,u$$
+          $$E_0:\quad H_t^{\text{visit,rand}} = H_t^A + \alpha \|H_t^B - H_t^A\|_F \frac{w}{\|w\|_F}$$
+        </div>
+        <div class="insight-box" style="margin-top: 0.8rem;">
+          <b>Read the paired outcomes:</b> The exported Phase 3 recording includes both rescues and degradations. Its fixed and randomized-residual methods have the same aggregate accuracy, despite different per-problem outcomes. Residual magnitude alone does not establish a reasoning benefit; inspect the paired control table and raw traces.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     12-METHOD CONTROL HIERARCHY
+============================================================ -->
+<section class="section" id="patterns">
+  <div class="container is-max-desktop">
+    <div class="has-text-centered" style="margin-bottom: 1rem;">
+      <span class="rm-eyebrow">Rigorous Falsification Design</span>
+      <h2 class="title is-3 rm-section-title">12-Method Control &amp; Ablation Hierarchy</h2>
+      <p class="rm-section-sub">
+        The recorded evaluation compares baselines, linear mixers, random-perturbation controls,
+        and nonlinear-residual ablations. This exploratory hierarchy was not preregistered.
+      </p>
+    </div>
+
+    <div class="pattern-grid">
+      <div class="pattern-card">
+        <div class="pattern-icon ic-seq"><i class="fas fa-Microchip"></i><i class="fas fa-stopwatch"></i></div>
+        <h4>Compute &amp; Voting Baselines</h4>
+        <p>Isolate whether extra recurrent depth or independent 2-branch sampling alone accounts for accuracy gains.</p>
+        <div class="pattern-roles">
+          <span class="role-chip">S0: Single 4-Step</span>
+          <span class="role-chip">S1: Deeper 5-Step</span>
+          <span class="role-chip">P0: 2-Branch Vote</span>
+          <span class="role-chip">P1: Oracle Best-of-2</span>
+        </div>
+      </div>
+
+      <div class="pattern-card">
+        <div class="pattern-icon ic-mix"><i class="fas fa-sliders"></i></div>
+        <h4>Linear Mixing Controls</h4>
+        <p>Test whether simple hidden-state interpolation ($M_0$) or linear velocity averaging without midpoint evaluation ($M_1$) suffices.</p>
+        <div class="pattern-roles">
+          <span class="role-chip">M0: State Mix</span>
+          <span class="role-chip">M1: Update Mix (C_t=0)</span>
+          <span class="role-chip">C0: Visit No Return</span>
+        </div>
+      </div>
+
+      <div class="pattern-card">
+        <div class="pattern-icon ic-dis"><i class="fas fa-dice"></i></div>
+        <h4>Noise &amp; Direction Controls</h4>
+        <p>Rule out generic stochastic regularisation by matching exact update shift norms ($R_0$) or midpoint probe distance ($E_0$).</p>
+        <div class="pattern-roles">
+          <span class="role-chip">R0: Norm-Matched Noise</span>
+          <span class="role-chip">E0: Random-Dir Excursion</span>
+        </div>
+      </div>
+
+      <div class="pattern-card">
+        <div class="pattern-icon ic-del"><i class="fas fa-route"></i></div>
+        <h4>TEBDİL &amp; Curvature Suite</h4>
+        <p>Compare full midpoint excursion ($E_1, E_2$) directly against stripped ($E_1^{\text{no-curv}}$) and randomized ($E_1^{\text{rand-curv}}$) curvature.</p>
+        <div class="pattern-roles">
+          <span class="role-chip">E1: Fixed Excursion</span>
+          <span class="role-chip">E2: Adaptive Policy</span>
+          <span class="role-chip">E1_no_curv</span>
+          <span class="role-chip">E1_rand_curv</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="rm-table-wrap" style="margin-top: 2rem;">
+      <table class="rm-table">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Category</th>
+            <th>State Update Equation at Step $t=2$</th>
+            <th>Compute accounting</th>
+            <th>Comparison purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><b>S0</b></td><td><span class="pat-tag pat-seq">Baseline</span></td><td>$H_3^A = F_{\theta,2}(H_2^A)$</td><td>See selected recording ledger</td><td>Standard deterministic LoopLM baseline</td></tr>
+          <tr><td><b>S1</b></td><td><span class="pat-tag pat-seq">Compute</span></td><td>5 recurrent steps ($T{=}5$ via extra final block evaluation)</td><td>See selected recording ledger</td><td>Extra recurrent depth on a single trajectory</td></tr>
+          <tr><td><b>P0</b></td><td><span class="pat-tag pat-seq">Ensemble</span></td><td>Independent $H_{1:4}^A, H_{1:4}^B$; confidence-based selection</td><td>Unverified selection cost</td><td>Independent parallel trajectories without interaction</td></tr>
+          <tr><td><b>P1</b></td><td><span class="pat-tag pat-seq">Oracle</span></td><td>$\arg\max_{y \in \{y^A, y^B\}} \mathbb{I}[y = y^*]$ (uses gold label)</td><td>Unverified selection cost</td><td>Upper bound of non-interacting 2-branch selection</td></tr>
+          <tr><td><b>M0</b></td><td><span class="pat-tag pat-mix">Linear</span></td><td>$H_3^{M_0} = F_{\theta,2}((1-\gamma)H_2^A + \gamma H_2^B)$ (collapses to midpoint)</td><td>See selected recording ledger</td><td>Direct state interpolation without anchor return</td></tr>
+          <tr><td><b>M1</b></td><td><span class="pat-tag pat-mix">Linear</span></td><td>$H_3^{M_1} = H_2^A + (1-\alpha\beta)V_2^A + \alpha\beta V_2^B$</td><td>See selected recording ledger</td><td>Linear combination of endpoint updates ($C_2 = 0$)</td></tr>
+          <tr><td><b>C0</b></td><td><span class="pat-tag pat-mix">Topology</span></td><td>$H_3^{C_0} = H_2^{\mathrm{visit}} + V_2^{\mathrm{visit}}$ (no return to $H_2^A$)</td><td>See selected recording ledger</td><td>Necessity of returning update vector to $H_2^A$</td></tr>
+          <tr><td><b>R0</b></td><td><span class="pat-tag pat-dis">Noise</span></td><td>$H_3^{R_0} = H_3^A + \|\Delta^{\mathrm{visit}}_2\|_F \cdot u / \|u\|_F$</td><td>See selected recording ledger</td><td>Generic norm-matched random state perturbation</td></tr>
+          <tr><td><b>E0</b></td><td><span class="pat-tag pat-dis">Direction</span></td><td>Excursion to $H_2^A + \alpha\|H_2^B - H_2^A\|_F \cdot w / \|w\|_F$</td><td>See selected recording ledger</td><td>Midpoint evaluation in a random direction</td></tr>
+          <tr><td><b>E1_no_curv</b></td><td><span class="pat-tag pat-del">Ablation</span></td><td>$H_3 = H_2^A + (1-\beta)V_2^A + \beta(V_2^{\mathrm{visit}} - C_2)$</td><td>See selected recording ledger</td><td>Tests the algebraic residual removal against $M_1$</td></tr>
+          <tr><td><b>E1_rand_curv</b></td><td><span class="pat-tag pat-del">Ablation</span></td><td>Replaces $C_2$ with random vector of identical norm $\|C_2\|_F$</td><td>See selected recording ledger</td><td>Tests whether $C_2$ direction (not just norm) matters</td></tr>
+          <tr class="row-ours"><td><b>E1 (Ours)</b></td><td><span class="pat-tag pat-del">TEBDİL</span></td><td>$H_3^{A'} = H_2^A + (1-\beta)V_2^A + \beta V_2^{\mathrm{visit}}$ ($\alpha{=}0.5, \beta{=}0.5$)</td><td>See selected recording ledger</td><td>Excursion-and-return anchored at the receiving state</td></tr>
+          <tr class="row-ours"><td><b>E2 (Ours)</b></td><td><span class="pat-tag pat-del">TEBDİL</span></td><td>Heuristic uncertainty, stability, donor, and budget checks; see recorded decision</td><td>See selected recording ledger</td><td>Label-free uncertainty-gated excursion</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     MAIN EXPERIMENTAL RESULTS (PHASE 7-8 TEST + PHASE 5, 6, 3 VALIDATION)
+============================================================ -->
+<section class="section rm-bg-soft" id="results">
+  <div class="container is-max-desktop">
+    <div class="has-text-centered" style="margin-bottom: 1.5rem;">
+      <span class="rm-eyebrow">Recorded Evaluation on ByteDance/Ouro-1.4B-Thinking</span>
+      <h2 class="title is-3 rm-section-title">Main Results, Self-Directed Controller &amp; Recorded Cost</h2>
+      <p class="rm-section-sub">
+        The tables are selected from recorded artifacts. Split names, problem counts, repeated seeds, confidence intervals, and current ledger warnings must be read with each selected recording. Repeated seeds are not independent problems, and no strict compute-matched claim is made.
+      </p>
+    </div>
+
+    <!-- Held-Out Test Table (Phase 7-8: 14 Methods) -->
+    <h4 id="selectedResultsTitle" style="font-weight:800; color:var(--rm-ink); margin-bottom:0.6rem;">1. Selected Recorded Experiment — Controller &amp; Baselines</h4>
+    <p id="runSummary" class="recording-status"></p>
+    <div class="rm-table-wrap">
+      <table class="rm-table" id="phase78TestTable"></table>
+    </div>
+
+    <!-- Task Family Breakdown + Pareto Frontier SVG -->
+    <div class="grid-2" style="margin-top: 1.6rem;">
+      <div class="figure-card">
+        <h4 style="font-weight:800; font-size:0.98rem; color:var(--rm-ink); margin-bottom:0.55rem;">
+          <i class="fas fa-chart-line" style="color:var(--rm-primary); margin-right:0.35rem;"></i>
+          Selected Recording Accuracy vs. Recurrent Calls
+        </h4>
+        <svg id="paretoChartSvg" viewBox="0 0 440 250" style="width:100%; height:auto;"></svg>
+        <p id="costPlotNote" class="figure-caption" style="margin-top:0.5rem;">Descriptive accuracy/call comparison, not a compute-matched efficiency claim. Methods with unverified costs are omitted. No hardcoded Pareto frontier is implied.</p>
+      </div>
+
+      <div class="figure-card">
+        <h4 style="font-weight:800; font-size:0.98rem; color:var(--rm-ink); margin-bottom:0.55rem;">
+          <i class="fas fa-layer-group" style="color:var(--rm-emerald); margin-right:0.35rem;"></i>
+          Selected Recording Accuracy by Task Family
+        </h4>
+        <div class="rm-table-wrap" style="box-shadow:none;">
+          <table class="rm-table" id="familyBreakdownTable"></table>
+        </div>
+        <div id="familyNote" class="insight-box" style="margin-top:0.8rem; font-size:0.85rem;">Family counts are drawn from the selected recording. Repeated seeds are not independent problems. Recovery in one example is not evidence of a general benefit.</div>
+      </div>
+    </div>
+
+    <!-- Phase 5 Multi-Branch Donor Selection Table -->
+    <h4 style="font-weight:800; color:var(--rm-ink); margin: 2.2rem 0 0.6rem;">
+      2. Multi-Branch Donor Selection (Phase 5 &middot; 3-Branch Pool: Primary $A$ + Donors $B, C$ &middot; $n = 18$)
+    </h4>
+    <div class="rm-table-wrap">
+      <table class="rm-table" id="phase5DonorTable"></table>
+    </div>
+
+    <!-- Phase 6 Selective Transfer & Subspace Projection Table -->
+    <h4 style="font-weight:800; color:var(--rm-ink); margin: 2.2rem 0 0.6rem;">
+      3. Selective Latent Transfer &amp; Coordinate-Restricted Projection (Phase 6 &middot; $n = 18$)
+    </h4>
+    <div class="rm-table-wrap">
+      <table class="rm-table" id="phase6SelectiveTable"></table>
+    </div>
+
+    <!-- Validation 12-Method Nonlinear Residual Table -->
+    <h4 style="font-weight:800; color:var(--rm-ink); margin: 2.2rem 0 0.6rem;">
+      4. Validation 12-Method Control &amp; Nonlinear-Residual Ablation Suite (Phase 3 &middot; $n = 18$)
+    </h4>
+    <div class="rm-table-wrap">
+      <table class="rm-table" id="phase3ValidationTable"></table>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SCALING: PHASE 1 (ALPHA x BETA) GRID & DIMENSION ABLATIONS
+============================================================ -->
+<section class="section" id="scaling">
+  <div class="container is-max-desktop">
+    <div class="has-text-centered" style="margin-bottom: 1.5rem;">
+      <span class="rm-eyebrow">Sensitivity &amp; Boundary Verification</span>
+      <h2 class="title is-3 rm-section-title">Excursion Grid $(\alpha \times \beta)$ &amp; Schedule Ablations</h2>
+      <p class="rm-section-sub">
+        Phase 1 sweeps 20 $(\alpha, \beta)$ pairs across $\alpha \in \{0.0, 0.25, 0.5, 0.75, 1.0\} \times \beta \in \{0.0, 0.25, 0.5, 1.0\}$,
+        testing the identity boundaries at $\alpha{=}0$ and $\beta{=}0$ alongside interior settings. These historical grid records do not replace current artifact validation.
+      </p>
+    </div>
+
+    <div class="grid-2">
+      <div class="figure-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.6rem;">
+          <h4 style="font-weight:800; font-size:0.98rem; color:var(--rm-ink); margin:0;">
+            Interactive $5 \times 4$ $(\alpha, \beta)$ Sensitivity Heatmap
+          </h4>
+          <select aria-label="Grid metric" id="gridMetricSelect" class="stage-select" style="font-size:0.78rem; padding:0.3rem 0.6rem;">
+            <option value="mean_curvature_frob">Nonlinear Curvature ||C₂||_F</option>
+            <option value="mean_delta_gold_logprob">Gold Log-Prob Delta (Δ log p)</option>
+            <option value="mean_max_abs_logit_diff">Max Abs Logit Diff vs S0</option>
+            <option value="mean_js_divergence">JS Divergence vs S0</option>
+          </select>
+        </div>
+        <div id="alphaBetaHeatmap" class="heatmap-grid"></div>
+        <p class="figure-caption" style="margin-top:0.75rem;">
+          The historical sweep records its identity-boundary and interior measurements. Inspect the corresponding artifact before treating any displayed value as current verification.
+        </p>
+      </div>
+
+      <div class="figure-card">
+        <h4 style="font-weight:800; font-size:0.98rem; color:var(--rm-ink); margin-bottom:0.6rem;">
+          Schedule Step ($t_{\mathrm{visit}}$) &times; Token Scope ($2 \times 2$ Ablation)
+        </h4>
+        <div class="rm-table-wrap" style="box-shadow:none;">
+          <table class="rm-table" id="dimAblationTable"></table>
+        </div>
+        <div class="insight-box" style="margin-top:0.9rem; font-size:0.86rem;">
+          <b>Historical schedule comparison:</b>
+          In the recorded ablation, the $t_{\mathrm{visit}}{=}2$ + <code>full</code> setting outperformed the tested $t{=}1$ setting. This does not establish global optimality outside that grid.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     CASE STUDY (DARK SECTION)
+============================================================ -->
+<section class="section rm-bg-dark" id="case-study">
+  <div class="container is-max-desktop">
+    <div class="has-text-centered" style="margin-bottom: 1.5rem;">
+      <span class="rm-eyebrow">Recorded Case Studies</span>
+      <h2 class="title is-3 rm-section-title">Recorded Recoveries and Failures</h2>
+      <p class="rm-section-sub">
+        Three real trace replays from <code>ByteDance/Ouro-1.4B-Thinking</code> illustrating recorded recovery,
+        a nonlinear-residual contrast, and honest over-excursion failure modes.
+      </p>
+    </div>
+
+    <div class="case-studies">
+      <div class="case-card r1">
+        <span class="case-tag">Case 1 · Recorded recovery</span>
+        <h4 style="font-weight:800;font-size:1.02rem;margin:0"><code>arith_test_003</code> (Gold = 48)</h4>
+        <div class="case-body"><b>Recorded prompt:</b> Evaluate (9 * 6) - (3 * 2). Output only the final integer.
+Answer: <br><br><b>S0:</b> <code>42</code> (incorrect)<br><b>P0:</b> <code>42</code> (incorrect)<br><b>P1:</b> <code>48</code> (correct)<br><b>M1:</b> <code>48</code> (correct)<br><b>E1:</b> <code>48</code> (correct)<br><b>E3_mlp:</b> <code>48</code> (correct)<br><br>The oracle and linear mixing also recover this case; it is not an exclusive TEBDİL rescue.<br><small>phase7_8_controller_test · seed 42</small></div>
+        <div class="case-answer"><button type="button" class="stage-btn load-case-btn" data-run="phase7_8_controller_test" data-problem="arith_test_003" data-seed="42" data-method="E3_mlp">Inspect recorded case</button></div>
+      </div>
+      <div class="case-card r2">
+        <span class="case-tag">Case 2 · Residual control contrast</span>
+        <h4 style="font-weight:800;font-size:1.02rem;margin:0"><code>graph_validation_002</code> (Gold = 17)</h4>
+        <div class="case-body"><b>Recorded prompt:</b> Directed graph edges: 0-&gt;1 (cost 9), 1-&gt;3 (cost 12), 0-&gt;2 (cost 9), 2-&gt;3 (cost 8), 1-&gt;2 (cost 4). What is the minimum path cost from node 0 to node 3? Output only the integer cost.
+Answer: <br><br><b>S0:</b> <code>13</code> (incorrect)<br><b>M1:</b> <code>13</code> (incorrect)<br><b>E1_no_curv:</b> <code>13</code> (incorrect)<br><b>E1_rand_curv:</b> <code>13</code> (incorrect)<br><b>E1:</b> <code>17</code> (correct)<br><br>These paired outputs describe this seed, not a causal proof or a general advantage.<br><small>phase3_ablations · seed 42</small></div>
+        <div class="case-answer"><button type="button" class="stage-btn load-case-btn" data-run="phase3_ablations" data-problem="graph_validation_002" data-seed="42" data-method="E1">Inspect recorded case</button></div>
+      </div>
+      <div class="case-card r3">
+        <span class="case-tag">Case 3 · Recorded degradation</span>
+        <h4 style="font-weight:800;font-size:1.02rem;margin:0"><code>arith_validation_003</code> (Gold = 40)</h4>
+        <div class="case-body"><b>Recorded prompt:</b> Compute the exact value of (8 * 4) + 12 - 4. Output only the integer result.
+Answer: <br><br><b>S0:</b> <code>40</code> (correct)<br><b>M1:</b> <code>36</code> (incorrect)<br><b>E1:</b> <code>36</code> (incorrect)<br><b>E1_rand_curv:</b> <code>40</code> (correct)<br><br>Fixed excursion changes a correct baseline output to an incorrect answer in this recorded case.<br><small>phase3_ablations · seed 42</small></div>
+        <div class="case-answer"><button type="button" class="stage-btn load-case-btn" data-run="phase3_ablations" data-problem="arith_validation_003" data-seed="42" data-method="E1">Inspect recorded case</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     TRACE EXPLORER TABLE (ALL REAL RECORDS)
+============================================================ -->
+<section class="section rm-bg-soft" id="examples">
+  <div class="container is-max-desktop">
+    <div class="has-text-centered" style="margin-bottom: 1.4rem;">
+      <span class="rm-eyebrow">Full Artifact Transparency</span>
+      <h2 class="title is-3 rm-section-title">Interactive Trace Explorer</h2>
+      <p class="rm-section-sub">
+        Browse and filter real execution traces across all eight recorded experiment sets.
+        Recording selection is shared with the replay and results above.
+        Click any row to load its recorded trace into the replay above.
+      </p>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem; align-items:center; justify-content:space-between;">
+      <div style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center;">
+        <select aria-label="Trace explorer recording" id="explorerSplitFilter" class="stage-select">
+          <option value="test_phase7_8">Controller Evaluation (recorded artifact)</option>
+          <option value="validation_phase5">3-Branch Donor Selection (recorded artifact)</option>
+          <option value="validation_phase6">Selective Coordinate Transfer (recorded artifact)</option>
+          <option value="test_phase4">Adaptive Evaluation (recorded artifact)</option>
+          <option value="validation_phase3">Nonlinear-Residual Controls (recorded artifact)</option>
+        </select>
+        <select aria-label="Trace explorer task family" id="explorerFamilyFilter" class="stage-select">
+          <option value="all">All Task Families</option>
+          <option value="arithmetic">Arithmetic</option>
+          <option value="logic">2-SAT Logic</option>
+          <option value="graph">Graph Shortest Path</option>
+        </select>
+        <select aria-label="Trace explorer method" id="explorerMethodFilter" class="stage-select">
+          <option value="all">All Methods</option>
+          <option value="E3_mlp">E3_mlp (Learned MLP)</option>
+          <option value="E3_ridge">E3_ridge (Learned Ridge)</option>
+          <option value="E3_no_exit">E3_no_exit</option>
+          <option value="H_budget">H_budget</option>
+          <option value="EXIT_2">EXIT_2</option>
+          <option value="RAND_CTRL">RAND_CTRL</option>
+          <option value="D_nearest">D_nearest</option>
+          <option value="D_learned">D_learned</option>
+          <option value="D_oracle">D_oracle</option>
+          <option value="E1_subspace">E1_subspace</option>
+          <option value="E2">E2</option>
+          <option value="E1">E1</option>
+          <option value="M1">M1</option>
+          <option value="M0">M0</option>
+          <option value="P0">P0</option>
+          <option value="P1">P1</option>
+          <option value="S0">S0</option>
+          <option value="S1">S1</option>
+          <option value="E1_no_curv">E1_no_curv</option>
+          <option value="E1_rand_curv">E1_rand_curv</option>
+        </select>
+      </div>
+      <span id="explorerCountBadge" style="font-family:'JetBrains Mono',monospace; font-size:0.8rem; color:var(--rm-sub); font-weight:700;"></span>
+    </div>
+
+    <div class="rm-table-wrap" style="max-height: 440px; overflow-y: auto;">
+      <table class="rm-table" id="traceExplorerTable">
+        <thead style="position: sticky; top: 0; z-index: 3;">
+          <tr>
+            <th>Problem ID</th>
+            <th>Family</th>
+            <th>Seed</th>
+            <th>Method</th>
+            <th>Gold</th>
+            <th>Pred</th>
+            <th>Status</th>
+            <th>$\|C_2\|_F$</th>
+            <th>$\Delta \log p(\text{gold})$</th>
+            <th>Calls</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="traceExplorerBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     ROADMAP TO FINAL PAPER
+============================================================ -->
+<section class="section rm-bg-tint" id="roadmap">
+  <div class="container is-max-desktop">
+    <div class="has-text-centered" style="margin-bottom: 1.5rem;">
+      <span class="rm-eyebrow">Research Limitations &amp; Next Checks</span>
+      <h2 class="title is-3 rm-section-title">What Remains Before Stronger Research Claims</h2>
+      <p class="rm-section-sub">
+        All core infrastructure, exact adapter equivalence tests, 12-method control suites, and pilot/test
+        validation runs are recorded, but larger independent and compute-matched evaluation remains before a paper-level claim. The remaining work is:
+      </p>
+    </div>
+
+    <div class="gain-grid">
+      <div class="gain-card">
+        <div class="num">Step 1</div>
+        <h5>Scale Test Sample Size ($n = 150\text{--}300$)</h5>
+        <p>
+          Expand held-out evaluation from $n{=}36$ to $150\text{--}300$ instances ($50\text{--}100$ per family across 3 seeds).
+          Choose the sample size from a preregistered power analysis, then report problem-cluster uncertainty and compute-matched comparisons.
+        </p>
+      </div>
+      <div class="gain-card">
+        <div class="num">Step 2</div>
+        <h5>Margin-Proportional $\beta(m_t^A, m_t^B)$ Damping</h5>
+        <p>
+          Replace hard binary gating in $E_2$ with smooth confidence weighting $\beta_t = \beta_{\max} \cdot \sigma(m_t^{\mathrm{visit}} - m_t^A)$
+          to prevent over-excursion on borderline-correct instances like <code>arith_validation_003</code>.
+        </p>
+      </div>
+      <div class="gain-card">
+        <div class="num">Step 3</div>
+        <h5>Paper Generation &amp; Vector Figures</h5>
+        <p>
+          Generate publication-ready PDF/SVG figures from verified artifacts and compile the manuscript
+          directly from <code>reports/final_results.json</code>, including theorem proofs and qualitative trace appendices.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     BIBTEX
+============================================================ -->
+<section class="section rm-bg-soft" id="bibtex">
+  <div class="container is-max-desktop">
+    <div class="has-text-centered" style="margin-bottom: 1.4rem;">
+      <span class="rm-eyebrow">Cite</span>
+      <h2 class="title is-3 rm-section-title">BibTeX</h2>
+    </div>
+    <div class="bibtex-box">
+      <button class="bibtex-copy" id="copyBibBtn" type="button">
+        <i class="fas fa-copy"></i>&nbsp;Copy
+      </button>
+      <pre id="bibtexCode">@misc{tebdil2026,
+  title   = {TEBD{\.I}L: Cooperative Latent Excursions for Recurrent Reasoning in Looped Language Models},
+  author  = {Kartkaya, Alper},
+  howpublished = {GitHub research project},
+  year    = {2026},
+  note    = {Evaluated on ByteDance/Ouro-1.4B-Thinking across 12 inference-time latent control regimes}
+}</pre>
+    </div>
+    <p><a href="https://github.com/AlperKartkaya/tebdil">Source code</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/reproduction.md">Reproduction</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/limitations.md">Limitations</a></p>
+  </div>
+</section>
+
 </main>
-<footer class="shell site-footer"><span>TEBDİL · Self-directed latent relocation for recurrent reasoning</span><a href="https://github.com/AlperKartkaya/tebdil/blob/main/CITATION.cff">Cite this work</a></footer>
+
+<footer class="footer" style="padding: 2rem 1.5rem; background: #f8fafc; border-top: 1px solid #e2e8f0;">
+  <div class="container is-max-desktop has-text-centered">
+    <p style="color:#475569; font-size:0.9rem;">
+      <b>TEBDİL Research Observatory</b> &middot; Recorded experiment artifacts, provenance, and limitations are available in the repository.
+    </p>
+  </div>
+</footer>
+
+<script src="static/tebdil_data.js"></script>
+<script src="static/app.js"></script>
 </body>
 </html>

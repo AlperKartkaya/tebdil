@@ -1,0 +1,32 @@
+{
+  "ablations": [
+    {
+      "visit_step": 1,
+      "token_scope": "last_token",
+      "accuracy": 0.1111,
+      "mean_curvature_frob": 1.2526,
+      "num_problems": 9
+    },
+    {
+      "visit_step": 1,
+      "token_scope": "full",
+      "accuracy": 0.1111,
+      "mean_curvature_frob": 43.5925,
+      "num_problems": 9
+    },
+    {
+      "visit_step": 2,
+      "token_scope": "last_token",
+      "accuracy": 0.1111,
+      "mean_curvature_frob": 0.944,
+      "num_problems": 9
+    },
+    {
+      "visit_step": 2,
+      "token_scope": "full",
+      "accuracy": 0.2222,
+      "mean_curvature_frob": 41.7568,
+      "num_problems": 9
+    }
+  ]
+}

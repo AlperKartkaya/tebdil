@@ -132,6 +132,8 @@ def build(root: Path = ROOT) -> None:
         "artifacts/evidence/audit_phase7_8_report.json", "artifacts/evidence/audit_fresh_test_report.json",
         "artifacts/counterfactuals/train_counterfactuals.json", "artifacts/counterfactuals/val_counterfactuals.json",
         "artifacts/counterfactuals/split_manifest.json",
+        "results/phase1_grid/grid_summary.json",
+        "results/phase3_ablations/dimension_ablations.json",
     ]
     sources += [p.relative_to(root).as_posix() for p in sorted((root / "artifacts/controllers").glob("*.json"))]
     for source in sources:
