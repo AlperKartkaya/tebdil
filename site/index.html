@@ -956,6 +956,12 @@
         <pre id="selectedTraceJson"></pre>
         <ul id="evidenceLinks"></ul>
       </details>
+      <details class="recording-evidence" id="ouroExecutionContract">
+        <summary>Ouro execution contract — real-checkpoint parity verified</summary>
+        <p>Fresh Apple MPS checks match native hidden states, gates and readouts at all four depths: three short token fixtures in FP32 and BF16, including padding and shifted positions. This verifies the cache-free adapter, not improved reasoning. FP32 and BF16 differ from each other; the evidence reports those differences.</p>
+        <p>Recorded experiments use forced <code>last_step</code> readout, not the default generation policy. Native gate selection does not itself save recurrent computation. Historical results and cost-provenance warnings remain unchanged.</p>
+        <p><a href="static/evidence/ouro_execution_contract.json">Download execution checks &amp; source hashes</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/ouro_execution_contract.md">Execution contract &amp; reproduction</a></p>
+      </details>
     </div>
   </div>
 </section>

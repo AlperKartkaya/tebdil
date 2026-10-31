@@ -159,7 +159,7 @@
     if(el("loadStatus")){el("loadStatus").textContent=message;el("loadStatus").setAttribute("aria-busy",String(loading));}
     if(button("retryLoad"))button("retryLoad").hidden=!failed;
     ["caseSelect","methodSelect","tokenSelect","stepSelect"].forEach((id)=>{const target=select(id);if(target)target.disabled=loading||failed;});
-    document.querySelectorAll(".stage-grid,.output-terminal,.recording-evidence,.question-box-live").forEach((item)=>{if(item instanceof HTMLElement)item.hidden=loading||failed;});
+    document.querySelectorAll(".stage-grid,.output-terminal,.recording-evidence:not(#ouroExecutionContract),.question-box-live").forEach((item)=>{if(item instanceof HTMLElement)item.hidden=loading||failed;});
     document.querySelectorAll(".step-pill,#playLoopBtn").forEach((item)=>{if(item instanceof HTMLButtonElement)item.disabled=loading||failed;});
     if(loading||failed){if(el("comparisonContext"))el("comparisonContext").textContent="";if(el("runSummary"))el("runSummary").textContent=message;}
     if(loading||failed)document.querySelectorAll(".metric-num").forEach((item)=>{item.textContent=loading?"Loading…":"Unavailable";});

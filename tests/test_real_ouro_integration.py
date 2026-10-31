@@ -17,6 +17,7 @@ from tebdil.core.excursions import execute_excursion_step
 from tebdil.core.state import ExcursionConfig, hash_tensor
 from tebdil.evaluation.metrics import compare_logits
 from tebdil.models.ouro_adapter import OuroRecurrentAdapter, PINNED_OURO_THINKING_REV
+from tebdil.models.validation import validate_ouro_execution
 
 
 @pytest.mark.real_model
@@ -37,6 +38,9 @@ def test_real_ouro_checkpoint_excursion_and_negative_controls(tmp_path: Path):
 
     prompt = "Directed graph edges: 0->1 (cost 3), 1->3 (cost 9), 0->2 (cost 4), 2->3 (cost 6), 1->2 (cost 2). What is the minimum path cost from node 0 to node 3? Output only the integer cost.\nAnswer: "
     input_ids = tokenizer.encode(prompt, return_tensors="pt").to(adapter.device)
+
+    execution_contract = validate_ouro_execution(adapter, input_ids)
+    assert execution_contract["all_passed"], execution_contract
 
     # 1. Verify exact equivalence with native OuroForCausalLM.forward
     with torch.no_grad():
@@ -120,6 +124,7 @@ def test_real_ouro_checkpoint_excursion_and_negative_controls(tmp_path: Path):
         "model_id": repo_id,
         "model_revision": PINNED_OURO_THINKING_REV,
         "device": str(adapter.device),
+        "execution_contract": execution_contract,
         "native_forward_equivalence": asdict(cmp_native),
         "negative_controls": {
             "alpha_zero_exact_match": bool(torch.equal(na_a0.hidden, ref_a3.hidden)),

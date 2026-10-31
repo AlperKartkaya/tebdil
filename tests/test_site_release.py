@@ -128,6 +128,27 @@ def test_original_inline_design_is_preserved_exactly() -> None:
     assert "TEBDİL: Self-Directed &amp; Cooperative Latent Excursions" in html
 
 
+def test_execution_contract_is_separate_and_traceable() -> None:
+    report_path = ROOT / "reports/ouro_execution_contract.json"
+    report = json.loads(report_path.read_text())
+    public = SITE / "static/evidence/ouro_execution_contract.json"
+    assert public.read_bytes() == report_path.read_bytes()
+    assert report["model_id"] == "ByteDance/Ouro-1.4B-Thinking"
+    assert report["all_passed"] is True
+    assert report["cache_mode"] == "disabled"
+    assert len(report["validations"]) == 6
+    for case in report["validations"]:
+        assert case["all_passed"] and len(case["steps"]) == 4
+        assert all(step["passed"] for step in case["steps"])
+    assert len(report["cross_precision_diagnostic"]) == 3
+    for source, digest in report["source_sha256"].items():
+        assert hashlib.sha256((ROOT / source).read_bytes()).hexdigest() == digest
+    html = INDEX.read_text()
+    assert 'id="ouroExecutionContract"' in html
+    assert "not improved reasoning" in html
+    assert any(e["source"] == "reports/ouro_execution_contract.json" for e in load_manifest()["evidence"])
+
+
 def test_primary_controls_and_states_are_present() -> None:
     parser = parse_site()
     required = {

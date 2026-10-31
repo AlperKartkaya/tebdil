@@ -24,6 +24,10 @@ The project supports Python 3.11–3.13; the local verification environment uses
 
 ## 3. Verify real Ouro execution
 
+The [execution contract](ouro_execution_contract.md) defines the exact recurrence,
+positions, masks and readout modes. Its [fresh machine-readable checks](../reports/ouro_execution_contract.json)
+cover every depth on FP32 and BF16; these checks do not rerun the task benchmark.
+
 Model: `ByteDance/Ouro-1.4B-Thinking`, revision `3aaa2224253a92ca45cf2e3d427c360e1ef9c93d`. Vendored model definitions live in [`vendor/ouro_1_4b_thinking/`](../vendor/ouro_1_4b_thinking/). Checkpoint identity is recorded in [model provenance](../site/static/evidence/model_provenance.json).
 
 The real-model integration test and supplied experiment configurations use `local_files_only=True`. Populate the local Hugging Face cache with this exact checkpoint revision before executing them; the static export is not a substitute for model weights.
@@ -32,6 +36,7 @@ The real-model integration test and supplied experiment configurations use `loca
 .venv/bin/python -m tebdil.cli inspect-model --model ByteDance/Ouro-1.4B-Thinking
 .venv/bin/pytest -q -m real_model
 .venv/bin/python -m tebdil.cli validate-adapter --config configs/phase1_smoke.yaml
+uv run python scripts/verify_ouro_execution.py --output /tmp/ouro-execution-new.json
 ```
 
 The latest local full suite passed 68 tests, including real Ouro integration. Selected real replays ran on Apple MPS; CUDA was unavailable. The [verification record](../reports/mvp_scientific_verification.md) separates those checks from unresolved historical audit failures.

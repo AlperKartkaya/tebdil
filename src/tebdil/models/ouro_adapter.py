@@ -39,10 +39,12 @@ class _OuroStepContextData:
 
 
 class OuroRecurrentAdapter:
-    """Stepwise RecurrentAdapter for OuroForCausalLM with exact forward equivalence.
+    """Full-prefix, cache-free recurrent execution of the vendored Ouro model.
 
     Enforces `use_cache=False` during recurrent state transitions so that
     branching and excursions never alias or corrupt KV caches.
+    `last_step` forces the latest state; `native_gate` honors the model's
+    configured forced step or threshold. Neither readout saves native loop work.
     """
 
     def __init__(
@@ -188,12 +190,17 @@ class OuroRecurrentAdapter:
         self,
         input_ids: Tensor,
         attention_mask: Optional[Tensor] = None,
+        position_ids: Optional[Tensor] = None,
     ) -> BranchState:
         """Prepare initial embedding state H_0 and precompute causal masks & RoPE."""
         if input_ids.dim() == 1:
             input_ids = input_ids.unsqueeze(0)
+        if input_ids.dim() != 2 or input_ids.shape[1] == 0:
+            raise ValueError("input_ids must be a nonempty [batch, tokens] tensor")
         input_ids = input_ids.to(device=self.device)
         if attention_mask is not None:
+            if attention_mask.shape != input_ids.shape:
+                raise ValueError("attention_mask must match input_ids [batch, tokens]")
             attention_mask = attention_mask.to(device=self.device)
 
         ouro_base = self.model.model
@@ -201,7 +208,18 @@ class OuroRecurrentAdapter:
         cache_position = torch.arange(
             0, inputs_embeds.shape[1], device=inputs_embeds.device
         )
-        position_ids = cache_position.unsqueeze(0)
+        if position_ids is None:
+            position_ids = cache_position.unsqueeze(0)
+        else:
+            if (
+                position_ids.ndim != 2
+                or position_ids.shape[1] != input_ids.shape[1]
+                or position_ids.shape[0] not in (1, input_ids.shape[0])
+                or position_ids.dtype != torch.long
+                or bool((position_ids < 0).any())
+            ):
+                raise ValueError("position_ids must be nonnegative int64 [1 or batch, tokens]")
+            position_ids = position_ids.to(device=self.device).detach().clone()
 
         mask_kwargs = {
             "config": ouro_base.config,
@@ -251,7 +269,11 @@ class OuroRecurrentAdapter:
 
     @torch.no_grad()
     def transition(self, state: BranchState) -> BranchState:
-        """Execute one full recurrent UT step (all 24 layers + self.norm + gate)."""
+        """Execute one shared-stack step, preserving native boundary RMSNorm and gate."""
+        if state.context.cache_mode != "disabled":
+            raise ValueError("Ouro excursions require cache_mode='disabled'")
+        if state.context.step != state.recurrent_step or state.recurrent_step < 0:
+            raise ValueError("TransitionContext step must match the nonnegative recurrent step")
         ctx_key = f"{state.context.token_ids_hash}:{state.context.mask_hash}:{state.context.positions_hash}"
         if ctx_key not in self._step_context_store:
             raise KeyError(
@@ -309,6 +331,9 @@ class OuroRecurrentAdapter:
         # Native gate readout matching OuroForCausalLM.forward (align post-step hidden states with gate_history)
         gate_list = list(state.gate_history)
         hidden_states_list = list(state.hidden_history[-len(gate_list) :])
+        forced_step = self.model.early_exit_step
+        if forced_step is not None and 0 <= forced_step < len(hidden_states_list):
+            return self.model.lm_head(hidden_states_list[forced_step])
         exit_threshold = self.model.early_exit_threshold
         if exit_threshold is None or len(gate_list) != len(hidden_states_list):
             return self.model.lm_head(state.hidden)

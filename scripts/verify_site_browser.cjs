@@ -11,6 +11,14 @@ const base=process.env.SITE_URL||'http://127.0.0.1:8093/';
  page.on('response',r=>{if(r.status()>=400)failed.push([r.status(),r.url()])});
  await page.goto(base,{waitUntil:'networkidle'});
  await page.waitForFunction(()=>document.querySelector('#loadStatus')?.textContent.includes('SHA-256 verified'));
+ const contract=page.locator('#ouroExecutionContract');
+ await contract.locator('summary').focus();await page.keyboard.press('Enter');
+ assert(await contract.getByText('Fresh Apple MPS checks',{exact:false}).isVisible());
+ const contractResponse=await page.request.get(new URL(await contract.locator('a').first().getAttribute('href'),base).href);
+ assert(contractResponse.ok());const execution=await contractResponse.json();
+ assert.equal(execution.all_passed,true);assert.equal(execution.validations.length,6);
+ assert(execution.validations.every(v=>v.steps.length===4&&v.steps.every(s=>s.passed)));
+ await contract.locator('summary').press('Enter');
  await page.screenshot({path:'/tmp/tebdil-final-desktop-hero.png'});
  await page.locator('#excursionStageSvg').scrollIntoViewIfNeeded();
  await page.screenshot({path:'/tmp/tebdil-final-desktop-stage.png'});
@@ -82,11 +90,11 @@ const base=process.env.SITE_URL||'http://127.0.0.1:8093/';
    const details=await page.locator('#stageStepNarrative').innerText();assert(details.includes('learned_mlp_gated_selected_EXCURSION_d1_a0.65_b0.65_full'));assert(details.includes('not a probability'));assert(details.includes('11 recurrent calls'));
    assert((await page.locator('#terminalCallCost').innerText()).includes('22'));
   }else{assert(narrative.includes('ID not captured'));assert(narrative.includes('Unavailable'));}
-  await page.locator('.recording-evidence summary').click();
+  await page.locator('.recording-evidence summary').first().click();
   const download=page.waitForEvent('download');await page.locator('#downloadTrace').click();
   assert.deepEqual(JSON.parse(fs.readFileSync(await (await download).path(),'utf8')),raw);
   for(const id of ['downloadRun','downloadConfig']){const response=await page.request.get(new URL(await page.locator('#'+id).getAttribute('href'),page.url()).href);assert(response.ok());}
-  await page.locator('.recording-evidence summary').click();
+  await page.locator('.recording-evidence summary').first().click();
  }
  // Neither the select nor method chips may silently replace a requested depth.
  await page.locator('#demo .load-case-btn').first().click();
@@ -131,6 +139,7 @@ const base=process.env.SITE_URL||'http://127.0.0.1:8093/';
  await isolated.goto(base,{waitUntil:'networkidle'});
  await isolated.waitForFunction(()=>document.querySelector('#loadStatus').textContent.includes('Recording unavailable'));
  assert(await isolated.locator('.stage-grid').isHidden());assert(await isolated.locator('#retryLoad').isVisible());
+ assert(await isolated.locator('#ouroExecutionContract').isVisible());
  assert(await isolated.locator('#caseSelect').isDisabled());
  await isolated.unroute('**/static/data/**');await isolated.click('#retryLoad');
  await isolated.waitForFunction(()=>document.querySelector('#loadStatus').textContent.includes('SHA-256 verified'));

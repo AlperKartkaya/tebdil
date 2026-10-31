@@ -98,11 +98,10 @@ def cmd_validate_adapter(args: argparse.Namespace) -> int:
         input_ids = tokenizer.encode(prob.prompt, return_tensors="pt").to(device)
         with torch.no_grad():
             if hasattr(adapter.model, "early_exit_threshold"):
-                ref_out = adapter.model(
-                    input_ids=input_ids,
-                    use_cache=False,
-                    exit_at_step=adapter.total_steps - 1,
-                )
+                native_kwargs = {"input_ids": input_ids, "use_cache": False}
+                if adapter.readout_mode == "last_step":
+                    native_kwargs["exit_at_step"] = adapter.total_steps - 1
+                ref_out = adapter.model(**native_kwargs)
                 ref_logits = ref_out.logits
             else:
                 ref_logits = adapter.model(input_ids, num_steps=adapter.total_steps)
@@ -130,6 +129,7 @@ def cmd_validate_adapter(args: argparse.Namespace) -> int:
         "model_revision": model_rev,
         "device": str(device),
         "total_ut_steps": adapter.total_steps,
+        "readout_mode": getattr(adapter, "readout_mode", "last_step"),
         "all_passed": all_passed,
         "checks": results,
     }
