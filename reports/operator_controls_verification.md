@@ -1,6 +1,6 @@
 # Gate C: operator controls verification
 
-The bounded operator study and local verification are complete; public deployment verification is pending.
+Gate C is complete, committed and publicly deployed.
 
 ## What changed
 
@@ -72,4 +72,10 @@ still requires a separately demonstrated useful intervention and frozen evaluati
   identity is unchanged. Seven pre-existing dirty research artifacts are untouched.
 - The frozen protocol's initial status reflects its pre-run snapshot; this record
   carries current completion status.
-- Public deployment and browser verification are the remaining release gate.
+- Commit `65cd09b`: [CI and Pages deployment passed](https://github.com/AlperKartkaya/tebdil/actions/runs/41241237400).
+- Full public browser pass repeats the local matrix, including new evidence retrieval
+  and corrected R0 replay. Public index, app, manifest and operator-evidence SHA-256
+  match the committed files. No browser errors or normal-request failures.
+
+Only after this deployment and verification was gate C closed. Gate D may now begin;
+no controller-utility or publication gate is implicitly cleared.
