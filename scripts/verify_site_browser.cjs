@@ -40,6 +40,9 @@ const base=process.env.SITE_URL||'http://127.0.0.1:8093/';
  assert.equal(smoke.records.length,1);assert(smoke.records.every(r=>r.split==='development'&&r.completed&&r.format_valid));
  assert.equal(smoke.actual_recurrent_calls,smoke.summary.generated_tokens*4);
  assert((await contract.innerText()).includes('not an intervention-accuracy result'));
+ for(const source of ['docs/completed_answer_comparison_protocol.md','reports/completed_answer_comparison_verification.md']){
+   assert.equal(await contract.locator(`a[href$="${source}"]`).count(),1);
+ }
  await contract.screenshot({path:'/tmp/tebdil-generation-evidence.png'});
  await contract.locator('summary').press('Enter');
  await page.screenshot({path:'/tmp/tebdil-final-desktop-hero.png'});

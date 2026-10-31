@@ -731,3 +731,7 @@ def test_completed_answer_evidence_stays_in_existing_disclosure() -> None:
     assert 'not an intervention-accuracy result' in html
     assert 'static/evidence/ouro_completed_answer_smoke.json' in html
     assert 'docs/completed_answer_protocol.md' in html
+    disclosure = html.split('id="ouroExecutionContract"', 1)[1].split('</details>', 1)[0]
+    assert 'docs/completed_answer_comparison_protocol.md' in disclosure
+    assert 'reports/completed_answer_comparison_verification.md' in disclosure
+    assert 'Comparison evidence pending' in disclosure
