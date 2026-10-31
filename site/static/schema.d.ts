@@ -22,6 +22,7 @@ interface ExcursionTelemetry {
   curvature_frob?: number; skipped_unstable?: boolean; clipped?: boolean;
   donor_branch_id?: string; receiving_state_hash?: string; visit_state_hash?: string;
   returned_shift_vs_normal_frob?: number; branch_relative_distance?: number;
+  update_visit_frob?: number; post_receiving_state_hash?: string;
 }
 interface PolicyDecision {
   action_type?: string; action?: "visit" | "no_visit"; reason?: string; action_id?: string; donor_index?: number;

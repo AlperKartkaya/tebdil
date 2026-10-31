@@ -388,3 +388,74 @@ state.step = 2; assert.equal(decision().action_type, 'EXIT');
         ["node", "-e", script], cwd=ROOT, capture_output=True, text=True, check=False
     )
     assert completed.returncode == 0, completed.stderr
+
+
+def test_method_comparison_preserves_context_including_missing_snapshots() -> None:
+    script = r"""
+const fs=require('fs'), assert=require('node:assert/strict');
+const source=fs.readFileSync('site/static/app.js','utf8');
+const state={run:'same-run',problem:'same-problem',seed:'42',method:'S1',token:3,step:5};
+let entries=[], samples=[], options={}, renders=0, stopped=0;
+const controls={methodSelect:{},tokenSelect:{},stepSelect:{}};
+const select=id=>controls[id], ledger=()=>entries, snapshots=()=>samples;
+const trace=()=>({step_snapshots:[{step:1},{step:2},{step:3},{step:4}]});
+const setOptions=(target,items,value)=>{const id=Object.keys(controls).find(id=>controls[id]===target);options[id]=items;target.value=String(value);};
+const stopAutoLoop=()=>stopped++, renderAll=()=>renders++;
+const start=source.indexOf('  function changeMethod('), end=source.indexOf('\n  function renderAll()',start);
+assert(start>=0&&end>start,'comparison controls need one shared changeMethod handler');
+eval(source.slice(start,end)+`
+changeMethod('E1');
+assert.deepEqual(state,{run:'same-run',problem:'same-problem',seed:'42',method:'E1',token:3,step:5});
+assert.equal(renders,1);assert.equal(stopped,1);
+assert(options.tokenSelect.some(([v,label])=>v===3&&label.includes('not recorded')));
+assert(options.stepSelect.some(([v,label])=>v===5&&label.includes('not recorded')));
+assert.deepEqual(availableSteps(),[],'no fabricated default steps');
+entries=[{decoded_token:'4'},{decoded_token:'8'}];state.token=1;samples=[{step:1},{step:2}];
+changeMethod('S0');assert.equal(state.token,1);assert.equal(state.step,5);
+assert(options.stepSelect.some(([v,label])=>v===5&&label.includes('not recorded')));
+state.step=2;changeMethod('M1');assert.equal(state.step,2);assert.equal(state.token,1);
+`);
+assert(source.includes('changeMethod(select("methodSelect").value)'));
+assert(source.includes('changeMethod(item.getAttribute("data-method")'));
+"""
+    completed = subprocess.run(["node", "-e", script], cwd=ROOT, capture_output=True, text=True, check=False)
+    assert completed.returncode == 0, completed.stderr
+
+
+
+def test_demo_copy_does_not_fix_recording_dependent_parameters() -> None:
+    html = INDEX.read_text(encoding="utf-8")
+    script = (SITE / "static/app.js").read_text(encoding="utf-8")
+    for stale in ("midpoint", "2-branch", "2-Branch Vote", "Best-of-2", r"n{=}36", r"\alpha{=}0.5"):
+        assert stale not in html
+    assert "Learned action score:" not in script
+    assert "Recorded action score:" in script
+    assert "not a probability" in script
+
+
+def test_selected_step_narrative_does_not_invent_visits_for_controls() -> None:
+    script = r"""
+const fs=require('fs'),assert=require('node:assert/strict'),source=fs.readFileSync('site/static/app.js','utf8');
+const start=source.indexOf('  function renderStepNarrative('),end=source.indexOf('\n  function renderPca(',start);
+const target={},el=()=>target,state={step:2,token:0};
+const num=(v,d=3)=>typeof v==='number'?v.toFixed(d):'Unavailable',esc=v=>String(v??'Unavailable');
+let tel={step:2,effective_alpha:.65,beta:.65,update_visit_frob:72.143,returned_shift_vs_normal_frob:42.232};
+const telemetry=()=>tel,decision=()=>({action_type:'CONTINUE',reason:'fixed_schedule',predicted_advantage:0});
+const token=()=>({recurrent_block_calls:11,donor_calls:6,visit_calls:1}),availableSteps=()=>[1,2,3,4];
+eval(source.slice(start,end)+`
+for(const kind of ['mix','switch','noise','normal']){
+ renderStepNarrative({method:'M1'},{kind,note:'Control; no anchored excursion'},[]);
+ assert(!target.innerHTML.includes('Compute V(visit)'));
+ assert(!target.innerHTML.includes('keep A as anchor'));
+ assert(target.innerHTML.includes('Recorded action score:'));
+}
+renderStepNarrative({method:'E1'},{kind:'excursion',note:'Visited response'},[]);
+assert(target.innerHTML.includes('42.232'));assert(target.innerHTML.includes('ID not captured'));
+assert(target.innerHTML.includes('keep A as anchor'));
+tel.skipped_unstable=true;
+renderStepNarrative({method:'E1'},{kind:'normal',note:'Intervention skipped'},[]);
+assert(!target.innerHTML.includes('Compute V(visit)'));assert(target.innerHTML.includes('Intervention skipped'));
+`);
+"""
+    completed = subprocess.run(["node", "-e", script], cwd=ROOT, capture_output=True, text=True, check=False)
+    assert completed.returncode == 0, completed.stderr

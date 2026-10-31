@@ -98,7 +98,7 @@
     setOptions(select("runSelect"),Object.entries(DATA.runs).map(([id,item])=>[id,item.label]),state.run);
     select("runSelect")?.addEventListener("change",()=>{ state.run=select("runSelect").value; state.problem=""; state.seed=""; loadRun(); });
     select("caseSelect")?.addEventListener("change",()=>{ const [problem,seed]=select("caseSelect").value.split("|"); stopAutoLoop();state.problem=problem;state.seed=seed;syncMethods();renderAll(); });
-    select("methodSelect")?.addEventListener("change",()=>{ stopAutoLoop();state.method=select("methodSelect").value; state.token=0; state.step=2; syncTokenAndSteps();renderAll(); });
+    select("methodSelect")?.addEventListener("change",()=>changeMethod(select("methodSelect").value));
     select("tokenSelect")?.addEventListener("change",()=>{ stopAutoLoop();state.token=Number(select("tokenSelect").value);syncSteps();renderAll(); });
     select("stepSelect")?.addEventListener("change",()=>{ state.step=Number(select("stepSelect").value);renderAll(); });
     document.querySelectorAll(".step-pill").forEach((item)=>item.addEventListener("click",()=>{ stopAutoLoop(); state.step=Number(item.getAttribute("data-step"))||1; if(select("stepSelect")) select("stepSelect").value=String(state.step); renderAll(); }));
@@ -112,6 +112,7 @@
   }
   function startAutoLoop() {
     stopAutoLoop();
+    if(availableSteps().length<2)return;
     if(el("playLoopIcon")) el("playLoopIcon").className="fas fa-pause";
     if(el("playLoopText")) el("playLoopText").textContent="Pause";
     autoLoopTimer=window.setInterval(()=>{ const steps=availableSteps(); const index=Math.max(0,steps.indexOf(state.step)); state.step=steps[(index+1)%steps.length]; if(select("stepSelect"))select("stepSelect").value=String(state.step);renderAll(); },1800);
@@ -146,8 +147,8 @@
       }
       setOptions(select("caseSelect"),[...pairs].map(([pairKey,methods])=>{const first=methods.S0||Object.values(methods)[0];return [pairKey,`${first.problem_id} · seed ${first.seed} · ${first.family}`];}),key);
       if(select("explorerSplitFilter")) setOptions(select("explorerSplitFilter"),Object.entries(DATA.runs).map(([id,item])=>[id,`${item.label} · ${item.record_count.toLocaleString()} traces`]),state.run);
-      syncMethods(); setLoading(false,`${recording.record_count.toLocaleString()} recorded traces · ${recording.num_problems} distinct problems · ${recording.seeds.length} seed(s) · SHA-256 verified in this browser.`);
-      renderAll(); renderResultTables(); renderExplorer(); loadAuxiliaryEvidence();
+      setLoading(false,`${recording.record_count.toLocaleString()} recorded traces · ${recording.num_problems} distinct problems · ${recording.seeds.length} seed(s) · SHA-256 verified in this browser.`);
+      syncMethods();renderAll(); renderResultTables(); renderExplorer(); loadAuxiliaryEvidence();
     } catch(error) {
       if(version!==loadVersion)return;
       const message=error instanceof Error?error.message:String(error);
@@ -160,7 +161,7 @@
     ["caseSelect","methodSelect","tokenSelect","stepSelect"].forEach((id)=>{const target=select(id);if(target)target.disabled=loading||failed;});
     document.querySelectorAll(".stage-grid,.output-terminal,.recording-evidence,.question-box-live").forEach((item)=>{if(item instanceof HTMLElement)item.hidden=loading||failed;});
     document.querySelectorAll(".step-pill,#playLoopBtn").forEach((item)=>{if(item instanceof HTMLButtonElement)item.disabled=loading||failed;});
-    if(loading||failed){if(el("runSummary"))el("runSummary").textContent=message;}
+    if(loading||failed){if(el("comparisonContext"))el("comparisonContext").textContent="";if(el("runSummary"))el("runSummary").textContent=message;}
     if(loading||failed)document.querySelectorAll(".metric-num").forEach((item)=>{item.textContent=loading?"Loading…":"Unavailable";});
   }
   function syncMethods() {
@@ -168,21 +169,37 @@
     available.sort((a,b)=>{const ai=ORDER.indexOf(a),bi=ORDER.indexOf(b);return(ai<0?999:ai)-(bi<0?999:bi);});
     setOptions(select("methodSelect"),available.map((method)=>[method,`${name(method)} · ${method}`]),state.method); syncTokenAndSteps();
   }
+  function changeMethod(method) {
+    stopAutoLoop();state.method=method;
+    if(select("methodSelect"))select("methodSelect").value=method;
+    syncTokenAndSteps();renderAll();
+  }
   function syncTokenAndSteps() {
-    const entries=ledger();state.token=Math.min(Math.max(0,state.token),Math.max(0,entries.length-1));
-    setOptions(select("tokenSelect"),entries.length?entries.map((item,index)=>[index,`Token ${index+1}: ${JSON.stringify(item.decoded_token??item.token_id)}`]):[[0,"Final output · per-token telemetry unavailable"]],state.token);
-    if(select("tokenSelect"))select("tokenSelect").disabled=!entries.length;syncSteps();
+    const entries=ledger();
+    /** @type {Array<[number,string]>} */
+    const items=entries.map((item,index)=>[index,`Token ${index+1}: ${JSON.stringify(item.decoded_token??item.token_id)}`]);
+    if(!entries.length&&trace()?.step_snapshots?.length)items.push([0,"Token 1 · legacy snapshots; token cost unavailable"]);
+    if(!items.some(([index])=>index===state.token))items.push([state.token,`Token ${state.token+1} · not recorded for this method`]);
+    setOptions(select("tokenSelect"),items,state.token);
+    if(select("tokenSelect"))select("tokenSelect").disabled=items.length<2;syncSteps();
   }
   function availableSteps() {
-    const steps=[...new Set(snapshots().map((item)=>item.step))].sort((a,b)=>a-b);return steps.length?steps:[1,2,3,4];
+    return [...new Set(snapshots().map((item)=>item.step))].sort((a,b)=>a-b);
   }
   function syncSteps() {
-    const steps=availableSteps();if(!steps.includes(state.step))state.step=steps.includes(2)?2:steps[0];
-    setOptions(select("stepSelect"),steps.map((step)=>[step,`Step ${step}`]),state.step);
+    const steps=availableSteps();
+    /** @type {Array<[number,string]>} */
+    const items=steps.map((step)=>[step,`Step ${step}`]);
+    if(!steps.includes(state.step))items.push([state.step,`Step ${state.step} · not recorded for this method`]);
+    setOptions(select("stepSelect"),items,state.step);
+    if(select("stepSelect"))select("stepSelect").disabled=!steps.length;
   }
   function renderAll() {
     const row=trace();if(!row)return;
     document.querySelectorAll(".step-pill").forEach((item)=>{const selected=Number(item.getAttribute("data-step"))===state.step;item.classList.toggle("is-active",selected);item.setAttribute("aria-pressed",String(selected));if(item instanceof HTMLButtonElement)item.disabled=!availableSteps().includes(Number(item.getAttribute("data-step")));});
+    if(button("playLoopBtn"))button("playLoopBtn").disabled=availableSteps().length<2;
+    const context=`Same case / seed / token position / step across methods. ${snapshot()?"Exact snapshot recorded.":"Snapshot unavailable; no neighboring token or step substituted."}`;
+    if(el("comparisonContext")&&el("comparisonContext").textContent!==context)el("comparisonContext").textContent=context;
     if(el("stageStepLabel"))el("stageStepLabel").textContent=`Token ${state.token+1} · recurrent step t = ${state.step} · ${name(row.method)}`;
     if(el("liveProblemHeader"))el("liveProblemHeader").textContent=`Problem: ${row.problem_id} (seed=${row.seed}) · ${row.split} · ${row.family}`;
     if(el("liveGoldBadge"))el("liveGoldBadge").textContent=`Verified target: ${row.gold_answer}`;
@@ -219,6 +236,12 @@
   }
   function renderStageSvg(row) {
     const svg=el("excursionStageSvg");if(!(svg instanceof SVGElement))return;
+    if(!snapshot()) {
+      svg.innerHTML='<text x="340" y="145" text-anchor="middle" font-size="15" fill="#475569">Selected snapshot not recorded</text><text x="340" y="172" text-anchor="middle" font-size="12" fill="#64748b">Choose an available token or step; final output below remains recorded.</text>';
+      if(el("liveFormulaPill"))el("liveFormulaPill").textContent="No snapshot substituted";
+      if(el("stageStepNarrative"))el("stageStepNarrative").textContent=`Token ${state.token+1}, step ${state.step} is unavailable for ${name(row.method)}. Comparison context is preserved; no visit, return or controller action is inferred.`;
+      return;
+    }
     // Retain the original fork/visit/return diagram; the path covers the selected token, not just one snapshot.
     const states=snapshots(),event=states.find((item)=>item.excursion_telemetry)?.excursion_telemetry;
     const entry=token(),model=mechanism(row,event),activeStep=state.step;
@@ -330,14 +353,24 @@
         <text x="440" y="273" text-anchor="middle" font-size="8.5" font-family="JetBrains Mono,monospace" fill="#64748b">${model.kind === "parallel" ? `B: ${esc(row.donor_b_answer)}` : "Shared model weights"}</text>
       </g>
     `;
-    const exact=snapshot();
     if(el("liveFormulaPill"))el("liveFormulaPill").textContent=model.formula;
-    if(el("stageStepNarrative"))el("stageStepNarrative").innerHTML=`<b>${esc(name(row.method))}:</b> ${esc(model.note)} The schematic shows the selected token's recorded computation path; positions are not latent coordinates. ${states.filter((item)=>item.excursion_telemetry).length>1?"Only the first visit is drawn; inspect later events in step telemetry. ":""}${availableSteps().some((step)=>step>4)?"The four-column schematic does not depict every depth; use the step selector for later snapshots. ":""}Highlight: token ${state.token+1}, recurrent step ${state.step}. ${exact?"Exact recorded snapshot appears in telemetry.":"No exact snapshot recorded; no neighboring state is substituted."}`;
+    renderStepNarrative(row,mechanism(row),states);
+  }
+  function renderStepNarrative(row,model,states) {
+    const target=el("stageStepNarrative"),tel=telemetry(),d=decision(),entry=token();if(!target)return;
+    const previous=states.find((item)=>item.excursion_telemetry?.step===state.step-1)?.excursion_telemetry;
+    let selected=tel?"Recorded intervention.":"No outgoing controller decision or visit recorded at this step.";
+    if(d)selected=`Controller: ${d.action_type}.`;
+    if(tel&&!tel.skipped_unstable&&model.kind==="excursion")selected+=` ${row.method==="E0"?"Random-direction visit":`Visit toward ${tel.donor_branch_id||"donor (ID not captured)"}`} with α_eff=${num(tel.effective_alpha,3)}. Compute V(visit)=F(visit)−visit, ‖V(visit)‖=${num(tel.update_visit_frob,3)}. Transfer with β=${num(tel.beta,3)}; keep A as anchor. Returned shift vs ordinary F(A): ${num(tel.returned_shift_vs_normal_frob,3)} (not the residual ‖C‖).`;
+    else if(tel)selected+=` ${model.note}`;
+    else if(previous&&!previous.skipped_unstable)selected+=" This snapshot follows the recorded intervention at the preceding step; it is not another excursion.";
+    const reason=d?.reason||(!d&&tel?entry?.policy_reason:null);
+    target.innerHTML=`<b>Selected step ${state.step} · token ${state.token+1}:</b> ${esc(selected)}<details><summary>Decision reason &amp; token compute</summary><p>Reason: <code>${esc(reason||"not captured at this step")}</code>. ${d?.predicted_advantage!==undefined?`Recorded action score: ${num(d.predicted_advantage,4)} (not a probability). `:""}${entry?`Token total: ${entry.recurrent_block_calls} recurrent calls; donor ${entry.donor_calls??"unavailable"}, visit ${entry.visit_calls??"unavailable"}.`:"Legacy first-token snapshots only; token-level compute unavailable."}</p>${tel?`<p>Receiving / visited state hashes: <code>${esc(tel.receiving_state_hash)}</code> / <code>${esc(tel.visit_state_hash)}</code>. Post-intervention state: <code>${esc(tel.post_receiving_state_hash)}</code>. Missing hashes or norms remain unavailable; see the selected raw trace below.</p>`:""}</details><small>${esc(model.note)} Whole-token schematic, not latent coordinates.${states.filter((item)=>item.excursion_telemetry).length>1?" Only the first visit is drawn.":""}${availableSteps().some((step)=>step>4)?" Use the step selector beyond the four-column schematic.":""}</small>`;
   }
   function renderPca(row) {
     const svg=el("pcaPlotSvg");if(!(svg instanceof SVGElement))return;
     const note=el("pcaNote");if(el("pcaVarLabel"))el("pcaVarLabel").textContent="Projection unavailable";
-    if(state.token!==0||row.method==="E0") {svg.innerHTML=`<text x="190" y="86" text-anchor="middle" font-size="11" fill="#64748b">Projection withheld</text>`;if(note)note.textContent=state.token!==0?"Only token 1 coordinates were recorded; they are not borrowed for later tokens.":"Random-direction visit coordinates were reconstructed historically, not captured; projection withheld.";return;}
+    if(!snapshot()||state.token!==0||row.method==="E0") {svg.innerHTML=`<text x="190" y="86" text-anchor="middle" font-size="11" fill="#64748b">Projection withheld</text>`;if(note)note.textContent=!snapshot()?"No projection highlighted: the selected snapshot is not recorded.":state.token!==0?"Only token 1 coordinates were recorded; they are not borrowed for later tokens.":"Random-direction visit coordinates were reconstructed historically, not captured; projection withheld.";return;}
     const branches=Object.entries(row.pca_coords||{}).filter(([branch,points])=>branch!=="VISIT"&&Array.isArray(points)&&points.length);
     const points=branches.flatMap(([,values])=>values).filter((point)=>point.length>=2&&point.every(Number.isFinite));
     if(!points.length){svg.innerHTML=`<text x="190" y="86" text-anchor="middle" font-size="11" fill="#64748b">No recorded projection</text>`;if(note)note.textContent="No coordinates are available for the selected trace.";return;}
@@ -366,10 +399,12 @@
     const main=el("terminalMainText"),bar=el("terminalMethodBadges"),cost=el("terminalCallCost");if(!main||!bar)return;
     const verified=ledgerMatches(row),base=baseline(),entry=token(),d=decision();
     if(cost)cost.textContent=verified?`Recorded calls: ${row.recurrent_block_calls} · scoring: ${row.scoring_recurrent_calls||0} separate`:`Execution cost unverified · raw reference calls: ${row.recurrent_block_calls}`;
-    main.innerHTML=`<div><b>${esc(name(row.method))} [${esc(row.method)}]</b> · decoded <code>${esc(JSON.stringify(row.decoded_text))}</code> → extracted <b>${esc(row.extracted_answer)}</b> · target <b>${esc(row.gold_answer)}</b> <span style="color:${row.is_correct?'#34d399':'#fda4af'};font-weight:800">${row.is_correct?'✓ CORRECT':'✗ INCORRECT'}</span></div><div style="font-size:.76rem;color:#94a3b8;margin-top:.3rem">Selected token action: <code>${esc(d?.action_type||entry?.controller_action_type||"not recorded")}</code> · donor <code>${esc(entry?.selected_donor)}</code> · policy <code>${esc(policy(row.method))}</code>${base?` · S0 answer <code>${esc(base.extracted_answer)}</code>`:""}</div>`;
+    const outcome=!base?"No paired S0 output":row.method==="S0"?"Ordinary recurrence reference":!base.is_correct&&row.is_correct?"Recovery vs S0":base.is_correct&&!row.is_correct?"Degradation vs S0":row.is_correct?"Both correct":"Both incorrect";
+    const mixing=pair().M1;
+    main.innerHTML=`<div><b>${esc(name(row.method))} [${esc(row.method)}]</b> · decoded <code>${esc(JSON.stringify(row.decoded_text))}</code> → extracted <b>${esc(row.extracted_answer)}</b> · target <b>${esc(row.gold_answer)}</b> <span style="color:${row.is_correct?'#34d399':'#fda4af'};font-weight:800">${row.is_correct?'✓ CORRECT':'✗ INCORRECT'}</span></div><div style="font-size:.76rem;color:#94a3b8;margin-top:.3rem">Selected token action: <code>${esc(d?.action_type||entry?.controller_action_type||"not recorded")}</code> · donor <code>${esc(entry?.selected_donor)}</code> · policy <code>${esc(policy(row.method))}</code>${base?` · S0 answer <code>${esc(base.extracted_answer)}</code> (${base.is_correct?"correct":"incorrect"}${ledgerMatches(base)?`, ${base.recurrent_block_calls} calls`:", cost unverified"})`:""}</div><div>${esc(outcome)}.${base&&!base.is_correct&&row.is_correct&&mixing?.is_correct&&(row.method.startsWith("E1")||row.method.startsWith("E3")||row.method==="E2")?" Linear update mixing (M1) also succeeds here; this is not an exclusive TEBDİL benefit.":""}</div>`;
     const methods=ORDER.filter((method)=>pair()[method]).concat(Object.keys(pair()).filter((method)=>!ORDER.includes(method)));
     bar.innerHTML=methods.map((method)=>{const item=pair()[method];return `<button type="button" class="m-chip ${item.is_correct?'pass':'fail'} ${method===row.method?'active-method':''}" data-method="${esc(method)}" title="Inspect ${esc(name(method))}">${esc(method)}: ${esc(item.extracted_answer)} ${item.is_correct?'✓':'✗'} ${ledgerMatches(item)?`(${item.recurrent_block_calls}c)`:'(cost unverified)'}</button>`;}).join("");
-    bar.querySelectorAll("button[data-method]").forEach((item)=>item.addEventListener("click",()=>{state.method=item.getAttribute("data-method")||state.method;if(select("methodSelect"))select("methodSelect").value=state.method;state.token=0;state.step=2;syncTokenAndSteps();renderAll();}));
+    bar.querySelectorAll("button[data-method]").forEach((item)=>item.addEventListener("click",()=>changeMethod(item.getAttribute("data-method")||state.method)));
   }
   function renderEvidence(row) {
     if(el("runSummary")){const summary=run().methods[row.method];el("runSummary").textContent=`${run().label} · ${run().num_problems} distinct problems × ${run().seeds.length} seed(s) · ${summary.num_instances} paired rows/method · cluster CI [${pp(summary.cluster_ci_95_low)}, ${pp(summary.cluster_ci_95_high)}] · ${run().status||"exploratory"}`;}

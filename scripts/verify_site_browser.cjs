@@ -62,6 +62,51 @@ const base=process.env.SITE_URL||'http://127.0.0.1:8093/';
  assert.equal(await page.locator('#runSelect').inputValue(),'phase7_8_controller_test');
  assert.equal(await page.locator('#caseSelect').inputValue(),'arith_test_003|42');
  await page.selectOption('#tokenSelect','1');assert((await page.locator('#pcaNote').innerText()).includes('not borrowed'));await page.selectOption('#tokenSelect','0');
+ // Three-minute demo rehearsal: positive, non-exclusive and negative evidence, with raw provenance.
+ const demoCases=[
+  ['arith_test_003','48','42','Recovery vs S0','also succeeds'],
+  ['graph_validation_002','17','13','Recovery vs S0',null],
+  ['arith_validation_003','40','40','Degradation vs S0',null],
+ ];
+ for(const [index,[problem,gold,s0,outcome,caveat]]of demoCases.entries()){
+  await page.locator('#demo .load-case-btn').nth(index).click();
+  await page.waitForFunction(problem=>JSON.parse(document.querySelector('#selectedTraceJson').textContent).problem_id===problem,problem);
+  const raw=JSON.parse(await page.locator('#selectedTraceJson').textContent());
+  assert.equal(raw.gold_answer,gold);
+  const output=await page.locator('#terminalMainText').innerText();assert(output.includes(outcome));assert(output.includes('S0 answer '+s0));if(caveat)assert(output.includes(caveat));
+  const event=(raw.token_ledger?.[0]?.step_snapshots||raw.step_snapshots).find(s=>s.excursion_telemetry?.step===2).excursion_telemetry;
+  const narrative=await page.locator('#stageStepNarrative').innerText();assert(narrative.includes(event.update_visit_frob.toFixed(3)));
+  if(index===0){
+   assert(narrative.includes('Visit toward C'));assert(narrative.includes('42.232'));assert(narrative.includes('keep A as anchor'));
+   await page.locator('#stageStepNarrative summary').click();
+   const details=await page.locator('#stageStepNarrative').innerText();assert(details.includes('learned_mlp_gated_selected_EXCURSION_d1_a0.65_b0.65_full'));assert(details.includes('not a probability'));assert(details.includes('11 recurrent calls'));
+   assert((await page.locator('#terminalCallCost').innerText()).includes('22'));
+  }else{assert(narrative.includes('ID not captured'));assert(narrative.includes('Unavailable'));}
+  await page.locator('.recording-evidence summary').click();
+  const download=page.waitForEvent('download');await page.locator('#downloadTrace').click();
+  assert.deepEqual(JSON.parse(fs.readFileSync(await (await download).path(),'utf8')),raw);
+  for(const id of ['downloadRun','downloadConfig']){const response=await page.request.get(new URL(await page.locator('#'+id).getAttribute('href'),page.url()).href);assert(response.ok());}
+  await page.locator('.recording-evidence summary').click();
+ }
+ // Neither the select nor method chips may silently replace a requested depth.
+ await page.locator('#demo .load-case-btn').first().click();
+ await page.waitForFunction(()=>document.querySelector('#runSelect').value==='phase7_8_controller_test'&&JSON.parse(document.querySelector('#selectedTraceJson').textContent).method==='E3_mlp');
+ await page.selectOption('#caseSelect','arith_test_000|42');await page.selectOption('#methodSelect','S0');await page.selectOption('#stepSelect','4');
+ await page.selectOption('#methodSelect','E3_mlp');
+ assert.equal(await page.locator('#stepSelect').inputValue(),'4');assert((await page.locator('#stepSelect option:checked').innerText()).includes('not recorded'));
+ assert((await page.locator('#comparisonContext').innerText()).includes('unavailable'));assert((await page.locator('#excursionStageSvg').textContent()).includes('not recorded'));
+ assert((await page.locator('#pcaNote').innerText()).includes('not recorded'));
+ await page.locator('.m-chip[data-method="S0"]').click();assert.equal(await page.locator('#stepSelect').inputValue(),'4');assert.equal(await page.locator('#caseSelect').inputValue(),'arith_test_000|42');
+ await page.selectOption('#methodSelect','E3_mlp');await page.selectOption('#stepSelect','2');assert((await page.locator('#telemetryGrid').innerText()).includes('EXIT'));
+ // An explicitly requested missing token is kept and labelled, not clamped to token 1.
+ await page.goto(base+'?run=phase7_8_controller_test&problem=arith_test_003&seed=42&method=S0&token=9&step=4',{waitUntil:'networkidle'});
+ await page.waitForFunction(()=>document.querySelector('#loadStatus').textContent.includes('SHA-256 verified'));
+ await page.selectOption('#methodSelect','E3_mlp');assert.equal(await page.locator('#tokenSelect').inputValue(),'9');assert.equal(await page.locator('#stepSelect').inputValue(),'4');assert((await page.locator('#tokenSelect option:checked').innerText()).includes('not recorded'));assert(await page.locator('#playLoopBtn').isDisabled());
+ await page.locator('#demo .load-case-btn').first().click();
+ await page.selectOption('#tokenSelect','1');await page.selectOption('#stepSelect','3');
+ await page.locator('.m-chip[data-method="M1"]').focus();await page.keyboard.press('Enter');
+ assert.equal(await page.locator('#methodSelect').inputValue(),'M1');assert.equal(await page.locator('#tokenSelect').inputValue(),'1');assert.equal(await page.locator('#stepSelect').inputValue(),'3');
+ await page.locator('#demo .load-case-btn').first().click();
  await page.selectOption('#explorerFamilyFilter','graph');
  assert(await page.locator('#traceExplorerBody tr').count()>0);
  assert((await page.locator('#traceExplorerBody').innerText()).includes('graph'));
@@ -96,6 +141,6 @@ const base=process.env.SITE_URL||'http://127.0.0.1:8093/';
  assert(await isolated.locator('.output-terminal').isHidden());assert((await isolated.locator('#runSummary').innerText()).includes('checksum mismatch'));
  assert((await isolated.locator('.metric-num').first().innerText()).includes('Unavailable'));
  assert.deepEqual(errors,[]);assert.deepEqual(external,[]);assert.deepEqual(failed,[]);
- const result={base,checks,widths,errors,external,failed,math:await page.locator('mjx-container').count(),failureRetryAndChecksum:'pass',keyboard:'pass',controls:'pass'};
+ const result={base,checks,widths,errors,external,failed,math:await page.locator('mjx-container').count(),failureRetryAndChecksum:'pass',keyboard:'pass',controls:'pass',demoRehearsal:'3 recorded cases; downloads/manifests; preserved/missing context; keyboard comparison'};
  fs.writeFileSync('/tmp/tebdil-original-restoration-browser.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

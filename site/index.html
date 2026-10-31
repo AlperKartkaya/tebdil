@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <title>TEBDİL — Cooperative Latent Excursions for Recurrent Reasoning</title>
-  <meta name="description" content="TEBDİL (Cooperative Latent Excursions for Recurrent Reasoning): Inference-time cross-trajectory latent midpoint excursions in looped language models (ByteDance/Ouro-1.4B-Thinking).">
+  <meta name="description" content="TEBDİL (Cooperative Latent Excursions for Recurrent Reasoning): Inference-time cross-trajectory latent excursion-and-return in looped language models (ByteDance/Ouro-1.4B-Thinking).">
   <meta name="keywords" content="looped language models, recurrent transformer, Universal Transformer, latent reasoning, Ouro-1.4B-Thinking, cooperative latent excursion, TEBDIL, nonlinear curvature">
   <meta name="author" content="TEBDİL Research Platform">
   <meta name="language" content="English">
@@ -860,10 +860,10 @@
             <span id="stageStepLabel">Loading recorded computation</span>
           </div>
           <div class="step-pill-bar" role="group" aria-label="Recurrent steps">
-            <button type="button" class="step-pill" data-step="1">t=1 Fork</button>
-            <button type="button" class="step-pill is-active" data-step="2">t=2 Excursion</button>
-            <button type="button" class="step-pill" data-step="3">t=3 Return</button>
-            <button type="button" class="step-pill" data-step="4">t=4 Readout</button>
+            <button type="button" class="step-pill" data-step="1">t=1</button>
+            <button type="button" class="step-pill is-active" data-step="2">t=2</button>
+            <button type="button" class="step-pill" data-step="3">t=3</button>
+            <button type="button" class="step-pill" data-step="4">t=4</button>
           </div>
           <button type="button" class="stage-btn is-primary" id="playLoopBtn">
             <i class="fas fa-play" id="playLoopIcon"></i>
@@ -893,6 +893,12 @@
         <div class="stage-select-group"><label for="tokenSelect">Generated token</label><select id="tokenSelect" class="stage-select" disabled></select></div>
         <div class="stage-select-group"><label for="stepSelect">Recurrent step</label><select id="stepSelect" class="stage-select" disabled></select></div>
       </div>
+      <p id="comparisonContext" class="recording-status" role="status" aria-live="polite"></p>
+      <p class="recording-status">Recorded walkthrough:
+        <button type="button" class="stage-btn load-case-btn" data-run="phase7_8_controller_test" data-problem="arith_test_003" data-seed="42" data-method="E3_mlp">Recovery · mixing also works</button>
+        <button type="button" class="stage-btn load-case-btn" data-run="phase3_ablations" data-problem="graph_validation_002" data-seed="42" data-method="E1">Recovery · mixing fails</button>
+        <button type="button" class="stage-btn load-case-btn" data-run="phase3_ablations" data-problem="arith_validation_003" data-seed="42" data-method="E1">Degradation</button>
+      </p>
       <noscript><p>JavaScript enables recorded replay. The research sections remain readable. <a href="https://github.com/AlperKartkaya/tebdil">Source and reproduction</a>.</p></noscript>
       <!-- Prompt & ground truth header -->
       <div class="question-box-live">
@@ -907,7 +913,7 @@
       <div class="stage-grid">
         <div class="svg-canvas-box">
           <div class="mini-panel-title">
-            <span><i class="fas fa-project-diagram"></i> Recurrent Computation Graph ($T = 4$ Universal Transformer Steps)</span>
+            <span><i class="fas fa-project-diagram"></i> Recurrent Computation Graph (four-column schematic)</span>
             <span id="liveFormulaPill" style="font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:#4338ca;">$H_3^{A'} = H_2^A + (1-\beta)V_2^A + \beta V_2^{\mathrm{visit}}$</span>
           </div>
           <svg role="img" aria-label="Recorded recurrent computation, schematic not latent coordinates" id="excursionStageSvg" viewBox="0 0 680 320" style="width:100%; height:auto; overflow:visible;"></svg>
@@ -946,7 +952,7 @@
       </div>
       <details class="recording-evidence"><summary>Selected trace, execution manifest &amp; provenance</summary>
         <p><a id="downloadTrace" download>Download selected trace</a> · <a id="downloadRun" download>Complete recording</a> · <a id="downloadConfig">Execution manifest</a></p>
-        <p>Counts include donor and visit work, not equivalent FLOPs. Scoring calls and wall time are separate. Parallel-selection ledgers are unverified; selected-output calls are not the total cost of all candidates. Gold-answer scores are evaluation diagnostics, never controller inputs.</p>
+        <p>Comparisons preserve the recording, problem, seed, token position and step. Token positions may have different generated prefixes. Counts include donor and visit work, not equivalent FLOPs. Scoring calls and wall time are separate. Parallel-selection ledgers are unverified; selected-output calls are not the total cost of all candidates. Gold-answer scores are evaluation diagnostics, never controller inputs.</p>
         <pre id="selectedTraceJson"></pre>
         <ul id="evidenceLinks"></ul>
       </details>
@@ -1119,7 +1125,7 @@
 
       <div class="insight-box" style="margin-top: 1rem;">
         <b>Why Return to $H_t^A$ Instead of Staying at $H_t^{\mathrm{visit}}$ ($C_0$)?</b>
-        In our Phase 3 ablation, staying at the midpoint without returning ($C_0$: $H_{t+1}^{C_0} = H_t^{\mathrm{visit}} + V_t^{\mathrm{visit}}$)
+        In our Phase 3 ablation, staying at the visited state without returning ($C_0$: $H_{t+1}^{C_0} = H_t^{\mathrm{visit}} + V_t^{\mathrm{visit}}$)
         changes the receiving anchor rather than transporting an update. The recorded <code>graph_validation_002</code> comparison can be inspected below.
         An anchored return is a distinct operator, not a guarantee of preserving answer correctness.
       </div>
@@ -1223,7 +1229,7 @@
           Decomposition 1 &mdash; Nonlinear Update Residual
         </h4>
         <p style="color: var(--rm-sub); font-size: 0.92rem; line-height: 1.6;">
-          Define the <b>nonlinear excursion curvature residual</b> $C_t$ at step $t$ as the deviation of the midpoint transition vector from the convex combination of endpoint transition vectors:
+          Define the <b>nonlinear excursion curvature residual</b> $C_t$ at step $t$ as the deviation of the visited-state transition vector from the convex combination of endpoint transition vectors:
         </p>
         <div class="eq-block">
           $$C_t \;\triangleq\; V_t^{\mathrm{visit}} - \Big[(1-\alpha_{\mathrm{eff}})V_t^A + \alpha_{\mathrm{eff}}V_t^B\Big]$$
@@ -1271,20 +1277,20 @@
     <div class="pattern-grid">
       <div class="pattern-card">
         <div class="pattern-icon ic-seq"><i class="fas fa-Microchip"></i><i class="fas fa-stopwatch"></i></div>
-        <h4>Compute &amp; Voting Baselines</h4>
-        <p>Isolate whether extra recurrent depth or independent 2-branch sampling alone accounts for accuracy gains.</p>
+        <h4>Compute &amp; Parallel Baselines</h4>
+        <p>Isolate whether extra recurrent depth or independent-branch sampling alone accounts for accuracy gains.</p>
         <div class="pattern-roles">
           <span class="role-chip">S0: Single 4-Step</span>
           <span class="role-chip">S1: Deeper 5-Step</span>
-          <span class="role-chip">P0: 2-Branch Vote</span>
-          <span class="role-chip">P1: Oracle Best-of-2</span>
+          <span class="role-chip">P0: Branch Selection</span>
+          <span class="role-chip">P1: Oracle Best Branch</span>
         </div>
       </div>
 
       <div class="pattern-card">
         <div class="pattern-icon ic-mix"><i class="fas fa-sliders"></i></div>
         <h4>Linear Mixing Controls</h4>
-        <p>Test whether simple hidden-state interpolation ($M_0$) or linear velocity averaging without midpoint evaluation ($M_1$) suffices.</p>
+        <p>Test whether simple hidden-state interpolation ($M_0$) or linear velocity averaging without visited-state evaluation ($M_1$) suffices.</p>
         <div class="pattern-roles">
           <span class="role-chip">M0: State Mix</span>
           <span class="role-chip">M1: Update Mix (C_t=0)</span>
@@ -1295,7 +1301,7 @@
       <div class="pattern-card">
         <div class="pattern-icon ic-dis"><i class="fas fa-dice"></i></div>
         <h4>Noise &amp; Direction Controls</h4>
-        <p>Rule out generic stochastic regularisation by matching exact update shift norms ($R_0$) or midpoint probe distance ($E_0$).</p>
+        <p>Rule out generic stochastic regularisation by matching exact update shift norms ($R_0$) or visit offset norm ($E_0$).</p>
         <div class="pattern-roles">
           <span class="role-chip">R0: Norm-Matched Noise</span>
           <span class="role-chip">E0: Random-Dir Excursion</span>
@@ -1305,7 +1311,7 @@
       <div class="pattern-card">
         <div class="pattern-icon ic-del"><i class="fas fa-route"></i></div>
         <h4>TEBDİL &amp; Curvature Suite</h4>
-        <p>Compare full midpoint excursion ($E_1, E_2$) directly against stripped ($E_1^{\text{no-curv}}$) and randomized ($E_1^{\text{rand-curv}}$) curvature.</p>
+        <p>Compare full excursion ($E_1, E_2$) directly against stripped ($E_1^{\text{no-curv}}$) and randomized ($E_1^{\text{rand-curv}}$) curvature.</p>
         <div class="pattern-roles">
           <span class="role-chip">E1: Fixed Excursion</span>
           <span class="role-chip">E2: Adaptive Policy</span>
@@ -1329,16 +1335,16 @@
         <tbody>
           <tr><td><b>S0</b></td><td><span class="pat-tag pat-seq">Baseline</span></td><td>$H_3^A = F_{\theta,2}(H_2^A)$</td><td>See selected recording ledger</td><td>Standard deterministic LoopLM baseline</td></tr>
           <tr><td><b>S1</b></td><td><span class="pat-tag pat-seq">Compute</span></td><td>5 recurrent steps ($T{=}5$ via extra final block evaluation)</td><td>See selected recording ledger</td><td>Extra recurrent depth on a single trajectory</td></tr>
-          <tr><td><b>P0</b></td><td><span class="pat-tag pat-seq">Ensemble</span></td><td>Independent $H_{1:4}^A, H_{1:4}^B$; confidence-based selection</td><td>Unverified selection cost</td><td>Independent parallel trajectories without interaction</td></tr>
-          <tr><td><b>P1</b></td><td><span class="pat-tag pat-seq">Oracle</span></td><td>$\arg\max_{y \in \{y^A, y^B\}} \mathbb{I}[y = y^*]$ (uses gold label)</td><td>Unverified selection cost</td><td>Upper bound of non-interacting 2-branch selection</td></tr>
-          <tr><td><b>M0</b></td><td><span class="pat-tag pat-mix">Linear</span></td><td>$H_3^{M_0} = F_{\theta,2}((1-\gamma)H_2^A + \gamma H_2^B)$ (collapses to midpoint)</td><td>See selected recording ledger</td><td>Direct state interpolation without anchor return</td></tr>
+          <tr><td><b>P0</b></td><td><span class="pat-tag pat-seq">Ensemble</span></td><td>Independent branches (recording-dependent); confidence-based selection</td><td>Unverified selection cost</td><td>Independent parallel trajectories without interaction</td></tr>
+          <tr><td><b>P1</b></td><td><span class="pat-tag pat-seq">Oracle</span></td><td>$\arg\max_{y \in \{y^A, y^B, \ldots\}} \mathbb{I}[y = y^*]$ (uses gold label)</td><td>Unverified selection cost</td><td>Upper bound of non-interacting branch selection (recording-dependent)</td></tr>
+          <tr><td><b>M0</b></td><td><span class="pat-tag pat-mix">Linear</span></td><td>$H_3^{M_0} = F_{\theta,2}((1-\gamma)H_2^A + \gamma H_2^B)$ (continues from the interpolated state)</td><td>See selected recording ledger</td><td>Direct state interpolation without anchor return</td></tr>
           <tr><td><b>M1</b></td><td><span class="pat-tag pat-mix">Linear</span></td><td>$H_3^{M_1} = H_2^A + (1-\alpha\beta)V_2^A + \alpha\beta V_2^B$</td><td>See selected recording ledger</td><td>Linear combination of endpoint updates ($C_2 = 0$)</td></tr>
           <tr><td><b>C0</b></td><td><span class="pat-tag pat-mix">Topology</span></td><td>$H_3^{C_0} = H_2^{\mathrm{visit}} + V_2^{\mathrm{visit}}$ (no return to $H_2^A$)</td><td>See selected recording ledger</td><td>Necessity of returning update vector to $H_2^A$</td></tr>
           <tr><td><b>R0</b></td><td><span class="pat-tag pat-dis">Noise</span></td><td>$H_3^{R_0} = H_3^A + \|\Delta^{\mathrm{visit}}_2\|_F \cdot u / \|u\|_F$</td><td>See selected recording ledger</td><td>Generic norm-matched random state perturbation</td></tr>
-          <tr><td><b>E0</b></td><td><span class="pat-tag pat-dis">Direction</span></td><td>Excursion to $H_2^A + \alpha\|H_2^B - H_2^A\|_F \cdot w / \|w\|_F$</td><td>See selected recording ledger</td><td>Midpoint evaluation in a random direction</td></tr>
+          <tr><td><b>E0</b></td><td><span class="pat-tag pat-dis">Direction</span></td><td>Excursion to $H_2^A + \alpha\|H_2^B - H_2^A\|_F \cdot w / \|w\|_F$</td><td>See selected recording ledger</td><td>Visited-state evaluation in a random direction</td></tr>
           <tr><td><b>E1_no_curv</b></td><td><span class="pat-tag pat-del">Ablation</span></td><td>$H_3 = H_2^A + (1-\beta)V_2^A + \beta(V_2^{\mathrm{visit}} - C_2)$</td><td>See selected recording ledger</td><td>Tests the algebraic residual removal against $M_1$</td></tr>
           <tr><td><b>E1_rand_curv</b></td><td><span class="pat-tag pat-del">Ablation</span></td><td>Replaces $C_2$ with random vector of identical norm $\|C_2\|_F$</td><td>See selected recording ledger</td><td>Tests whether $C_2$ direction (not just norm) matters</td></tr>
-          <tr class="row-ours"><td><b>E1 (Ours)</b></td><td><span class="pat-tag pat-del">TEBDİL</span></td><td>$H_3^{A'} = H_2^A + (1-\beta)V_2^A + \beta V_2^{\mathrm{visit}}$ ($\alpha{=}0.5, \beta{=}0.5$)</td><td>See selected recording ledger</td><td>Excursion-and-return anchored at the receiving state</td></tr>
+          <tr class="row-ours"><td><b>E1 (Ours)</b></td><td><span class="pat-tag pat-del">TEBDİL</span></td><td>$H_3^{A'} = H_2^A + (1-\beta)V_2^A + \beta V_2^{\mathrm{visit}}$ (configured strengths in manifest; effective strengths in telemetry)</td><td>See selected recording ledger</td><td>Excursion-and-return anchored at the receiving state</td></tr>
           <tr class="row-ours"><td><b>E2 (Ours)</b></td><td><span class="pat-tag pat-del">TEBDİL</span></td><td>Heuristic uncertainty, stability, donor, and budget checks; see recorded decision</td><td>See selected recording ledger</td><td>Label-free uncertainty-gated excursion</td></tr>
         </tbody>
       </table>
@@ -1601,9 +1607,9 @@ Answer: <br><br><b>S0:</b> <code>40</code> (correct)<br><b>M1:</b> <code>36</cod
     <div class="gain-grid">
       <div class="gain-card">
         <div class="num">Step 1</div>
-        <h5>Scale Test Sample Size ($n = 150\text{--}300$)</h5>
+        <h5>Scale Independent Evaluation</h5>
         <p>
-          Expand held-out evaluation from $n{=}36$ to $150\text{--}300$ instances ($50\text{--}100$ per family across 3 seeds).
+          Expand beyond the 18 distinct problems per controller/fresh recording. Three seeds per problem are repeated measurements, not extra independent problems.
           Choose the sample size from a preregistered power analysis, then report problem-cluster uncertainty and compute-matched comparisons.
         </p>
       </div>
