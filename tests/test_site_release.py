@@ -149,6 +149,30 @@ def test_execution_contract_is_separate_and_traceable() -> None:
     assert any(e["source"] == "reports/ouro_execution_contract.json" for e in load_manifest()["evidence"])
 
 
+def test_pilot_calibration_prefixes_and_counts_are_traceable() -> None:
+    from tebdil.core.state import hash_tensor
+    import torch
+
+    path = ROOT / "reports/ouro_baseline_calibration.json"
+    report = json.loads(path.read_text())
+    assert (SITE / "static/evidence" / path.name).read_bytes() == path.read_bytes()
+    assert report["independent_problems"] == 3 and len(report["records"]) == 9
+    for row in report["records"]:
+        assert row["trajectory_semantics"] == "full_prefix_refork_per_generated_token"
+        assert len(row["token_ledger"]) == len(row["generated_token_ids"])
+        assert row["recurrent_block_calls"] + row["scoring_recurrent_calls"] == row["executed_recurrent_calls_including_scoring"]
+        for k, entry in enumerate(row["token_ledger"]):
+            prefix = row["prompt_token_ids"] + row["generated_token_ids"][:k]
+            assert entry["prefix_length"] == len(prefix)
+            assert entry["prefix_token_ids_sha256"] == hash_tensor(torch.tensor([prefix]), length=64)
+            assert entry["branch_seed"] == report["seed"] + 131 * k
+    for budget in (2, 64):
+        raw = [r for r in report["records"] if r["prompt_format"] == "raw" and r["max_output_tokens"] == budget]
+        assert len(raw) == 3 and sum(r["strict_correct"] for r in raw) == 1
+    chat = [r for r in report["records"] if r["prompt_format"] == "chat"]
+    assert len(chat) == 3 and all(r["stop_reason"] == "max_output_tokens" for r in chat)
+
+
 def test_primary_controls_and_states_are_present() -> None:
     parser = parse_site()
     required = {

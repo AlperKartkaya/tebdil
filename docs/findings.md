@@ -4,6 +4,14 @@ Updated 2026-10-30. Values below come from the current [static manifest](../site
 
 ## Scope
 
+These are **historical raw-prompt, two-token short-answer experiments**, not
+completed chat-format Thinking evaluations. Branches re-fork within each generated
+token's recurrent unroll; no hidden branch memory crosses output positions.
+See the [generation contract](trajectory_semantics.md) for new prefix/termination
+metadata and the separate pilot calibration. Changing prompt/budget settings for
+S0 alone would not produce a fair intervention comparison: every method needs the
+same frozen completion protocol in a new campaign.
+
 There are **2,866 trace records across eight runs**. A trace is one method/problem/seed result, not an independent problem. Both controller evaluations contain **18 distinct problems × 3 seeds = 54 paired instances per method**. The label `fresh_test` identifies a separate generated split; it does not establish preregistration, distributional generalization, or a confirmatory study.
 
 ## Fresh-template evaluation

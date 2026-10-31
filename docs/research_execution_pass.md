@@ -6,8 +6,8 @@ uncommitted controller, counterfactual and report artifacts are not inputs to th
 
 | Order | Gate before moving on | Status |
 |---|---|---|
-| A. Ouro execution contract | Per-depth real-checkpoint state/gate/logit parity; masks/positions; both readouts; FP32/BF16 diagnostic; documentation and Pages evidence | Verified locally; [record](../reports/ouro_execution_verification.md); deployment gate next |
-| B. Trajectory semantics | Explicit token/depth and prefix contracts; baseline-generation calibration | Not started |
+| A. Ouro execution contract | Per-depth real-checkpoint state/gate/logit parity; masks/positions; both readouts; FP32/BF16 diagnostic; documentation and Pages evidence | Complete: `e0728b3`; [CI/deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41219360287) and public browser checks passed |
+| B. Trajectory semantics | Explicit token/depth and prefix contracts; baseline-generation calibration | In progress |
 | C. Operator controls | Correctly named input noise; output-matched controls; algebraic invariants; fixed-prefix residual study | Not started |
 | D. Normalization diagnostics | Explicit radial/directional and norm-preserving ablations | Not started |
 | E. Controller evaluation | Unshaped and heuristic controls only after intervention utility is established | Not started |

@@ -15,7 +15,7 @@ import yaml
 from tebdil.controller.learned_policy import LearnedControllerCheckpoint
 from tebdil.core.policies import AdaptivePolicyConfig, compute_last_token_uncertainty
 from tebdil.core.scheduler import TrajectoryScheduleResult, run_scheduled_trajectory
-from tebdil.core.state import ExcursionConfig, RecurrentAdapter
+from tebdil.core.state import ExcursionConfig, RecurrentAdapter, hash_tensor
 from tebdil.evaluation.metrics import compare_logits, compute_token_logprob
 from tebdil.evaluation.trace import (
     create_run_manifest,
@@ -261,6 +261,8 @@ def _build_token_ledger_entry(
     sched_res: TrajectoryScheduleResult,
     method: str,
     excursion_config: ExcursionConfig,
+    prefix_ids: Tensor,
+    branch_seed: int,
 ) -> Dict[str, Any]:
     """Construct an exact per-token call and decision ledger entry."""
     dec_info = _resolve_decision_summary(method, sched_res, excursion_config)
@@ -293,6 +295,9 @@ def _build_token_ledger_entry(
         "token_index": int(token_index),
         "token_id": int(token_id),
         "decoded_token": str(decoded_token),
+        "prefix_token_ids_sha256": hash_tensor(prefix_ids, length=64),
+        "prefix_length": int(prefix_ids.shape[1]),
+        "branch_seed": int(branch_seed),
         "recurrent_block_calls": total_c,
         "shared_calls": int(shared_c),
         "primary_branch_calls": int(primary_post_c),
@@ -408,12 +413,23 @@ def _decode_method_on_problem(
     extra_steps_for_s1: int = 3,
     select_branch_b: bool = False,
     select_branch_id: Optional[str] = None,
+    prompt_format: str = "raw",
 ) -> Dict[str, Any]:
     """Run a single method on a single problem and decode its short continuation."""
     device = getattr(adapter, "device", torch.device("cpu"))
     _sync_device(device)
     t_wall_start = time.perf_counter()
-    prompt_ids = tokenizer.encode(problem.prompt, return_tensors="pt").to(device)
+    if max_output_tokens < 1:
+        raise ValueError("max_output_tokens must be positive")
+    if prompt_format == "raw":
+        prompt_ids = tokenizer.encode(problem.prompt, return_tensors="pt").to(device)
+    elif prompt_format == "chat":
+        prompt_ids = tokenizer.apply_chat_template(
+            [{"role": "user", "content": problem.prompt}], tokenize=True,
+            add_generation_prompt=True, enable_thinking=False, return_tensors="pt",
+        ).to(device)
+    else:
+        raise ValueError(f"Unsupported prompt_format: {prompt_format}")
     gold_token_ids = tokenizer.encode(problem.gold_answer, add_special_tokens=False)
     if not gold_token_ids:
         gold_token_ids = [0]
@@ -450,7 +466,7 @@ def _decode_method_on_problem(
     first_decoded = tokenizer.decode([tok_0])
 
     token_ledger: List[Dict[str, Any]] = [
-        _build_token_ledger_entry(0, tok_0, first_decoded, sched_0, method, excursion_config)
+        _build_token_ledger_entry(0, tok_0, first_decoded, sched_0, method, excursion_config, prompt_ids, seed)
     ]
     step_k_logits_by_prefix: Dict[Tuple[int, ...], Tensor] = {}
 
@@ -459,15 +475,20 @@ def _decode_method_on_problem(
     total_ctrl_ms = sched_0.controller_overhead_ms
     margins = [margin_0]
 
-    # Determine whether a second continuation token is needed
+    # Legacy raw prompts use short-answer stops; chat may contain reasoning/newlines.
+    eos_id = getattr(tokenizer, "eos_token_id", None)
+    stop_reason = "max_output_tokens"
+    if tok_0 == eos_id:
+        stop_reason = "eos_token"
+    elif prompt_format == "raw" and "\n" in first_decoded:
+        stop_reason = "newline"
+    elif prompt_format == "raw" and problem.template_id in (
+        "logic_bool_xor_not_v1", "logic_bool_or_xor_test", "logic_mux_branch_fresh",
+    ):
+        stop_reason = "boolean_single_token_rule"
     needs_more = (
         max_output_tokens > 1
-        and "\n" not in first_decoded
-        and problem.template_id not in (
-            "logic_bool_xor_not_v1",
-            "logic_bool_or_xor_test",
-            "logic_mux_branch_fresh",
-        )
+        and stop_reason == "max_output_tokens"
     )
 
     if needs_more:
@@ -503,14 +524,18 @@ def _decode_method_on_problem(
             tok_k = int(logits_k[:, -1, :].argmax(dim=-1).item())
             tok_k_str = tokenizer.decode([tok_k])
             token_ledger.append(
-                _build_token_ledger_entry(tok_step, tok_k, tok_k_str, sched_k, method, excursion_config)
+                _build_token_ledger_entry(tok_step, tok_k, tok_k_str, sched_k, method, excursion_config, cur_ids, seed + tok_step * 131)
             )
             generated_tokens.append(tok_k)
             total_calls += sched_k.recurrent_block_calls
             total_ctrl_calls += sched_k.controller_calls
             total_ctrl_ms += sched_k.controller_overhead_ms
             dec_k = tokenizer.decode(generated_tokens)
-            if "\n" in dec_k:
+            if tok_k == eos_id:
+                stop_reason = "eos_token"
+                break
+            if prompt_format == "raw" and "\n" in dec_k:
+                stop_reason = "newline"
                 break
             cur_ids = torch.cat(
                 [cur_ids, torch.tensor([[tok_k]], dtype=torch.long, device=device)],
@@ -570,12 +595,14 @@ def _decode_method_on_problem(
     decoded_text = tokenizer.decode(generated_tokens).strip()
     val_outcome = validate_problem_response(problem, decoded_text)
 
-    seq_len = int(prompt_ids.shape[1])
-    if hasattr(adapter, "estimate_step_flops"):
-        flops_per_call = float(adapter.estimate_step_flops(seq_len=seq_len, batch_size=1))
-    else:
-        flops_per_call = float(seq_len * adapter.hidden_size * adapter.hidden_size * 12)
-    estimated_flops = total_calls * flops_per_call
+    estimated_flops = 0.0
+    for entry in token_ledger:
+        seq_len = entry["prefix_length"]
+        if hasattr(adapter, "estimate_step_flops"):
+            flops_per_call = float(adapter.estimate_step_flops(seq_len=seq_len, batch_size=1))
+        else:
+            flops_per_call = float(seq_len * adapter.hidden_size * adapter.hidden_size * 12)
+        estimated_flops += entry["recurrent_block_calls"] * flops_per_call
 
     telem = sched_0.excursion_telemetry
     pol_dec = sched_0.policy_decision
@@ -589,6 +616,12 @@ def _decode_method_on_problem(
         "difficulty": problem.difficulty,
         "prompt": problem.prompt,
         "prompt_hash": hashlib.sha256(problem.prompt.encode("utf-8")).hexdigest()[:16],
+        "prompt_format": prompt_format,
+        "prompt_token_ids": prompt_ids.detach().cpu().tolist()[0],
+        "generated_token_ids": generated_tokens,
+        "trajectory_semantics": "full_prefix_refork_per_generated_token",
+        "max_output_tokens": max_output_tokens,
+        "stop_reason": stop_reason,
         "gold_answer": problem.gold_answer,
         "method": method,
         "seed": seed,

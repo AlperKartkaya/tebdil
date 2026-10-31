@@ -961,6 +961,9 @@
         <p>Fresh Apple MPS checks match native hidden states, gates and readouts at all four depths: three short token fixtures in FP32 and BF16, including padding and shifted positions. This verifies the cache-free adapter, not improved reasoning. FP32 and BF16 differ from each other; the evidence reports those differences.</p>
         <p>Recorded experiments use forced <code>last_step</code> readout, not the default generation policy. Native gate selection does not itself save recurrent computation. Historical results and cost-provenance warnings remain unchanged.</p>
         <p><a href="static/evidence/ouro_execution_contract.json">Download execution checks &amp; source hashes</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/ouro_execution_contract.md">Execution contract &amp; reproduction</a></p>
+        <p><b>Branch lifetime:</b> A and donor branches re-fork inside each generated token's recurrent unroll. Hidden states do not persist across output tokens. Equal token positions can have different generated prefixes.</p>
+        <p><b>Baseline calibration, not a new benchmark:</b> on three fixed pilot problems, raw prompts scored 1/3 with either a 2- or 64-token budget. Chat formatting produced reasoning but all three responses were unfinished at 128 tokens. A completed native-generation follow-up is in progress; historical scores have not been replaced.</p>
+        <p><a href="static/evidence/ouro_baseline_calibration.json">Pilot calibration: raw outputs, token prefixes &amp; measured calls</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/trajectory_semantics.md">Trajectory and generation contract</a></p>
       </details>
     </div>
   </div>
@@ -1367,7 +1370,7 @@
       <span class="rm-eyebrow">Recorded Evaluation on ByteDance/Ouro-1.4B-Thinking</span>
       <h2 class="title is-3 rm-section-title">Main Results, Self-Directed Controller &amp; Recorded Cost</h2>
       <p class="rm-section-sub">
-        The tables are selected from recorded artifacts. Split names, problem counts, repeated seeds, confidence intervals, and current ledger warnings must be read with each selected recording. Repeated seeds are not independent problems, and no strict compute-matched claim is made.
+        The tables are historical raw-prompt, two-token short-answer experiments, not completed chat-format thinking. Split names, problem counts, repeated seeds, confidence intervals, and current ledger warnings must be read with each selected recording. Repeated seeds are not independent problems, and no strict compute-matched claim is made.
       </p>
     </div>
 

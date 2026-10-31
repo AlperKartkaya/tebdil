@@ -27,6 +27,13 @@ On fresh templates, S0 scores **27.78%**, fixed excursions E1 **33.33%**, gated 
 
 Compute is reported, but comparisons are not uniformly compute-matched. Historical parallel records have ledger mismatches; several earlier runs lack token ledgers. The current audit **fails closed**, rather than reusing historical `all_passed` flags. [Full findings and limitations](docs/findings.md).
 
+**Protocol limit:** these historical results use raw prompts and a two-token
+short-answer budget, not completed chat-format thinking. Branches are re-forked
+within each generated token's recurrent computation; they are not persistent
+reasoning agents. The [generation contract](docs/trajectory_semantics.md) separates
+these semantics from a fresh pilot prompt/budget calibration. Calibration does not
+replace the historical results or establish intervention efficacy.
+
 ## Run the static observatory
 
 No checkpoint, backend, or raw `results/` directory is needed to serve the committed export:
@@ -48,7 +55,10 @@ uv sync --locked
 .venv/bin/pytest -q -m real_model
 ```
 
-Fresh local verification passed **68 tests, including real Ouro integration**; see the [scientific verification record](reports/mvp_scientific_verification.md) for replay scope and historical-audit failures. CUDA behavior and a full experiment rerun are not implied.
+The [Ouro execution contract](docs/ouro_execution_contract.md) now includes fresh
+per-depth FP32/BF16 real-checkpoint checks. The earlier [MVP scientific verification](reports/mvp_scientific_verification.md)
+documents sampled replays and historical-audit failures. Neither proves efficacy,
+CUDA behavior or a full campaign rerun.
 
 Rebuilding the export with `python scripts/build_landing_data.py` requires local raw experiment inputs. Those `results/` files are ignored by Git and are not supplied by a clean clone. See the [reproduction guide](docs/reproduction.md) before running research scripts.
 

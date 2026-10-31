@@ -17,6 +17,29 @@ flowchart TD
 
 ## 2. Core Mathematical Formulation
 
+### Token position and recurrent depth are different axes
+
+For generated token position $k$, the runner embeds the complete prefix
+$(x, y_{<k})$ as a fresh state $H_{k,0}$, then advances recurrent depth $t$.
+Branches are re-forked inside **each next-token computation**, not carried as
+persistent hidden-state agents across generated tokens. The perturbation seed is
+`seed + 131*k`. Branch A is initially unperturbed; donor branches are seeded
+perturbations under the same frozen weights, not independently trained reasoners.
+An intervention's influence across generated positions is mediated by changed
+output tokens, not by a carried recurrent hidden state.
+
+At $k+1$, all methods reinitialize using their own generated prefix. Equal token
+indices therefore do not establish equal contexts after outputs diverge. A local
+causal comparison must hold the actual encoded prefix, mask, positions, recurrent
+depth, receiving state and donor fixed. Free-running answer evaluation measures a
+different outcome. New traces record encoded prompt/generated IDs, per-token
+prefix hashes/lengths, branch seeds and termination reason. Historical traces
+without those fields are not retroactively assigned invented metadata.
+
+The [Ouro execution contract](ouro_execution_contract.md) defines normalization,
+readout and disabled-cache boundaries. Prompt/budget calibration is separate from
+both adapter fidelity and intervention efficacy.
+
 Let $F_{\theta, t}: \mathbb{R}^{B \times L \times d} \to \mathbb{R}^{B \times L \times d}$ denote the $t$-th recurrent step of a LoopLM under fixed token embeddings $X$, causal mask $M$, and rotary position embeddings $P$, with `use_cache=False`.
 
 1. **Shared Step & Branch Forking (at step $t_{\mathrm{fork}} = 1$):**
@@ -41,7 +64,7 @@ Let $F_{\theta, t}: \mathbb{R}^{B \times L \times d} \to \mathbb{R}^{B \times L 
 
 ## 3. Invariants Enforced by Code and Tests
 
-1. **Zero-Intervention Equivalence:** With no intervention (`S0`), unrolling `RecurrentAdapter.transition` $T$ times produces identical hidden states and logits to `model.forward()`.
+1. **Zero-Intervention Equivalence:** With no intervention (`S0`), unrolling `RecurrentAdapter.transition` $T$ times matches the native stack states. `last_step` logits match native forced-depth readout, not an unspecified native generation policy; `native_gate` is checked against the corresponding configured native readout.
 2. **Identity Limits:**
    - When $\alpha = 0$ or $\beta = 0$, $H_{t+1}^{A'} = F_{\theta, t}(H_t^A)$ within floating-point precision ($\le 10^{-6}$ in `float32`, $0.0$ when short-circuited or $\le 10^{-3}$ in `bfloat16`).
    - When $H_t^A = H_t^B$, $D_t = 0 \implies H_t^{\mathrm{visit}} = H_t^A \implies C_t = 0$ and $H_{t+1}^{A'} = F_{\theta, t}(H_t^A)$.

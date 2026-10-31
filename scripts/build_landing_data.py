@@ -126,6 +126,7 @@ def build(root: Path = ROOT) -> None:
 
     sources = [
         "reports/ouro_execution_contract.json",
+        "reports/ouro_baseline_calibration.json",
         "reports/mvp_audit_fresh_test.json",
         "artifacts/evidence/model_provenance.json",
         "artifacts/evidence/phase1_excursion_verification.json",
