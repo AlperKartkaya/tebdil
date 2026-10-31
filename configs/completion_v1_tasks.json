@@ -1,0 +1,1714 @@
+{
+  "schema_version": 1,
+  "purpose": "Frozen development/reserved test inputs; smoke does not execute test questions",
+  "generator_seeds": {
+    "development": 20261101,
+    "test": 20261102
+  },
+  "smoke_problem_ids": [
+    "completion_dev_000"
+  ],
+  "partitions": {
+    "development": [
+      {
+        "problem_id": "completion_dev_000",
+        "family": "arithmetic",
+        "split": "development",
+        "template_id": "arith_affine_cascade_v1",
+        "difficulty": "medium",
+        "prompt": "Compute the exact value of (5 * 6) + 6 - 7. Output only the integer result.\nAnswer: ",
+        "gold_answer": "29",
+        "candidate_answers": [
+          "29",
+          "36",
+          "53",
+          "31"
+        ],
+        "metadata": {
+          "operands": [
+            5,
+            6,
+            6,
+            7
+          ],
+          "op": "a*b+c-d"
+        }
+      },
+      {
+        "problem_id": "completion_dev_001",
+        "family": "arithmetic",
+        "split": "development",
+        "template_id": "arith_linear_eq_v1",
+        "difficulty": "medium",
+        "prompt": "Solve for x: 7 * x + 7 = 42. Output only the integer value of x.\nAnswer: ",
+        "gold_answer": "5",
+        "candidate_answers": [
+          "5",
+          "6",
+          "4",
+          "7"
+        ],
+        "metadata": {
+          "linear_eq": [
+            7,
+            7,
+            42
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_dev_002",
+        "family": "arithmetic",
+        "split": "development",
+        "template_id": "arith_mod_product_v1",
+        "difficulty": "hard",
+        "prompt": "Find the remainder when (15 * 9 + 10) is divided by 13. Output only the integer remainder.\nAnswer: ",
+        "gold_answer": "2",
+        "candidate_answers": [
+          "2",
+          "1",
+          "5",
+          "3"
+        ],
+        "metadata": {
+          "operands": [
+            15,
+            9,
+            10,
+            13
+          ],
+          "op": "(a*b+c)%m"
+        }
+      },
+      {
+        "problem_id": "completion_dev_003",
+        "family": "arithmetic",
+        "split": "development",
+        "template_id": "arith_affine_cascade_v1",
+        "difficulty": "medium",
+        "prompt": "Compute the exact value of (7 * 5) + 10 - 9. Output only the integer result.\nAnswer: ",
+        "gold_answer": "36",
+        "candidate_answers": [
+          "36",
+          "45",
+          "96",
+          "38"
+        ],
+        "metadata": {
+          "operands": [
+            7,
+            5,
+            10,
+            9
+          ],
+          "op": "a*b+c-d"
+        }
+      },
+      {
+        "problem_id": "completion_dev_004",
+        "family": "arithmetic",
+        "split": "development",
+        "template_id": "arith_linear_eq_v1",
+        "difficulty": "medium",
+        "prompt": "Solve for x: 4 * x + 11 = 27. Output only the integer value of x.\nAnswer: ",
+        "gold_answer": "4",
+        "candidate_answers": [
+          "4",
+          "5",
+          "3",
+          "9"
+        ],
+        "metadata": {
+          "linear_eq": [
+            4,
+            11,
+            27
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_dev_005",
+        "family": "arithmetic",
+        "split": "development",
+        "template_id": "arith_mod_product_v1",
+        "difficulty": "hard",
+        "prompt": "Find the remainder when (15 * 7 + 7) is divided by 9. Output only the integer remainder.\nAnswer: ",
+        "gold_answer": "4",
+        "candidate_answers": [
+          "4",
+          "1",
+          "6",
+          "5"
+        ],
+        "metadata": {
+          "operands": [
+            15,
+            7,
+            7,
+            9
+          ],
+          "op": "(a*b+c)%m"
+        }
+      },
+      {
+        "problem_id": "completion_dev_006",
+        "family": "arithmetic",
+        "split": "development",
+        "template_id": "arith_affine_cascade_v1",
+        "difficulty": "medium",
+        "prompt": "Compute the exact value of (9 * 5) + 18 - 6. Output only the integer result.\nAnswer: ",
+        "gold_answer": "57",
+        "candidate_answers": [
+          "57",
+          "63",
+          "201",
+          "59"
+        ],
+        "metadata": {
+          "operands": [
+            9,
+            5,
+            18,
+            6
+          ],
+          "op": "a*b+c-d"
+        }
+      },
+      {
+        "problem_id": "completion_dev_007",
+        "family": "arithmetic",
+        "split": "development",
+        "template_id": "arith_linear_eq_v1",
+        "difficulty": "medium",
+        "prompt": "Solve for x: 4 * x + 16 = 72. Output only the integer value of x.\nAnswer: ",
+        "gold_answer": "14",
+        "candidate_answers": [
+          "14",
+          "15",
+          "13",
+          "22"
+        ],
+        "metadata": {
+          "linear_eq": [
+            4,
+            16,
+            72
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_dev_008",
+        "family": "arithmetic",
+        "split": "development",
+        "template_id": "arith_mod_product_v1",
+        "difficulty": "hard",
+        "prompt": "Find the remainder when (15 * 10 + 3) is divided by 9. Output only the integer remainder.\nAnswer: ",
+        "gold_answer": "0",
+        "candidate_answers": [
+          "0",
+          "6",
+          "1"
+        ],
+        "metadata": {
+          "operands": [
+            15,
+            10,
+            3,
+            9
+          ],
+          "op": "(a*b+c)%m"
+        }
+      },
+      {
+        "problem_id": "completion_dev_009",
+        "family": "arithmetic",
+        "split": "development",
+        "template_id": "arith_affine_cascade_v1",
+        "difficulty": "medium",
+        "prompt": "Compute the exact value of (6 * 4) + 17 - 8. Output only the integer result.\nAnswer: ",
+        "gold_answer": "33",
+        "candidate_answers": [
+          "33",
+          "41",
+          "118",
+          "35"
+        ],
+        "metadata": {
+          "operands": [
+            6,
+            4,
+            17,
+            8
+          ],
+          "op": "a*b+c-d"
+        }
+      },
+      {
+        "problem_id": "completion_dev_010",
+        "family": "arithmetic",
+        "split": "development",
+        "template_id": "arith_linear_eq_v1",
+        "difficulty": "medium",
+        "prompt": "Solve for x: 8 * x + 19 = 123. Output only the integer value of x.\nAnswer: ",
+        "gold_answer": "13",
+        "candidate_answers": [
+          "13",
+          "14",
+          "12",
+          "17"
+        ],
+        "metadata": {
+          "linear_eq": [
+            8,
+            19,
+            123
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_dev_011",
+        "family": "arithmetic",
+        "split": "development",
+        "template_id": "arith_mod_product_v1",
+        "difficulty": "hard",
+        "prompt": "Find the remainder when (16 * 8 + 4) is divided by 7. Output only the integer remainder.\nAnswer: ",
+        "gold_answer": "6",
+        "candidate_answers": [
+          "6",
+          "2",
+          "0"
+        ],
+        "metadata": {
+          "operands": [
+            16,
+            8,
+            4,
+            7
+          ],
+          "op": "(a*b+c)%m"
+        }
+      }
+    ],
+    "test": [
+      {
+        "problem_id": "completion_test_000",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (8 * 8) - (4 * 2). Output only the final integer.\nAnswer: ",
+        "gold_answer": "56",
+        "candidate_answers": [
+          "56",
+          "72",
+          "24",
+          "52"
+        ],
+        "metadata": {
+          "operands": [
+            8,
+            8,
+            4,
+            2
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_001",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 9 * x - 25 = 119, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "16",
+        "candidate_answers": [
+          "16",
+          "10",
+          "18",
+          "15"
+        ],
+        "metadata": {
+          "linear_eq": [
+            9,
+            -25,
+            119
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_002",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 4*6 + 2*7 - 6. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "32",
+        "candidate_answers": [
+          "32",
+          "38",
+          "72",
+          "36"
+        ],
+        "metadata": {
+          "operands": [
+            4,
+            6,
+            2,
+            7,
+            6
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_003",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (10 * 7) - (4 * 3). Output only the final integer.\nAnswer: ",
+        "gold_answer": "58",
+        "candidate_answers": [
+          "58",
+          "82",
+          "24",
+          "54"
+        ],
+        "metadata": {
+          "operands": [
+            10,
+            7,
+            4,
+            3
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_004",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 4 * x - 12 = 60, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "18",
+        "candidate_answers": [
+          "18",
+          "12",
+          "20",
+          "17"
+        ],
+        "metadata": {
+          "linear_eq": [
+            4,
+            -12,
+            60
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_005",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 2*5 + 2*9 - 12. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "16",
+        "candidate_answers": [
+          "16",
+          "28",
+          "44",
+          "18"
+        ],
+        "metadata": {
+          "operands": [
+            2,
+            5,
+            2,
+            9,
+            12
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_006",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (7 * 7) - (4 * 3). Output only the final integer.\nAnswer: ",
+        "gold_answer": "37",
+        "candidate_answers": [
+          "37",
+          "61",
+          "12",
+          "33"
+        ],
+        "metadata": {
+          "operands": [
+            7,
+            7,
+            4,
+            3
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_007",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 3 * x - 21 = 0, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "7",
+        "candidate_answers": [
+          "7",
+          "1",
+          "9",
+          "6"
+        ],
+        "metadata": {
+          "linear_eq": [
+            3,
+            -21,
+            0
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_008",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 2*4 + 3*5 - 6. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "17",
+        "candidate_answers": [
+          "17",
+          "23",
+          "39",
+          "19"
+        ],
+        "metadata": {
+          "operands": [
+            2,
+            4,
+            3,
+            5,
+            6
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_009",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (11 * 8) - (3 * 3). Output only the final integer.\nAnswer: ",
+        "gold_answer": "79",
+        "candidate_answers": [
+          "79",
+          "97",
+          "40",
+          "76"
+        ],
+        "metadata": {
+          "operands": [
+            11,
+            8,
+            3,
+            3
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_010",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 6 * x - 8 = 16, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "4",
+        "candidate_answers": [
+          "4",
+          "1",
+          "6",
+          "3"
+        ],
+        "metadata": {
+          "linear_eq": [
+            6,
+            -8,
+            16
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_011",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 2*6 + 4*10 - 10. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "42",
+        "candidate_answers": [
+          "42",
+          "52",
+          "86",
+          "44"
+        ],
+        "metadata": {
+          "operands": [
+            2,
+            6,
+            4,
+            10,
+            10
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_012",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (7 * 9) - (4 * 5). Output only the final integer.\nAnswer: ",
+        "gold_answer": "43",
+        "candidate_answers": [
+          "43",
+          "83",
+          "12",
+          "39"
+        ],
+        "metadata": {
+          "operands": [
+            7,
+            9,
+            4,
+            5
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_013",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 6 * x - 22 = 56, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "13",
+        "candidate_answers": [
+          "13",
+          "5",
+          "15",
+          "12"
+        ],
+        "metadata": {
+          "linear_eq": [
+            6,
+            -22,
+            56
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_014",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 2*4 + 2*4 - 8. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "8",
+        "candidate_answers": [
+          "8",
+          "16",
+          "24",
+          "10"
+        ],
+        "metadata": {
+          "operands": [
+            2,
+            4,
+            2,
+            4,
+            8
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_015",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (9 * 7) - (4 * 4). Output only the final integer.\nAnswer: ",
+        "gold_answer": "47",
+        "candidate_answers": [
+          "47",
+          "79",
+          "15",
+          "43"
+        ],
+        "metadata": {
+          "operands": [
+            9,
+            7,
+            4,
+            4
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_016",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 4 * x - 22 = 18, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "10",
+        "candidate_answers": [
+          "10",
+          "1",
+          "12",
+          "9"
+        ],
+        "metadata": {
+          "linear_eq": [
+            4,
+            -22,
+            18
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_017",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 4*6 + 4*6 - 4. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "44",
+        "candidate_answers": [
+          "44",
+          "48",
+          "92"
+        ],
+        "metadata": {
+          "operands": [
+            4,
+            6,
+            4,
+            6,
+            4
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_018",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (9 * 9) - (4 * 3). Output only the final integer.\nAnswer: ",
+        "gold_answer": "69",
+        "candidate_answers": [
+          "69",
+          "93",
+          "30",
+          "65"
+        ],
+        "metadata": {
+          "operands": [
+            9,
+            9,
+            4,
+            3
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_019",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 7 * x - 20 = 64, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "12",
+        "candidate_answers": [
+          "12",
+          "6",
+          "14",
+          "11"
+        ],
+        "metadata": {
+          "linear_eq": [
+            7,
+            -20,
+            64
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_020",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 2*10 + 4*10 - 8. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "52",
+        "candidate_answers": [
+          "52",
+          "60",
+          "112",
+          "54"
+        ],
+        "metadata": {
+          "operands": [
+            2,
+            10,
+            4,
+            10,
+            8
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_021",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (11 * 8) - (2 * 2). Output only the final integer.\nAnswer: ",
+        "gold_answer": "84",
+        "candidate_answers": [
+          "84",
+          "92",
+          "54",
+          "82"
+        ],
+        "metadata": {
+          "operands": [
+            11,
+            8,
+            2,
+            2
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_022",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 9 * x - 26 = 118, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "16",
+        "candidate_answers": [
+          "16",
+          "10",
+          "18",
+          "15"
+        ],
+        "metadata": {
+          "linear_eq": [
+            9,
+            -26,
+            118
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_023",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 2*11 + 2*4 - 11. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "19",
+        "candidate_answers": [
+          "19",
+          "30",
+          "49",
+          "21"
+        ],
+        "metadata": {
+          "operands": [
+            2,
+            11,
+            2,
+            4,
+            11
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_024",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (7 * 6) - (4 * 3). Output only the final integer.\nAnswer: ",
+        "gold_answer": "30",
+        "candidate_answers": [
+          "30",
+          "54",
+          "9",
+          "26"
+        ],
+        "metadata": {
+          "operands": [
+            7,
+            6,
+            4,
+            3
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_025",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 8 * x - 7 = 81, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "11",
+        "candidate_answers": [
+          "11",
+          "9",
+          "13",
+          "10"
+        ],
+        "metadata": {
+          "linear_eq": [
+            8,
+            -7,
+            81
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_026",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 2*8 + 3*6 - 5. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "29",
+        "candidate_answers": [
+          "29",
+          "34",
+          "65",
+          "31"
+        ],
+        "metadata": {
+          "operands": [
+            2,
+            8,
+            3,
+            6,
+            5
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_027",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (11 * 5) - (3 * 3). Output only the final integer.\nAnswer: ",
+        "gold_answer": "46",
+        "candidate_answers": [
+          "46",
+          "64",
+          "16",
+          "43"
+        ],
+        "metadata": {
+          "operands": [
+            11,
+            5,
+            3,
+            3
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_028",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 10 * x - 8 = 172, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "18",
+        "candidate_answers": [
+          "18",
+          "16",
+          "20",
+          "17"
+        ],
+        "metadata": {
+          "linear_eq": [
+            10,
+            -8,
+            172
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_029",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 4*10 + 3*8 - 5. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "59",
+        "candidate_answers": [
+          "59",
+          "64",
+          "121",
+          "63"
+        ],
+        "metadata": {
+          "operands": [
+            4,
+            10,
+            3,
+            8,
+            5
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_030",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (11 * 5) - (2 * 5). Output only the final integer.\nAnswer: ",
+        "gold_answer": "45",
+        "candidate_answers": [
+          "45",
+          "65",
+          "0",
+          "43"
+        ],
+        "metadata": {
+          "operands": [
+            11,
+            5,
+            2,
+            5
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_031",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 4 * x - 27 = -11, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "4",
+        "candidate_answers": [
+          "4",
+          "1",
+          "6",
+          "3"
+        ],
+        "metadata": {
+          "linear_eq": [
+            4,
+            -27,
+            -11
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_032",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 2*6 + 3*4 - 7. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "17",
+        "candidate_answers": [
+          "17",
+          "24",
+          "43",
+          "19"
+        ],
+        "metadata": {
+          "operands": [
+            2,
+            6,
+            3,
+            4,
+            7
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_033",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (5 * 6) - (3 * 3). Output only the final integer.\nAnswer: ",
+        "gold_answer": "21",
+        "candidate_answers": [
+          "21",
+          "39",
+          "6",
+          "18"
+        ],
+        "metadata": {
+          "operands": [
+            5,
+            6,
+            3,
+            3
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_034",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 6 * x - 27 = 9, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "6",
+        "candidate_answers": [
+          "6",
+          "1",
+          "8",
+          "5"
+        ],
+        "metadata": {
+          "linear_eq": [
+            6,
+            -27,
+            9
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_035",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 3*7 + 4*7 - 11. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "38",
+        "candidate_answers": [
+          "38",
+          "49",
+          "87",
+          "41"
+        ],
+        "metadata": {
+          "operands": [
+            3,
+            7,
+            4,
+            7,
+            11
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_036",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (7 * 8) - (3 * 5). Output only the final integer.\nAnswer: ",
+        "gold_answer": "41",
+        "candidate_answers": [
+          "41",
+          "71",
+          "12",
+          "38"
+        ],
+        "metadata": {
+          "operands": [
+            7,
+            8,
+            3,
+            5
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_037",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 11 * x - 15 = 29, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "4",
+        "candidate_answers": [
+          "4",
+          "1",
+          "6",
+          "3"
+        ],
+        "metadata": {
+          "linear_eq": [
+            11,
+            -15,
+            29
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_038",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 3*11 + 3*6 - 7. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "44",
+        "candidate_answers": [
+          "44",
+          "51",
+          "95",
+          "47"
+        ],
+        "metadata": {
+          "operands": [
+            3,
+            11,
+            3,
+            6,
+            7
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_039",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (11 * 8) - (3 * 5). Output only the final integer.\nAnswer: ",
+        "gold_answer": "73",
+        "candidate_answers": [
+          "73",
+          "103",
+          "24",
+          "70"
+        ],
+        "metadata": {
+          "operands": [
+            11,
+            8,
+            3,
+            5
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_040",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 8 * x - 23 = 9, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "4",
+        "candidate_answers": [
+          "4",
+          "1",
+          "6",
+          "3"
+        ],
+        "metadata": {
+          "linear_eq": [
+            8,
+            -23,
+            9
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_041",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 2*5 + 2*8 - 11. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "15",
+        "candidate_answers": [
+          "15",
+          "26",
+          "41",
+          "17"
+        ],
+        "metadata": {
+          "operands": [
+            2,
+            5,
+            2,
+            8,
+            11
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_042",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (8 * 9) - (4 * 5). Output only the final integer.\nAnswer: ",
+        "gold_answer": "52",
+        "candidate_answers": [
+          "52",
+          "92",
+          "16",
+          "48"
+        ],
+        "metadata": {
+          "operands": [
+            8,
+            9,
+            4,
+            5
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_043",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 11 * x - 18 = 81, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "9",
+        "candidate_answers": [
+          "9",
+          "5",
+          "11",
+          "8"
+        ],
+        "metadata": {
+          "linear_eq": [
+            11,
+            -18,
+            81
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_044",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 3*6 + 3*6 - 12. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "24",
+        "candidate_answers": [
+          "24",
+          "36",
+          "60",
+          "27"
+        ],
+        "metadata": {
+          "operands": [
+            3,
+            6,
+            3,
+            6,
+            12
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_045",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (5 * 7) - (3 * 2). Output only the final integer.\nAnswer: ",
+        "gold_answer": "29",
+        "candidate_answers": [
+          "29",
+          "41",
+          "10",
+          "26"
+        ],
+        "metadata": {
+          "operands": [
+            5,
+            7,
+            3,
+            2
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_046",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 3 * x - 16 = 23, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "13",
+        "candidate_answers": [
+          "13",
+          "2",
+          "15",
+          "12"
+        ],
+        "metadata": {
+          "linear_eq": [
+            3,
+            -16,
+            23
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_047",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 2*9 + 3*6 - 5. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "31",
+        "candidate_answers": [
+          "31",
+          "36",
+          "70",
+          "33"
+        ],
+        "metadata": {
+          "operands": [
+            2,
+            9,
+            3,
+            6,
+            5
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_048",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (9 * 6) - (3 * 5). Output only the final integer.\nAnswer: ",
+        "gold_answer": "39",
+        "candidate_answers": [
+          "39",
+          "69",
+          "6",
+          "36"
+        ],
+        "metadata": {
+          "operands": [
+            9,
+            6,
+            3,
+            5
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_049",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 10 * x - 6 = 114, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "12",
+        "candidate_answers": [
+          "12",
+          "10",
+          "14",
+          "11"
+        ],
+        "metadata": {
+          "linear_eq": [
+            10,
+            -6,
+            114
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_050",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 3*10 + 2*9 - 12. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "36",
+        "candidate_answers": [
+          "36",
+          "48",
+          "83",
+          "39"
+        ],
+        "metadata": {
+          "operands": [
+            3,
+            10,
+            2,
+            9,
+            12
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_051",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (9 * 5) - (4 * 3). Output only the final integer.\nAnswer: ",
+        "gold_answer": "33",
+        "candidate_answers": [
+          "33",
+          "57",
+          "10",
+          "29"
+        ],
+        "metadata": {
+          "operands": [
+            9,
+            5,
+            4,
+            3
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_052",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 9 * x - 13 = 95, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "12",
+        "candidate_answers": [
+          "12",
+          "9",
+          "14",
+          "11"
+        ],
+        "metadata": {
+          "linear_eq": [
+            9,
+            -13,
+            95
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_053",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 2*6 + 4*10 - 12. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "40",
+        "candidate_answers": [
+          "40",
+          "52",
+          "84",
+          "42"
+        ],
+        "metadata": {
+          "operands": [
+            2,
+            6,
+            4,
+            10,
+            12
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_054",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (7 * 8) - (2 * 5). Output only the final integer.\nAnswer: ",
+        "gold_answer": "46",
+        "candidate_answers": [
+          "46",
+          "66",
+          "15",
+          "44"
+        ],
+        "metadata": {
+          "operands": [
+            7,
+            8,
+            2,
+            5
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_055",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 5 * x - 5 = 45, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "10",
+        "candidate_answers": [
+          "10",
+          "8",
+          "12",
+          "9"
+        ],
+        "metadata": {
+          "linear_eq": [
+            5,
+            -5,
+            45
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_056",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 4*10 + 2*8 - 5. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "51",
+        "candidate_answers": [
+          "51",
+          "56",
+          "103",
+          "55"
+        ],
+        "metadata": {
+          "operands": [
+            4,
+            10,
+            2,
+            8,
+            5
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      },
+      {
+        "problem_id": "completion_test_057",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_diff_of_products_test",
+        "difficulty": "medium",
+        "prompt": "Evaluate (9 * 8) - (2 * 5). Output only the final integer.\nAnswer: ",
+        "gold_answer": "62",
+        "candidate_answers": [
+          "62",
+          "82",
+          "21",
+          "60"
+        ],
+        "metadata": {
+          "operands": [
+            9,
+            8,
+            2,
+            5
+          ],
+          "op": "a*b-c*d"
+        }
+      },
+      {
+        "problem_id": "completion_test_058",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_linear_sub_test",
+        "difficulty": "medium",
+        "prompt": "If 10 * x - 25 = 45, what is the integer value of x? Output only the integer.\nAnswer: ",
+        "gold_answer": "7",
+        "candidate_answers": [
+          "7",
+          "2",
+          "9",
+          "6"
+        ],
+        "metadata": {
+          "linear_eq": [
+            10,
+            -25,
+            45
+          ]
+        }
+      },
+      {
+        "problem_id": "completion_test_059",
+        "family": "arithmetic",
+        "split": "test",
+        "template_id": "arith_weighted_comb_test",
+        "difficulty": "hard",
+        "prompt": "Calculate 2*10 + 2*5 - 12. Output only the integer answer.\nAnswer: ",
+        "gold_answer": "18",
+        "candidate_answers": [
+          "18",
+          "30",
+          "48",
+          "20"
+        ],
+        "metadata": {
+          "operands": [
+            2,
+            10,
+            2,
+            5,
+            12
+          ],
+          "op": "w1*x1+w2*x2-bias"
+        }
+      }
+    ]
+  }
+}
