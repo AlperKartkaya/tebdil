@@ -111,3 +111,10 @@ without a new framework/dependency. Webapp-testing guidance applies to the exist
 keyboard/disclosure/download/responsive browser matrix; public verification is
 reported separately from local tests. No new skill installation or upstream code
 copy was needed; prior reference revisions/licenses above remain unchanged.
+
+Gate 2 reuses the existing recurrent scheduler and tested operators directly.
+It deliberately does not reuse the short-answer runner's retained per-prefix
+full-vocabulary logit dictionary for long completions. No existing research code
+was rewritten. Scientific guidance keeps input-distance random excursions distinct
+from output-norm-matched controls, and per-prefix call matching distinct from
+whole-answer compute matching. New mini-model tests carry no checkpoint claims.

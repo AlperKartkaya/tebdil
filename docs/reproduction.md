@@ -152,3 +152,20 @@ source hashes are checked, and the physical call counters must agree. RSS/MPS
 memory values are after-run snapshots, not peak measurements. See the
 [verification record](../reports/completed_answer_verification.md) before making
 any claim about completion or deployment. This does not rerun historical phases.
+
+## 10. Fixed-method completed-answer comparison (gate 2)
+
+```bash
+uv run pytest -q tests/test_fixed_completion_comparison.py
+uv run python scripts/compare_completed_answers.py --output-dir /tmp/comparison-new
+```
+
+Uses only completion_dev_000 and the committed native S0 record; first verifies
+an eight-token adapter/native prefix. All five new methods run serially to EOS
+or 2048 tokens. This can take hours on the local MPS machine; do not mistake a
+partial journal for a completed campaign. The directory must not exist. Each
+method has an exclusive output and every token is journaled. An interruption
+leaves partial evidence; there is intentionally no silent restart/overwrite.
+No reserved test inference or controller evaluation. Check the
+[verification status](../reports/completed_answer_comparison_verification.md)
+before claiming any result. See the [frozen scope and cost caveats](completed_answer_comparison_protocol.md).
