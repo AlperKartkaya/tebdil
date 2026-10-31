@@ -1,7 +1,8 @@
 # Gate 1: shared completed-answer evaluation
 
-Status: implementation frozen at `54b3381`; real-model smoke passed. Public
-deployment verification is pending; gate 2 has not started.
+Status: gate 1 complete. Implementation frozen at `54b3381`; observation and
+public evidence committed at `d74a61f`. Real smoke, release and public deployment
+verification passed before moving to gate 2.
 
 ## What changed
 
@@ -60,8 +61,13 @@ section order and IDs remain unchanged. No WCAG conformance claim follows.
 
 Manifest registration is append-only: old runs, metrics, evidence entries and file
 identities are unchanged. Seven pre-existing dirty research artifacts remain
-untouched; the exporter was checked, not rebuilt from those inputs. Public
-deployment verification remains pending.
+untouched; the exporter was checked, not rebuilt from those inputs.
+
+[CI and Pages deployment passed](https://github.com/AlperKartkaya/tebdil/actions/runs/41245538443).
+The full public browser matrix repeated the local pass, including the new recorded
+smoke download. Public SHA-256 matches the committed index, app, manifest and
+completion report. Protocol, task-manifest and verification GitHub source links
+return HTTP 200. Only after these checks was gate 1 closed.
 
 ## Interpretation
 
