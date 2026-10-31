@@ -1,6 +1,6 @@
 # Gate 2: fixed-method completed-answer comparison
 
-Status: **real technical comparison complete; release validation in progress**.
+Status: **real technical comparison and public release verification complete**.
 Gate 1 was publicly verified first. Code and [protocol](../docs/completed_answer_comparison_protocol.md)
 were frozen at `c60dbaf` before observation. Gate 3 has not started; all 60 reserved
 test questions remain unexecuted. No learned controller was run.
@@ -89,4 +89,7 @@ independent test and report uncertainty and all outcomes.
   download, keyboard/retry/checksum handling and 320–1440 px layouts; no console,
   network or overflow failures. Expanded evidence was visually inspected.
 - All historical manifest entries/run data remain byte-equivalent in content.
-  Public deployment/hash/browser verification is still pending for this new report.
+- Evidence commit `0dcbdc3`: [CI and Pages deployment passed](https://github.com/AlperKartkaya/tebdil/actions/runs/41254056115).
+  The full public browser matrix passed separately. Deployed HTML, app, manifest
+  and new raw report match local SHA-256 digests; protocol, findings and raw-journal
+  source links return HTTP 200. This closes the technical gate, not the efficacy gate.
