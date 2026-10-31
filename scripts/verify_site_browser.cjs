@@ -43,6 +43,13 @@ const base=process.env.SITE_URL||'http://127.0.0.1:8093/';
  for(const source of ['docs/completed_answer_comparison_protocol.md','reports/completed_answer_comparison_verification.md']){
    assert.equal(await contract.locator(`a[href$="${source}"]`).count(),1);
  }
+ const comparisonResponse=await page.request.get(new URL(await contract.locator('a[href="static/evidence/ouro_completed_answer_comparison.json"]').getAttribute('href'),base).href);
+ assert(comparisonResponse.ok());const comparison=await comparisonResponse.json();
+ assert(comparison.all_checks_passed);assert.equal(comparison.protocol,'completed_answer_comparison_smoke_v1');
+ assert.deepEqual(comparison.records.map(r=>r.method),['B_only','M0','M1','E0','E1']);
+ assert(comparison.records.every(r=>r.split==='development'&&r.completed));
+ assert.equal(comparison.actual_new_recurrent_calls,32+comparison.records.reduce((n,r)=>n+r.recurrent_block_calls,0));
+ assert((await contract.innerText()).includes('format failure, not demonstrated wrong arithmetic'));
  await contract.screenshot({path:'/tmp/tebdil-generation-evidence.png'});
  await contract.locator('summary').press('Enter');
  await page.screenshot({path:'/tmp/tebdil-final-desktop-hero.png'});

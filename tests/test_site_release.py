@@ -734,4 +734,74 @@ def test_completed_answer_evidence_stays_in_existing_disclosure() -> None:
     disclosure = html.split('id="ouroExecutionContract"', 1)[1].split('</details>', 1)[0]
     assert 'docs/completed_answer_comparison_protocol.md' in disclosure
     assert 'reports/completed_answer_comparison_verification.md' in disclosure
-    assert 'Comparison evidence pending' in disclosure
+    assert 'not an efficacy result' in disclosure
+    assert 'format failure, not demonstrated wrong arithmetic' in disclosure
+    assert 'static/evidence/ouro_completed_answer_comparison.json' in disclosure
+
+
+def test_fixed_completion_evidence_retains_every_arm_and_reconciles_real_costs() -> None:
+    import torch
+    from tebdil.core.state import hash_tensor
+    from tebdil.evaluation.comparison import METHOD_CALLS
+    from tebdil.evaluation.completion import score_completion
+    from tebdil.tasks.completion import extract_completed_integer
+
+    path = ROOT / 'reports/ouro_completed_answer_comparison.json'
+    report = json.loads(path.read_text())
+    reference = json.loads((ROOT / report['baseline_reference']).read_text())
+    assert report['all_checks_passed'] and report['cache_mode'] == 'disabled'
+    assert report['protocol'] == 'completed_answer_comparison_smoke_v1'
+    assert report['checkpoint_sha256'] == reference['checkpoint_sha256']
+    assert report['model_revision'] == reference['model_revision']
+    assert report['device'] == reference['device'] and report['torch_version'] == reference['torch_version']
+    assert report['baseline_record'] == reference['records'][0]
+    assert report['methods'] == ['B_only', 'M0', 'M1', 'E0', 'E1']
+    assert [r['method'] for r in report['records']] == report['methods']
+    assert report['parity']['generated_token_ids'] == report['baseline_record']['generated_token_ids'][:8]
+    assert report['parity']['recurrent_block_calls'] == 32
+    for source, digest in report['source_sha256'].items():
+        assert hashlib.sha256((ROOT / source).read_bytes()).hexdigest() == digest, source
+    events = [json.loads(line) for line in path.with_suffix('.jsonl').read_text().splitlines()]
+    assert events[0]['event'] == 'start' and events[-1]['event'] == 'finish'
+    assert events[0]['source_sha256'] == report['source_sha256']
+    assert not any(e['event'] == 'failure' for e in events)
+    assert [e['method'] for e in events if e['event'] == 'method_start'] == report['methods']
+    assert [e['record'] for e in events if e['event'] == 'method_finish'] == report['records']
+    for record in report['records']:
+        assert record['problem_id'] == 'completion_dev_000' and record['split'] == 'development'
+        assert record['prompt_token_ids'] == report['baseline_record']['prompt_token_ids']
+        assert record['gold_answer'] == report['baseline_record']['gold_answer']
+        tokens, method = record['generated_token_ids'], record['method']
+        assert 0 < len(tokens) <= 2048
+        assert record['completed'] == (tokens[-1] == reference['eos_token_id'])
+        assert reference['eos_token_id'] not in tokens[:-1]
+        assert record['stop_reason'] == ('eos_token' if record['completed'] else 'max_output_tokens')
+        assert record['completed'] or len(tokens) == 2048
+        answer = extract_completed_integer(record['decoded_text_with_special_tokens'], reference['eos_token'], completed=record['completed'])
+        assert record['extracted_answer'] == answer and record['format_valid'] == (answer is not None)
+        assert {k: record[k] for k in ('status', 'is_correct')} == score_completion(record, record['gold_answer'])
+        calls = METHOD_CALLS[method]
+        assert record['recurrent_block_calls'] == calls * len(tokens)
+        assert len(record['token_ledger']) == len(tokens)
+        for k, entry in enumerate(record['token_ledger']):
+            prefix = record['prompt_token_ids'] + tokens[:k]
+            assert entry['token_index'] == k and entry['token_id'] == tokens[k]
+            assert entry['prefix_length'] == len(prefix)
+            assert entry['prefix_token_ids_sha256'] == hash_tensor(torch.tensor([prefix]), 64)
+            assert entry['branch_seed'] == 20261101 + 131 * k
+            assert entry['calls_before'] == k * calls and entry['recurrent_block_calls'] == calls
+            assert entry['selected_branch'] == ('B' if method == 'B_only' else 'A')
+            assert SHA256.fullmatch(entry['selected_hidden_hash'])
+            telemetry = entry['intervention']
+            if method == 'B_only':
+                assert telemetry is None
+            else:
+                assert telemetry['post_finite'] and not telemetry['skipped_unstable']
+        assert record['recurrent_token_positions'] == sum(e['prefix_length'] * calls for e in record['token_ledger'])
+        token_events = [{k: v for k, v in e.items() if k not in ('event', 'method')} for e in events if e['event'] == 'token' and e['method'] == method]
+        assert token_events == record['token_ledger']
+    assert report['actual_new_recurrent_calls'] == 32 + sum(r['recurrent_block_calls'] for r in report['records'])
+    assert events[-1]['actual_new_recurrent_calls'] == report['actual_new_recurrent_calls']
+    assert report['reused_baseline_recurrent_calls'] == report['baseline_record']['recurrent_block_calls']
+    assert (SITE / 'static/evidence' / path.name).read_bytes() == path.read_bytes()
+    assert any(e['source'] == 'reports/ouro_completed_answer_comparison.json' for e in load_manifest()['evidence'])

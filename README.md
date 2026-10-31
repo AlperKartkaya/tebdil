@@ -51,8 +51,11 @@ prompt/stopping/parser contract and separate development/reserved test questions
 Its [verification record](reports/completed_answer_verification.md) distinguishes
 pipeline smoke validation from a future intervention-accuracy comparison.
 Gate 1 is complete. The [fixed-method comparison](docs/completed_answer_comparison_protocol.md)
-is now being validated on the same development question; no new efficacy result
-or reserved-test inference is available. [Current gate-2 status](reports/completed_answer_comparison_verification.md).
+now records five real EOS completions on the same already-correct development
+question: mixing and excursion methods retain the recognized correct answer;
+donor-only uses a boxed answer rejected by the frozen parser, not demonstrated
+wrong arithmetic. No rescue or held-out benefit is established.
+[Gate-2 findings and actual costs](reports/completed_answer_comparison_verification.md).
 
 ## Run the static observatory
 

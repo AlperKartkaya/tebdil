@@ -130,3 +130,14 @@ test inputs before new model observations. Unfinished and malformed attempts sta
 in the denominator. Its development smoke tests the instrument, not intervention
 utility. [Protocol](completed_answer_protocol.md) and
 [execution status](../reports/completed_answer_verification.md).
+
+## Completed-answer fixed-method smoke
+
+The [gate-2 record](../reports/completed_answer_comparison_verification.md) now
+contains five genuine Ouro EOS completions on the same already-correct development
+question. M0/M1/E0/E1 retain the recognized correct final answer; donor-only emits
+`\boxed{29}`, rejected by the unchanged parser. This is a measurement-format limit,
+not demonstrated wrong reasoning. E0/E1 each use 381 tokens and 3,048 calls here.
+All outputs and costs are retained. One question provides no rescue/generalization
+or superiority evidence. Before a utility pilot, freeze format coverage and
+completed-answer matched controls; no reserved tests or controller were executed.
