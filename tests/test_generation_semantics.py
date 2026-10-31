@@ -84,3 +84,20 @@ def test_chat_template_is_explicit_and_does_not_stop_at_a_reasoning_newline():
     assert record["stop_reason"] == "max_output_tokens"
     with pytest.raises(ValueError, match="prompt_format"):
         decode(adapter, Tokenizer(), prompt_format="invented")
+
+
+@pytest.mark.parametrize("gold", ["777", "888"])
+def test_teacher_forced_full_answer_is_not_clipped_by_generation_budget(gold):
+    adapter = OuroRecurrentAdapter.from_mini_config(vocab_size=128)
+    constant_readout(adapter, ord("7"))
+    problem = TaskProblem("fixture", "arithmetic", "pilot", "fixture", "test", "Answer: ", gold)
+    record = _decode_method_on_problem(
+        adapter, ByteLevelToyTokenizer(), problem, "S0", 42, 4, 1, 1,
+        "none", 0.0, ExcursionConfig(), AdaptivePolicyConfig(), max_output_tokens=1,
+    )
+    assert record["generated_token_ids"] == [ord("7")]
+    assert len(record["gold_token_logprobs"]) == 3
+    assert record["recurrent_block_calls"] == 4
+    assert record["scoring_recurrent_calls"] == 8
+    assert adapter.recurrent_block_calls == 12
+    assert record["sequence_gold_logprob"] == pytest.approx(sum(record["gold_token_logprobs"]), abs=2e-6)

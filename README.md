@@ -32,7 +32,10 @@ short-answer budget, not completed chat-format thinking. Branches are re-forked
 within each generated token's recurrent computation; they are not persistent
 reasoning agents. The [generation contract](docs/trajectory_semantics.md) separates
 these semantics from a fresh pilot prompt/budget calibration. Calibration does not
-replace the historical results or establish intervention efficacy.
+replace the historical results or establish intervention efficacy. The native
+follow-up now preserves three EOS-completed pilot continuations and real call
+ledgers; its separate post-hoc scoring distinguishes answer-format failures from
+mathematical errors. See [point B verification](reports/trajectory_verification.md).
 
 ## Run the static observatory
 

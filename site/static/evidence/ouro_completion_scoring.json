@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-10-31T20:37:16.128960+00:00",
+  "purpose": "Post-hoc pilot final-answer format diagnostic, not a held-out benchmark",
+  "posthoc": true,
+  "answer_extraction": "completed_final_integer_v1",
+  "eos_token": "<|im_end|>",
+  "eos_token_id": 2,
+  "input_source": "reports/ouro_baseline_completion.json",
+  "input_sha256": "d05cb39ee6561f07ff8708a69e2c195ebe48a647770ceac842fff02e85d19dc8",
+  "source_sha256": {
+    "scripts/score_ouro_completion.py": "e91cad3d4926335977962c8600e86c373c860c788baac9f8bc351f3c658e9dff",
+    "src/tebdil/tasks/completion.py": "bb29538f5d308a7c38014bbad73ebd3507fe936e5dc1852d1d5db9f644264f63",
+    "uv.lock": "cb7b5dd654ef14b025231b164d04f95f7b4c7c3ecae32567f4a2d7515f78482b"
+  },
+  "independent_problems": 3,
+  "records": [
+    {
+      "problem_id": "arith_pilot_000",
+      "split": "pilot",
+      "completed": true,
+      "final_integer": "50",
+      "format_valid": true,
+      "correct": true,
+      "original_strict_correct": false
+    },
+    {
+      "problem_id": "logic_pilot_000",
+      "split": "pilot",
+      "completed": true,
+      "final_integer": "0",
+      "format_valid": true,
+      "correct": true,
+      "original_strict_correct": false
+    },
+    {
+      "problem_id": "graph_pilot_000",
+      "split": "pilot",
+      "completed": true,
+      "final_integer": null,
+      "format_valid": false,
+      "correct": false,
+      "original_strict_correct": false
+    }
+  ],
+  "limitations": [
+    "Parser developed after inspecting arithmetic and logic pilot outputs; not preregistered",
+    "The same pilot problems, not new independent observations or evidence of generalization",
+    "Original strict scores and native outputs remain unchanged; no intervention was evaluated",
+    "Future held-out comparisons must freeze this parser and share one prompt, completion and compute protocol"
+  ]
+}

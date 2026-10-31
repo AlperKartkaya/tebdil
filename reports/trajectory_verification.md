@@ -1,47 +1,84 @@
 # Point B — trajectory semantics and baseline calibration
 
-2026-10-31. **In progress: completed-generation follow-up remains a gate.**
-Point A was committed as `e0728b3`, deployed by [run 41219360287](https://github.com/AlperKartkaya/tebdil/actions/runs/41219360287),
-and passed the full browser script on the public GitHub Pages URL.
+2026-10-31. **Local verification complete; Pages deployment verification pending.**
+Point A remains separately verified in `e0728b3` and [deployment 41219360287](https://github.com/AlperKartkaya/tebdil/actions/runs/41219360287).
 
-## Completed checks
+## Implementation
 
-- New inference records identify encoded prompts, generated IDs, actual per-token
-  prefix SHA-256/length, branch seed, branch lifetime, output budget and stop reason.
-- Regression tests verify re-forking at depth 1 for each new prefix; a branch is not
-  a persistent agent across generated tokens. EOS now stops even if decoded text
-  is empty. An explicit diagnostic chat mode permits reasoning newlines.
-- New FLOP estimates sum actual prefix lengths instead of charging all generated
-  tokens at the initial prompt length. They remain estimates, not measured FLOPs.
-- `uv run pytest -q -m 'not real_model'`: **102 passed, 1 deselected**. Scoped Ruff,
-  JavaScript syntax, TypeScript, export checksums/pairing and diff checks pass.
-- Real checkpoint calibration completed nine evaluations on the same three pilot
-  problems: seed 20261031, BF16, four-depth forced-final readout. Checkpoint files
-  were rehashed against committed provenance. All measured inference/scoring
-  counters reconcile; committed tests reconstruct every recorded token prefix.
-- Raw/2 and raw/64 each produced 1/3 correct integer-only responses. Arithmetic
-  and graph kept the same wrong answers after reaching a newline. Chat/128
-  produced explicit `<think>` content but no completed final answer on any case.
-- Original experiment shards, scores, styles and seven pre-existing modified
-  research artifacts were not regenerated or overwritten.
+- Per-token records now identify actual prefix IDs/hashes/lengths, branch seeds,
+  encoded prompts, generated IDs, prompt format, branch lifetime and stop reason.
+  Branches re-fork inside each generated token's depth unroll; hidden states do
+  not persist across output positions. Subsequent influence is through emitted tokens.
+- EOS stops immediately even when decoded text is empty. Diagnostic chat permits
+  reasoning newlines; the historical raw stopping policy remains explicitly labeled.
+- FLOP estimates now sum each token's actual prefix length. These remain estimates,
+  not measured FLOPs or evidence of compute matching.
+- Full teacher-forced gold-sequence scoring no longer truncates at the generation
+  budget. Its regression failed first, then passed with all target tokens and
+  separately charged scoring calls. Two different gold targets leave the generated
+  token unchanged. Scoring occurs after generation, not inside controller decisions.
+- Chat scoring requires EOS and an explicit final integer outside thought. It
+  never scores the first integer in an unfinished continuation. The conservative
+  `completed_final_integer_v1` parser was developed after inspecting two pilot
+  outputs; raw extraction remains the explicitly labeled legacy policy.
 
-## Open completion gate
+## Real-checkpoint evidence
 
-`scripts/complete_ouro_baseline.py` follows up **all three** unfinished chat cases,
-not a correctness-selected subset. It uses native greedy, cache-free generation,
-forced depth 4 and a 2048-token ceiling. Forward hooks count real normalization
-boundaries and record input-prefix hashes. It compares the first recorded tokens
-with the adapter and only accepts a final integer after EOS and outside thought.
-Mini-model generation/parsing tests pass; those are not real completion evidence.
+The initial [calibration](ouro_baseline_calibration.json) preserves nine evaluations
+on the same three pilot problems: seed 20261031, BF16, forced depth 4, MPS.
+Raw/2 and raw/64 each scored 1/3; chat/128 always truncated thinking.
 
-Until this follow-up is finished, inspected and published, point B is not complete
-and point C is not started. The initial calibration is preserved unchanged in
-[JSON](ouro_baseline_calibration.json); it is not rewritten to improve its outcomes.
+The new [native completion](ouro_baseline_completion.json) follows up **all three**
+chat cases, with the same prefixes, greedy forced-depth-4 execution, disabled
+caching and a 2048-token ceiling. Checkpoint files were rehashed before loading;
+source identities were captured before generation. Its [JSONL journal](ouro_baseline_completion.jsonl)
+preserves each finished case immediately. Hooks count actual normalization-boundary
+executions and record every actual forward-input prefix, not inferred savings.
 
-## Limits
+| Family | Generated tokens | Actual recurrent calls | Stop | First 128 vs adapter |
+|---|---:|---:|---|---|
+| Arithmetic | 437 | 1,748 | EOS | Exact agreement |
+| Logic | 483 | 1,932 | EOS | Exact agreement |
+| Graph | 1,514 | 6,056 | EOS | Exact agreement |
 
-Three pilot problems cannot establish baseline competence, optimal prompting,
-generalization, statistical improvement or intervention benefit. Native completion
-and the old raw-prompt interventions must not be compared as a fair efficacy
-experiment. New controller training and all method comparisons need one common
-frozen prompt/completion/scoring protocol before publication.
+All three final responses contain correct mathematics by inspection, but fail the
+original whole-response integer format because they contain prose. A separate
+[post-hoc annotation](ouro_completion_scoring.json) recognizes 50 and 0; it rejects
+the graph's prose conclusion of 15. That rejection is retained, not tuned away.
+These are parser/protocol diagnostics, **not a 2/3 mathematical accuracy estimate**,
+a held-out benchmark, new independent problems, or a TEBDİL comparison.
+Original outputs and strict scores remain unchanged.
+
+Measured case wall times were 689.223, 854.096 and 7,480.436 seconds. This expensive
+cache-free path is not a practical-caching or campaign-throughput benchmark.
+The initial interrupted attempt is excluded because its raw output was not saved.
+A mini cached-generation probe failed on the pinned Transformers cache API; no
+real cached baseline ran. No upstream cache implementation was patched.
+
+## Verification
+
+- `uv run pytest -q`: **122 passed**, including real Ouro integration on MPS.
+- Regression checks reconstruct every native prefix and calibration branch seed,
+  reconcile inference/scoring calls, match the completion journal to final JSON,
+  verify source and input identities, and reproduce post-hoc parsing independently.
+- Scoped Ruff (`E4,E7,E9,F`), JavaScript syntax, TypeScript and export hashes/pairing pass.
+- Full Chromium verification at `/tebdil/`: all eight recorded datasets, three demo
+  cases, downloads, evidence links, keyboard, failure/retry/checksum handling pass.
+  New native and post-hoc JSON downloads are checked separately. No page errors,
+  failed normal requests, external runtime dependencies or overflow at widths
+  320/390/768/1024/1440. Expanded evidence screenshot inspected.
+- Original CSS, section order, IDs, experiment shards and historical scores are
+  preserved. Seven pre-existing modified research artifacts were not regenerated,
+  staged or republished. Only new evidence was appended to the export manifest.
+
+## Boundaries and next gate
+
+Three pilot problems do not establish baseline competence, optimal prompting,
+precision robustness, statistical improvement or intervention efficacy. The parser
+is deliberately conservative and post-hoc; future held-out comparisons must freeze
+one common prompt/completion/scoring protocol and disclose format validity separately.
+Historical raw-prompt interventions cannot be fairly compared with this longer
+native generation as an efficacy result. CUDA, native caching, branch-safe caching,
+and a complete new held-out campaign are unverified.
+
+Point C is not started until the Pages deployment and public browser checks pass.

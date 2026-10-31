@@ -25,6 +25,8 @@ from tebdil.evaluation.trace import (
 from tebdil.models.ouro_adapter import OuroRecurrentAdapter, PINNED_OURO_THINKING_REV
 from tebdil.models.toy_adapter import ToyRecurrentAdapter
 from tebdil.tasks import TaskProblem, generate_task_suite, validate_problem_response
+from tebdil.tasks.completion import extract_completed_integer
+from tebdil.tasks.validators import ValidationOutcome
 
 
 class ByteLevelToyTokenizer:
@@ -552,7 +554,7 @@ def _decode_method_on_problem(
     gold_token_lps: List[float] = [first_gold_lp]
     scoring_calls = 0
     if len(gold_token_ids) > 1:
-        for g_idx in range(1, min(len(gold_token_ids), max_output_tokens)):
+        for g_idx in range(1, len(gold_token_ids)):
             prefix_tuple = tuple(gold_token_ids[:g_idx])
             if prefix_tuple in step_k_logits_by_prefix:
                 g_logits = step_k_logits_by_prefix[prefix_tuple]
@@ -593,7 +595,17 @@ def _decode_method_on_problem(
     mean_gold_token_lp = float(sum(gold_token_lps) / len(gold_token_lps))
 
     decoded_text = tokenizer.decode(generated_tokens).strip()
-    val_outcome = validate_problem_response(problem, decoded_text)
+    if prompt_format == "chat":
+        final_answer = extract_completed_integer(
+            decoded_text, getattr(tokenizer, "eos_token", "") or "",
+            completed=stop_reason == "eos_token",
+        )
+        val_outcome = (
+            validate_problem_response(problem, final_answer) if final_answer is not None
+            else ValidationOutcome(False, "", "incomplete_or_unrecognized_final_answer")
+        )
+    else:
+        val_outcome = validate_problem_response(problem, decoded_text)
 
     estimated_flops = 0.0
     for entry in token_ledger:
@@ -617,6 +629,7 @@ def _decode_method_on_problem(
         "prompt": problem.prompt,
         "prompt_hash": hashlib.sha256(problem.prompt.encode("utf-8")).hexdigest()[:16],
         "prompt_format": prompt_format,
+        "answer_extraction": "completed_final_integer_v1" if prompt_format == "chat" else "legacy_first_integer",
         "prompt_token_ids": prompt_ids.detach().cpu().tolist()[0],
         "generated_token_ids": generated_tokens,
         "trajectory_semantics": "full_prefix_refork_per_generated_token",

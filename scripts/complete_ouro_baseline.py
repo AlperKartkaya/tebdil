@@ -1,4 +1,4 @@
-"""Follow up truncated pilot chat responses with native, cache-free generation.
+"""Follow up truncated pilot chat responses with native generation.
 
 uv run python scripts/complete_ouro_baseline.py --output reports/ouro_baseline_completion.json
 This is a completion diagnostic, not a new intervention benchmark.
@@ -17,10 +17,12 @@ import time
 
 import torch
 from transformers import AutoTokenizer
+from huggingface_hub import snapshot_download
 
 from tebdil.core.state import hash_tensor
 from tebdil.models.ouro_adapter import OuroRecurrentAdapter, PINNED_OURO_THINKING_REV
 from tebdil.tasks import TaskProblem, validate_problem_response
+from tebdil.evaluation.trace import append_trace_record
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -34,7 +36,10 @@ def final_integer(text: str, eos_text: str) -> str | None:
     text = text.strip()
     if eos_text and text.endswith(eos_text):
         text = text[:-len(eos_text)].strip()
-    return text if re.fullmatch(r"[+-]?\d+", text) else None
+    if text.startswith("$") and text.endswith("$"):
+        text = text[1:-1].strip()
+    match = re.fullmatch(r"(?:\\boxed\{([+-]?\d+)\}|([+-]?\d+))", text)
+    return (match.group(1) or match.group(2)) if match else None
 
 
 @torch.no_grad()
@@ -49,9 +54,13 @@ def native_generate(adapter, tokenizer, prompt_ids, budget):
 
     def prefix_hook(module, args, kwargs):
         ids = kwargs["input_ids"]
+        if ledger and len(ledger) % 128 == 0:
+            print(f"  {len(ledger)} tokens generated; prefix length {ids.shape[1]}", flush=True)
         ledger.append({
             "prefix_length": int(ids.shape[1]),
             "prefix_token_ids_sha256": hash_tensor(ids, length=64),
+            "processed_sequence_length": int(ids.shape[1]),
+            "processed_input_ids": ids.tolist()[0],
             "calls_before": calls,
         })
 
@@ -86,15 +95,31 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
-    if args.output.exists():
-        parser.error("output exists; preserve earlier evidence")
+    journal = args.output.with_suffix(".jsonl")
+    if args.output.exists() or journal.exists():
+        parser.error("output or journal exists; preserve earlier evidence")
     reference_path = ROOT / "reports/ouro_baseline_calibration.json"
     reference = json.loads(reference_path.read_text())
     repo = "ByteDance/Ouro-1.4B-Thinking"
+    snapshot = Path(snapshot_download(repo, revision=PINNED_OURO_THINKING_REV, local_files_only=True))
+    if any(sha256(snapshot / n) != h for n, h in reference["checkpoint_sha256"].items()):
+        raise ValueError("Checkpoint provenance changed since calibration")
     tokenizer = AutoTokenizer.from_pretrained(repo, revision=PINNED_OURO_THINKING_REV, local_files_only=True)
     adapter = OuroRecurrentAdapter.from_pretrained(local_files_only=True)
     budget = 2048
     records = []
+    sources = ["scripts/complete_ouro_baseline.py", "src/tebdil/models/ouro_adapter.py",
+               "src/tebdil/tasks/validators.py", "vendor/ouro_1_4b_thinking/modeling_ouro.py", "uv.lock"]
+    identity = {
+        "base_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+        "source_sha256": {p: sha256(ROOT / p) for p in sources},
+        "reference_calibration_sha256": sha256(reference_path),
+        "cache_mode": "disabled",
+        "max_output_tokens": budget,
+    }
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    with journal.open("x", encoding="utf-8") as stream:
+        stream.write(json.dumps({"event": "start", **identity}) + "\n")
     # Selection is completion-driven, not correctness-driven: every chat case.
     for initial in (r for r in reference["records"] if r["prompt_format"] == "chat"):
         print(f"Native completion: {initial['problem_id']}, max {budget} tokens", flush=True)
@@ -125,25 +150,24 @@ def main():
             "wall_seconds": round(time.monotonic() - started, 3),
         }
         records.append(row)
+        append_trace_record({"event": "completion", "record": row}, journal)
         print(f"  {len(tokens)} tokens; {row['stop_reason']}; final={answer}; strict_correct={row['strict_correct']}; divergence={divergence}", flush=True)
 
-    sources = ["scripts/complete_ouro_baseline.py", "src/tebdil/models/ouro_adapter.py",
-               "src/tebdil/tasks/validators.py", "vendor/ouro_1_4b_thinking/modeling_ouro.py", "uv.lock"]
     report = {
         "schema_version": 1, "purpose": "Native completion follow-up to truncated pilot calibration",
         "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
-        "base_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-        "source_sha256": {p: sha256(ROOT / p) for p in sources},
-        "reference_calibration_sha256": sha256(reference_path),
+        **identity,
         "model_id": repo, "model_revision": PINNED_OURO_THINKING_REV,
         "checkpoint_sha256": reference["checkpoint_sha256"],
         "device": str(adapter.device), "dtype": str(adapter.dtype), "torch_version": torch.__version__,
-        "engine": "native generate, cache disabled, forced depth 4, greedy, full-prefix logits",
+        "engine": "native generate, forced depth 4, greedy, all processed-position logits",
         "max_output_tokens": budget, "independent_problems": len(records), "records": records,
         "limitations": [
             "Adaptive budget follow-up after all three pilot chat responses were unfinished at 128 tokens",
             "Same three pilot problems, not additional independent observations or a held-out study",
-            "Final integer is scored only after EOS and outside a completed thought region",
+            "Final integer (bare or boxed, optional math dollars) is scored only after EOS and outside a completed thought region",
+            "Every forward receives the full recorded prefix; no persistent hidden-state or KV cache",
+            "Cached generation is unsupported in this pinned stack and not used; no compute-matched intervention comparison",
             "Native ledger counts actual RMSNorm-boundary executions, not inferred compute savings",
             "No intervention efficacy, optimal-prompt or general model-competence claim",
         ],

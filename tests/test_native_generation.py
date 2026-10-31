@@ -22,6 +22,8 @@ native_generate = MODULE.native_generate
     ("<think>50</think>not an answer<eos>", None),
     ("-12<eos>", "-12"),
     ("There are 12 edges and 15 is the answer<eos>", None),
+    (r"<think>8 * 6 is 48.</think>\boxed{50}<eos>", "50"),
+    (r"<think>8 * 6 is 48.</think>$\boxed{-12}$<eos>", "-12"),
 ])
 def test_final_integer_excludes_thought_and_requires_complete_integer_region(text, expected):
     assert final_integer(text, "<eos>") == expected
@@ -44,3 +46,4 @@ def test_native_greedy_prefix_matches_adapter_and_actual_calls():
         ids = torch.cat([ids, torch.tensor([[token]])], dim=1)
     assert calls == len(tokens) * 4
     assert [e["prefix_length"] for e in ledger] == list(range(3, 3 + len(tokens)))
+    assert [e["processed_sequence_length"] for e in ledger] == [e["prefix_length"] for e in ledger]

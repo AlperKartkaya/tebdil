@@ -173,6 +173,80 @@ def test_pilot_calibration_prefixes_and_counts_are_traceable() -> None:
     assert len(chat) == 3 and all(r["stop_reason"] == "max_output_tokens" for r in chat)
 
 
+
+def test_native_completion_preserves_actual_prefixes_and_journal() -> None:
+    from tebdil.core.state import hash_tensor
+    import torch
+
+    path = ROOT / "reports/ouro_baseline_completion.json"
+    report = json.loads(path.read_text())
+    initial_path = ROOT / "reports/ouro_baseline_calibration.json"
+    initial = json.loads(initial_path.read_text())
+    reference = {r["problem_id"]: r for r in initial["records"] if r["prompt_format"] == "chat"}
+    journal = [json.loads(line) for line in path.with_suffix(".jsonl").read_text().splitlines()]
+    assert journal[0]["event"] == "start"
+    for key, value in journal[0].items():
+        if key != "event":
+            assert report[key] == value
+    assert report["reference_calibration_sha256"] == hashlib.sha256(initial_path.read_bytes()).hexdigest()
+    assert report["checkpoint_sha256"] == initial["checkpoint_sha256"]
+    assert report["model_id"] == initial["model_id"] and report["model_revision"] == initial["model_revision"]
+    assert report["cache_mode"] == "disabled" and report["max_output_tokens"] == 2048
+    assert report["independent_problems"] == len(report["records"]) == 3
+    assert {r["problem_id"] for r in report["records"]} == set(reference)
+    assert [event["record"] for event in journal[1:] if event["event"] == "completion"] == report["records"]
+    for source, digest in report["source_sha256"].items():
+        assert hashlib.sha256((ROOT / source).read_bytes()).hexdigest() == digest
+    for row in report["records"]:
+        old = reference[row["problem_id"]]
+        assert row["prompt_token_ids"] == old["prompt_token_ids"]
+        assert row["gold_answer"] == old["gold_answer"] and row["split"] == "pilot"
+        assert len(row["token_ledger"]) == len(row["generated_token_ids"])
+        assert row["recurrent_block_calls"] == 4 * len(row["generated_token_ids"])
+        assert row["strict_correct"] == (row["final_integer"] is not None and int(row["final_integer"]) == int(row["gold_answer"]))
+        n = min(len(old["generated_token_ids"]), len(row["generated_token_ids"]))
+        assert row["reference_prefix_tokens_compared"] == n
+        divergence = next((k for k in range(n) if old["generated_token_ids"][k] != row["generated_token_ids"][k]), None)
+        assert row["first_divergent_token_vs_adapter"] == divergence
+        for k, entry in enumerate(row["token_ledger"]):
+            prefix = row["prompt_token_ids"] + row["generated_token_ids"][:k]
+            assert entry["processed_input_ids"] == prefix
+            assert entry["prefix_length"] == entry["processed_sequence_length"] == len(prefix)
+            assert entry["prefix_token_ids_sha256"] == hash_tensor(torch.tensor([prefix]), length=64)
+            assert entry["calls_before"] == 4 * k and entry["recurrent_block_calls"] == 4
+    assert (SITE / "static/evidence" / path.name).read_bytes() == path.read_bytes()
+    assert any(e["source"] == "reports/ouro_baseline_completion.json" for e in load_manifest()["evidence"])
+
+
+
+def test_completion_rescoring_is_separate_and_explicitly_posthoc() -> None:
+    from tebdil.tasks.completion import extract_completed_integer
+
+    path = ROOT / "reports/ouro_completion_scoring.json"
+    report = json.loads(path.read_text())
+    raw_path = ROOT / report["input_source"]
+    raw = json.loads(raw_path.read_text())
+    assert report["posthoc"] is True
+    assert report["answer_extraction"] == "completed_final_integer_v1"
+    assert report["input_sha256"] == hashlib.sha256(raw_path.read_bytes()).hexdigest()
+    assert report["independent_problems"] == len(report["records"]) == len(raw["records"]) == 3
+    for source, digest in report["source_sha256"].items():
+        assert hashlib.sha256((ROOT / source).read_bytes()).hexdigest() == digest
+    for row, native in zip(report["records"], raw["records"], strict=True):
+        assert row["problem_id"] == native["problem_id"] and row["split"] == "pilot"
+        completed = native["generated_token_ids"][-1] == report["eos_token_id"]
+        assert row["completed"] == completed
+        answer = extract_completed_integer(
+            native["decoded_text_with_special_tokens"], report["eos_token"], completed=completed,
+        )
+        assert row["final_integer"] == answer
+        assert row["format_valid"] == (answer is not None)
+        assert row["correct"] == (answer is not None and int(answer) == int(native["gold_answer"]))
+        assert row["original_strict_correct"] == native["strict_correct"]
+    assert (SITE / "static/evidence" / path.name).read_bytes() == path.read_bytes()
+    assert any(e["source"] == "reports/ouro_completion_scoring.json" for e in load_manifest()["evidence"])
+
+
 def test_primary_controls_and_states_are_present() -> None:
     parser = parse_site()
     required = {

@@ -39,7 +39,29 @@ The real-model integration test and supplied experiment configurations use `loca
 uv run python scripts/verify_ouro_execution.py --output /tmp/ouro-execution-new.json
 ```
 
-The latest local full suite passed 68 tests, including real Ouro integration. Selected real replays ran on Apple MPS; CUDA was unavailable. The [verification record](../reports/mvp_scientific_verification.md) separates those checks from unresolved historical audit failures.
+See the dated [execution verification](../reports/ouro_execution_verification.md) and
+[generation verification](../reports/trajectory_verification.md) for current checks;
+the earlier [MVP record](../reports/mvp_scientific_verification.md) is historical.
+Real checks use Apple MPS; CUDA was unavailable. None resolve the historical
+benchmark audit failures.
+
+Pilot generation diagnostics (not a task campaign; these can take minutes
+to hours on MPS and refuse to overwrite existing evidence):
+
+```bash
+uv run pytest -q tests/test_generation_semantics.py tests/test_native_generation.py
+uv run python scripts/calibrate_ouro_baseline.py --output /tmp/ouro-calibration-new.json
+uv run python scripts/complete_ouro_baseline.py --output /tmp/ouro-completion-new.json
+# Separate post-hoc scoring of the committed native completion artifact:
+uv run python scripts/score_ouro_completion.py --output /tmp/ouro-format-diagnostic-new.json
+```
+
+The completion script uses the committed initial pilot calibration as its input,
+not `/tmp/ouro-calibration-new.json`; the scoring script likewise reads the committed
+native artifact, not the temporary rerun. See the [generation contract](trajectory_semantics.md)
+for exact prefix/branch lifetime, chat formatting, EOS and final-answer rules.
+Each finished follow-up case is saved to a sibling JSONL journal; the final JSON
+is only written when all three cases finish. A journal alone is not a complete run.
 
 ## 4. Regenerate experiments deliberately
 

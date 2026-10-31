@@ -71,7 +71,8 @@ def main():
         n = min(len(short["generated_token_ids"]), len(long["generated_token_ids"]))
         assert short["generated_token_ids"][:n] == long["generated_token_ids"][:n]
     sources = ["scripts/calibrate_ouro_baseline.py", "src/tebdil/evaluation/runner.py",
-               "src/tebdil/core/scheduler.py", "src/tebdil/tasks/validators.py", "uv.lock"]
+               "src/tebdil/core/scheduler.py", "src/tebdil/tasks/validators.py",
+               "src/tebdil/tasks/completion.py", "uv.lock"]
     report = {
         "schema_version": 1, "purpose": "Exploratory baseline-format diagnostic, not a held-out benchmark",
         "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -87,7 +88,8 @@ def main():
             "Three pilot problems selected before observing outputs; no held-out or statistical efficacy claim",
             "Chat uses the pinned tokenizer template with enable_thinking=False; not a claim of optimal prompting",
             "Raw retains legacy first-newline/one-token Boolean stops; chat stops at EOS or its token budget",
-            "Legacy is_correct extracts the first integer; strict_correct additionally requires an integer-only whole response",
+            "Raw is_correct uses legacy first-integer extraction; chat is_correct requires completed_final_integer_v1",
+            "strict_correct additionally requires an integer-only whole response; format failure is not necessarily a mathematical error",
             "Budget exhaustion is not an EOS or proof that a reasoning answer completed",
             "No intervention, controller training or historical result replacement",
         ],

@@ -50,7 +50,11 @@ change to all experiment configs or controller training inputs.
 
 FLOP estimates in new records sum each token's recurrent calls at its actual
 prefix length. They remain approximations, exclude separately reported scoring
-calls, and do not certify compute-matched system comparisons.
+calls, and do not certify compute-matched system comparisons. Teacher-forced
+`sequence_gold_logprob` now scores every gold-answer token even if the free-running
+output budget is shorter. Those extra calls occur only after decoding and are
+charged separately; gold tokens never select generated tokens. Historical sequence
+scores were not regenerated and may have been truncated by their output budget.
 
 ## Baseline calibration protocol
 
@@ -60,7 +64,7 @@ problem per arithmetic/logic/graph family, four-depth BF16 forced-final Ouro, an
 three policies: raw/2 tokens, raw/64 tokens, chat/128 tokens. The same canonical
 decoder is used, including measured inference/scoring call accounting.
 
-The legacy validator extracts an integer from text. That is insufficient evidence
+The legacy raw validator extracts an integer from text. That is insufficient evidence
 of a completed answer when a chat continuation contains reasoning. Calibration
 therefore separately reports whether the **whole response** is an integer and
 whether that integer is correct. Budget exhaustion and malformed output must
@@ -93,6 +97,9 @@ uses **the same three problems**, a 2048-token ceiling, greedy forced-depth-4
 readout and disabled caching. It counts actual native normalization boundaries
 and compares its initial token prefix with the adapter's recorded continuation.
 It only scores an integer after EOS and outside a completed `</think>` region.
+The accepted final region is a whole bare integer or `\boxed{integer}`, optionally
+wrapped in math dollars. Embedded integers in prose and unfinished thought are
+not answers; budget exhaustion is retained as non-completion.
 This adaptive budget extension is exploratory, not preregistered or held out.
 
 ```bash
@@ -100,5 +107,65 @@ uv run pytest -q tests/test_native_generation.py
 uv run python scripts/complete_ouro_baseline.py --output /tmp/ouro-completion-new.json
 ```
 
-Point B's completion gate remains open until that follow-up is inspected. No
-operator/control study or controller retraining begins while it is open.
+The [native follow-up](../reports/ouro_baseline_completion.json) completed all
+three cases. Its [verification record](../reports/trajectory_verification.md)
+tracks the remaining release checks; no operator study begins before those pass.
+
+## Execution constraints
+
+The first uncached completion attempt was interrupted after one case reached EOS;
+its raw output was not durably saved, so it is excluded from accuracy evidence.
+The follow-up now creates an exclusive start journal and appends every completed
+case immediately. Source identities are captured before generation, not after it.
+Neither a partial journal nor an interrupted run is a completed three-case study.
+
+A mini-model cached-generation check failed in the pinned stack: the vendored
+`UniversalTransformerCache` assigns `key_cache`, but Transformers 4.55 exposes it
+as a property without a setter. No real cached baseline was run. This pass does
+not patch upstream cache semantics or claim cached/uncached equivalence. Both the
+recorded calibration and its completion follow-up retain `use_cache=False`.
+
+## Final-answer policy after pilot inspection
+
+`completed_final_integer_v1` is a fixed parser, not a learned controller. It is
+used by new diagnostic chat records for integer-answer tasks and requires EOS.
+It is not a general free-form or assignment-answer evaluator. It discards the completed
+`</think>` region, then accepts a whole integer, a single terminal integer box,
+or a terminal `Answer:` / `Final Answer:` / `Result:` label. It never selects the
+first number in reasoning or accepts a budget-exhausted continuation. Ambiguous
+multiple boxes and unrecognized prose remain invalid. Gold answers are not parser
+inputs. Raw mode retains its explicitly labeled legacy extraction policy.
+
+This parser was developed **after observing the arithmetic and logic pilot
+outputs**. Those contain mathematically correct final answers in prose, which the
+original whole-response integer rule rejects. A separate post-hoc annotation is
+therefore kept apart from the immutable native outputs and original strict scores.
+It is protocol development, not confirmatory accuracy or a new experiment sample.
+Freeze prompt IDs, budget, EOS rules, this parser and compute policy before a new
+held-out method comparison; do not retroactively relabel the historical benchmark.
+
+```bash
+uv run pytest -q tests/test_completion_scoring.py
+uv run python scripts/score_ouro_completion.py --output /tmp/ouro-format-diagnostic-new.json
+```
+
+## Completed native pilot observations
+
+| Family | Output tokens | Actual recurrent calls | EOS | Original whole-response integer format | Post-hoc final parser |
+|---|---:|---:|---|---|---|
+| Arithmetic | 437 | 1,748 | Yes | Rejected prose | 50, correct |
+| Logic | 483 | 1,932 | Yes | Rejected prose | 0, correct |
+| Graph | 1,514 | 6,056 | Yes | Rejected prose | Unrecognized |
+
+All three first-128-token prefixes agree exactly with the adapter recording.
+The graph response explicitly concludes that the minimum cost is 15, but not in
+a format accepted by the fixed parser; it remains invalid under that parser.
+Do not describe this as a mathematical error or silently expand extraction to
+force three passes. The [post-hoc annotation](../reports/ouro_completion_scoring.json)
+recognizes two answers; it does not replace the original strict scores.
+
+Measured case wall times were 689.223, 854.096 and 7,480.436 seconds on MPS.
+Full-prefix regeneration is expensive and grows with the prefix; native cached
+speed, branch-safe caching and GPU campaign feasibility are not established.
+These three pilot problems do not establish model competence, generalization,
+or a prompt advantage on held-out tasks.

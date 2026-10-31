@@ -1,6 +1,6 @@
 # TEBDİL: recorded findings and evidence limits
 
-Updated 2026-10-30. Values below come from the current [static manifest](../site/static/tebdil_data.js), recomputed from exported raw records by `scripts/build_landing_data.py`. No model outputs were changed for presentation.
+Updated 2026-10-31. Values below come from the current [static manifest](../site/static/tebdil_data.js), recomputed from exported raw records by `scripts/build_landing_data.py`. No model outputs were changed for presentation.
 
 ## Scope
 
@@ -13,6 +13,22 @@ S0 alone would not produce a fair intervention comparison: every method needs th
 same frozen completion protocol in a new campaign.
 
 There are **2,866 trace records across eight runs**. A trace is one method/problem/seed result, not an independent problem. Both controller evaluations contain **18 distinct problems × 3 seeds = 54 paired instances per method**. The label `fresh_test` identifies a separate generated split; it does not establish preregistration, distributional generalization, or a confirmatory study.
+
+## Separate baseline protocol diagnostic
+
+A new three-problem pilot is separate from every table below. Raw/2 and raw/64
+each produced one correct answer; chat/128 always truncated thinking. Longer
+native cache-free continuations reached EOS in 437/483/1,514 tokens, with
+1,748/1,932/6,056 measured recurrent calls. All three match the adapter's first
+128 tokens. The original integer-only format rejects their explanatory prose.
+A separately labeled post-hoc final parser recognizes arithmetic and logic but
+not the graph conclusion, despite its mathematically correct answer of 15.
+
+This exposes prompt, completion and extraction confounds, not a TEBDİL benefit.
+Neither the parser nor these pilot outcomes provide a held-out accuracy result.
+See the [generation contract](trajectory_semantics.md),
+[native raw evidence](../reports/ouro_baseline_completion.json), and
+[post-hoc annotation](../reports/ouro_completion_scoring.json).
 
 ## Fresh-template evaluation
 
