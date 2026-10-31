@@ -64,3 +64,13 @@ future native-gate readouts use the corrected history.
 
 See the [frozen diagnostic protocol](operator_controls_protocol.md) and
 [verification record](../reports/operator_controls_verification.md).
+
+## Normalization diagnostics are separate from production recurrence
+
+The native final RMSNorm remains part of every F. Gate D only constructs diagnostic
+radial/tangential visits and per-token norm-preserved visits/returns. Matching can
+use Euclidean coordinates or coordinates divided by the learned boundary weight;
+these metrics are not interchangeable or semantic geometry. Preservation precedes
+explicit dtype casting, and realized errors/displacements are measured. No new
+production normalizer, method flag or trained policy is added. See the
+[frozen protocol](normalization_protocol.md) and [observations](../reports/normalization_verification.md).

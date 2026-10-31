@@ -42,6 +42,10 @@ now checks E1 against update mixing and output-matched random directions in FP32
 Its 306 real recurrent calls verify the bounded mechanism, not a reasoning gain.
 Historical R0 is input-offset-matched noise, not an output-matched control.
 
+The [normalization diagnostic](reports/normalization_verification.md) adds radial,
+tangential and norm-preserved controls with 246 real boundary observations. Equal
+norms do not eliminate logit sensitivity; no completed-answer benefit follows.
+
 ## Run the static observatory
 
 No checkpoint, backend, or raw `results/` directory is needed to serve the committed export:

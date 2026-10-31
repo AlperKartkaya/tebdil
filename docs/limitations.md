@@ -20,3 +20,13 @@
    complete its reasoning. Prompt format, completion policy and final-region answer
    extraction must be frozen equally across methods before new efficacy claims.
    See the [generation contract](trajectory_semantics.md).
+
+8. **Normalization and coordinate geometry:**
+   The native boundary computes FP32 RMS with epsilon, casts back, then multiplies
+   by learned coordinate weights. Normalized states do not share a single
+   Euclidean norm. Per-token radial/tangential and learned-weight-divided metrics
+   are diagnostic choices, not semantic geometry. Norm-preserving visits/returns
+   can change displacement and exceed the original visit radius; dtype casting
+   also breaks exact preservation. Historical token-scope contrasts change more
+   than normalization and cannot establish its causal contribution. See the
+   [frozen normalization study](normalization_protocol.md).

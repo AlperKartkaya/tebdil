@@ -626,3 +626,49 @@ def test_fixed_prefix_operator_evidence_is_separate_and_cost_reconciled() -> Non
         accounted += cost
     assert physical == accounted == report['actual_recurrent_calls'] == 306
     assert any(e['source'] == 'reports/ouro_operator_controls.json' for e in load_manifest()['evidence'])
+
+
+def test_historical_scope_contrast_is_not_presented_as_normalization_causality() -> None:
+    html = INDEX.read_text()
+    assert 'Sandwich RMSNorm Contraction vs. Token Scope' not in html
+    assert 'not a causal test of normalization' in html
+
+
+def test_normalization_evidence_binds_native_boundaries_and_ablations() -> None:
+    import torch
+    from tebdil.core.state import hash_tensor
+
+    path = ROOT / 'reports/ouro_normalization.json'
+    raw = path.read_bytes()
+    report = json.loads(raw)
+    assert (SITE / 'static/evidence' / path.name).read_bytes() == raw
+    assert report['all_checks_passed'] and report['independent_prefixes'] == 3
+    assert report['cache_mode'] == 'disabled' and report['readout_mode'] == 'last_step'
+    assert len(report['conditions']) == 12 and len(report['preparation']) == 6
+    for source, digest in {**report['source_sha256'], **report['input_sha256']}.items():
+        assert hashlib.sha256((ROOT / source).read_bytes()).hexdigest() == digest, source
+    journal = [json.loads(line) for line in path.with_suffix('.jsonl').read_text().splitlines()]
+    assert journal[0]['event'] == 'start'
+    assert journal[0]['source_sha256'] == report['source_sha256']
+    assert [{k: v for k, v in r.items() if k != 'event'} for r in journal if r['event'] == 'condition'] == report['conditions']
+    assert [b for r in journal if r['event'] == 'boundaries' for b in r['records']] == report['boundary_records']
+    assert len(report['boundary_records']) == report['actual_recurrent_calls'] == 246
+    assert all(b['native_formula_max_abs_error'] == 0 for b in report['boundary_records'])
+    pilots = json.loads((ROOT / 'reports/ouro_baseline_calibration.json').read_text())['records']
+    ids = {r['problem_id']: r['prompt_token_ids'] for r in pilots if r['prompt_format'] == 'chat'}
+    accounted = sum(p['recurrent_calls'] for p in report['preparation'])
+    for condition in report['conditions']:
+        assert all(condition['checks'].values())
+        assert condition['prompt_token_ids'] == ids[condition['problem_id']]
+        assert condition['prefix_sha256'] == hash_tensor(torch.tensor([condition['prompt_token_ids']]), 64)
+        assert len(condition['measurements']) == 9 and len(condition['visits']) == 5
+        assert len({m['method'] for m in condition['measurements']}) == 9
+        assert condition['total_recurrent_calls'] == condition['construction_and_reference_recurrent_calls'] + sum(m['continuation_recurrent_calls'] for m in condition['measurements'])
+        boundaries = [b for b in report['boundary_records'] if b['problem_id'] == condition['problem_id'] and b['dtype'] == condition['dtype'] and b['radius'] == condition['max_relative_norm']]
+        assert len(boundaries) == condition['total_recurrent_calls']
+        for boundary in boundaries:
+            assert all(len(batch) == len(condition['prompt_token_ids']) for batch in boundary['input_rms_by_token'])
+        accounted += condition['total_recurrent_calls']
+    assert accounted == 246
+    assert any(e['source'] == 'reports/ouro_normalization.json' for e in load_manifest()['evidence'])
+    assert '246 measured recurrent boundaries' in INDEX.read_text()

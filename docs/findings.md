@@ -110,3 +110,15 @@ not an assumption of exact BF16 equality. Residual magnitude/direction has no
 consistent first-answer-token likelihood advantage over matched random controls.
 This surrogate is not completed-answer accuracy or evidence of a reasoning gain.
 See [raw observations and limits](../reports/operator_controls_verification.md).
+
+## Normalization follow-up (gate D)
+
+All 246 observed native boundary calls match the pinned formula, including cast order.
+Learned weights produce per-token Euclidean RMS of 0.436–1.215 across these probes,
+not a universal unit shell. In FP32, preserving returned output L2 norms to within
+0.0000118% still leaves final logit distances of 0.593–15.410 from ordinary A. Norm
+alone therefore does not eliminate sensitivity in these fixed-prefix cases. This
+is not completed-answer utility, a semantic-manifold result or a causal explanation
+of historical token-scope outcomes. BF16 preservation errors reach 0.2420% under
+the weighted metric; small-radius effects are not precision-robust by default.
+[Raw observations, full ablations and limitations](../reports/normalization_verification.md).

@@ -121,3 +121,17 @@ run took about one minute; other hardware can differ. FP32/BF16 results are devi
 dependent diagnostics, not bitwise cross-device guarantees. Both reference
 construction and continuation costs are reported; do not treat shared-work probes
 as independently executed compute-matched benchmarks. Historical results are untouched.
+
+## 8. Native normalization and norm-preserving diagnostics (gate D)
+
+```bash
+uv run python scripts/verify_normalization.py --output /tmp/ouro-normalization-new.json
+```
+
+Requires the same pinned cached checkpoint and committed pilot prefixes. Both the
+output and adjacent journal must be absent. The [protocol](normalization_protocol.md)
+was frozen before observations. Native boundary input/output RMS and exact formula
+parity are recorded for each call; all reference and continuation costs reconcile.
+The completed Apple MPS run took about 49 seconds. The output is a sensitivity
+diagnostic, not a generation benchmark. Native normalization and historical results
+are unchanged; BF16 rescaling is only approximately norm-preserving after casting.

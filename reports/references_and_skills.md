@@ -92,3 +92,10 @@ Statistical-analysis guidance fixed sampling units/design before observations an
 prevented inferential claims from twelve dependent conditions. Frontend/accessibility
 guidance preserved the original page hierarchy, expandable evidence and keyboard
 controls; webapp-testing guidance supplies fresh browser verification.
+
+Gate D reused XERJ's pinned Ouro norm source and inspected the current vendored
+cast order directly. Statistical-analysis guidance again fixes the three independent
+prefixes versus twelve repeated conditions and prevents efficacy claims from
+logit sensitivity. Frontend/accessibility guidance keeps the existing design and
+puts detailed normalization evidence in its existing disclosure. No new skill,
+dependency, upstream code copy or native normalization change.

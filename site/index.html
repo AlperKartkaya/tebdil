@@ -966,6 +966,8 @@
         <p><a href="static/evidence/ouro_baseline_calibration.json">Pilot calibration: raw outputs, token prefixes &amp; measured calls</a> · <a href="static/evidence/ouro_baseline_completion.json">Native completion: raw outputs &amp; call ledger</a> · <a href="static/evidence/ouro_completion_scoring.json">Post-hoc format diagnostic</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/trajectory_semantics.md">Trajectory and generation contract</a></p>
         <p><b>Operator controls:</b> twelve fixed-prefix Ouro conditions (306 measured recurrent calls) verify excursion-and-return and donor isolation. The E1-minus-mixing residual identity holds within FP32 error; BF16 casting introduces visible deviations. Output-matched random directions and residual-scale sweeps do not establish a reasoning benefit. Historical R0 matches input offset, not output correction.</p>
         <p><a href="static/evidence/ouro_operator_controls.json">Fixed-prefix controls, norms &amp; costs</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/reports/operator_controls_verification.md">Operator verification &amp; limitations</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/operator_controls_protocol.md">Frozen diagnostic design</a></p>
+        <p><b>Normalization diagnostic:</b> 246 measured recurrent boundaries match native RMSNorm, including cast order. Learned weights mean normalized states do not all have unit Euclidean norm. Norm-preserved excursions still change logits; this establishes sensitivity, not better reasoning. BF16 introduces measurable norm-preservation error.</p>
+        <p><a href="static/evidence/ouro_normalization.json">Radial/directional controls &amp; native norm observations</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/reports/normalization_verification.md">Normalization findings &amp; limits</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/normalization_protocol.md">Frozen normalization design</a></p>
       </details>
     </div>
   </div>
@@ -1010,7 +1012,7 @@
       </p>
     </div>
 
-    <!-- Part 1: Ouro Sandwich RMSNorm Contraction -->
+    <!-- Part 1: Ouro normalization boundary and historical scope observations -->
     <div class="arch-block">
       <div class="arch-step">
         <span class="arch-step-num">Part 1</span>
@@ -1090,7 +1092,7 @@
             <rect x="340" y="224" width="72" height="24" rx="4" fill="url(#gIndigo)"/>
           </svg>
           <p class="figure-caption">
-            <b>Sandwich RMSNorm Contraction vs. Token Scope.</b> Full-sequence perturbation at $t{=}1$ generates $44\times$ larger nonlinear excursion curvature $\|C_2\|_F$ at $t{=}2$ than last-token perturbation and doubles accuracy on the Phase 3 ablation subset.
+            <b>Historical Token-Scope Contrast.</b> Full-sequence scope records roughly $44\times$ the residual norm and two correct cases rather than one in the nine-problem subset. This changes scope and perturbation settings; it is not a causal test of normalization. Bars are schematic, not proportional.
           </p>
         </div>
       </div>
