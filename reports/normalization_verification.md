@@ -1,6 +1,6 @@
 # Gate D: normalization diagnostics
 
-Real study and local verification complete; public deployment checks pending. Gate C was closed and publicly
+Gate D is complete, committed and publicly deployed. Gate C was closed and publicly
 verified (`65cd09b`, closeout `beff3cb`) before this study began.
 
 ## Scope and evidence
@@ -88,6 +88,14 @@ evidence. No historical number, chart geometry, styling or result was changed.
   regression checks pass.
 - Manifest is append-only relative to gate C: every historical metric, recording
   and file identity is unchanged. Seven pre-existing dirty artifacts are untouched.
-- Public Pages deployment and public browser/hash verification remain pending.
+- Commit `43e807d`: [CI and Pages deployment passed](https://github.com/AlperKartkaya/tebdil/actions/runs/41242354541).
+- Full public browser pass repeats the local matrix and retrieves the normalization
+  report with 246 native observations. Public index, app, manifest, operator and
+  normalization evidence SHA-256 match the committed files. New GitHub source
+  links return HTTP 200. No page errors or normal-request failures.
+
+D was closed only after these deployment checks. E is not evaluated: a common
+completed-answer intervention comparison must establish utility before a controller
+benefit can be claimed. No publication-readiness or reasoning-gain conclusion follows.
 Controller evaluation remains gated on demonstrated intervention utility under a
 common completed-answer protocol, not on these sensitivity diagnostics.
