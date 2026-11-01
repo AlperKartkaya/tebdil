@@ -199,3 +199,18 @@ against actual returned tokens before a question is marked finished. Partial
 journals are diagnostic progress, not completed outcomes. This may take hours.
 [Protocol](baseline_difficulty_protocol.md) and
 [current verification](../reports/baseline_difficulty_verification.md).
+
+The committed [raw pilot](../reports/ouro_baseline_difficulty.json) and
+[append-only journal](../reports/ouro_baseline_difficulty.jsonl) retain all twelve
+attempts (eleven new, one reused). Audit without running the checkpoint:
+
+```bash
+uv run pytest -q tests/test_site_release.py -k baseline_difficulty_retains
+```
+
+This reconstructs every token-prefix hash and reconciles independent forward
+proposals, physical calls, per-template summaries and frozen source hashes.
+It audits recorded evidence, not a clean-clone or cross-device generation rerun.
+The outcome is 10 recognized correct, 0 recognized incorrect, 2 invalid format,
+0 budget exhausted. Do not repair these scores or infer arithmetic accuracy from
+format failures. No intervention or reserved-test execution is implied.

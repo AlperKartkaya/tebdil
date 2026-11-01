@@ -58,6 +58,18 @@ const base=process.env.SITE_URL||'http://127.0.0.1:8093/';
  for(const source of ['docs/baseline_difficulty_protocol.md','reports/baseline_difficulty_verification.md']){
    assert.equal(await contract.locator(`a[href$="${source}"]`).count(),1);
  }
+ const difficultyResponse=await page.request.get(new URL(await contract.locator('a[href="static/evidence/ouro_baseline_difficulty.json"]').getAttribute('href'),base).href);
+ assert(difficultyResponse.ok());const difficulty=await difficultyResponse.json();
+ assert(difficulty.all_checks_passed);assert.equal(difficulty.protocol,'development_baseline_difficulty_v1');
+ assert.equal(difficulty.records.length,12);assert.equal(difficulty.new_problem_ids.length,11);
+ assert.deepEqual(difficulty.reused_problem_ids,['completion_dev_000']);
+ assert(difficulty.records.every(r=>r.split==='development'&&r.method==='S0'&&r.completed));
+ assert.deepEqual(difficulty.summary.outcome_counts,{correct:10,incorrect:0,invalid_format:2,budget_exhausted:0});
+ assert.equal(difficulty.actual_new_recurrent_calls,difficulty.records.slice(1).reduce((n,r)=>n+r.recurrent_block_calls,0));
+ assert.equal(difficulty.summary.recurrent_block_calls,difficulty.actual_new_recurrent_calls+difficulty.reused_recurrent_calls);
+ assert.equal(difficulty.difficulty_decision,'headroom_unresolved_format_or_truncation');
+ assert((await contract.innerText()).includes('not demonstrated wrong arithmetic'));
+ assert((await contract.innerText()).includes('does not establish rescue opportunities or TEBDİL benefit'));
  await contract.screenshot({path:'/tmp/tebdil-generation-evidence.png'});
  await contract.locator('summary').press('Enter');
  await page.screenshot({path:'/tmp/tebdil-final-desktop-hero.png'});

@@ -13,8 +13,8 @@ uncommitted controller, counterfactual and report artifacts are not inputs to th
 | Completed-answer gate 1 | Frozen prompt/stopping/scoring; real baseline smoke; docs and Pages | Complete: `54b3381`, `d74a61f`; 167 tests, real EOS completion, [CI/deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41245538443), public browser/hash checks passed |
 | Completed-answer gate 2 | Fixed intervention/donor definitions, appropriate controls and measured completed-answer costs | Technical smoke complete: `c60dbaf`, `0dcbdc3`; five EOS completions, 14,402 new calls; 178 tests, [CI/deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41254056115), public browser/hash checks passed; boxed-format limit retained, no efficacy claim |
 | Measurement v2 prerequisite | Versioned format repair, immutable v1 scores, offline diagnostic and Pages verification | Complete: `b315d22`, `2f9f96b`; 232 tests, [CI/deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41273817261), public browser/hash checks passed; no new model completions |
-| Baseline difficulty prerequisite | All twelve development S0 attempts, versioned scoring, measured costs and raw evidence | In progress: `0c1719e`; 241 tests passed before observation; eleven new completions running, one old output reused; no intervention/test inference |
-| Completed-answer gate 3 | Development timing/utility pilot, then frozen independent test with uncertainty | Not started; all 60 reserved test questions remain unexecuted |
+| Baseline difficulty prerequisite | All twelve development S0 attempts, versioned scoring, measured costs and raw evidence | Run and raw audit complete: `0c1719e` freeze; 12 EOS, 10 recognized correct, 0 incorrect, 2 invalid format; 26,668 new calls, 1,524 reused. [Findings](../reports/baseline_difficulty_verification.md); public release verification pending |
+| Completed-answer gate 3 | Development timing/utility pilot, then frozen independent test with uncertainty | Not started: baseline headroom unresolved, no recognized failure to rescue; all 60 reserved test questions remain unexecuted |
 | E. Controller evaluation | Unshaped and heuristic controls only after intervention utility is established | Prerequisite unmet: C/D establish sensitivity, not completed-answer utility; no new controller evaluation |
 | Publication package | Frozen held-out campaign, complete costs and immutable reproducible evidence | Not started |
 
@@ -26,3 +26,19 @@ C/D do not clear the efficacy gate. Before controller evaluation, a new held-out
 intervention comparison needs one frozen completed-answer prompt/stopping/scoring
 protocol, matched controls, measured costs and immutable outputs. The historical
 raw two-token tables and these three reused pilot prefixes cannot supply that proof.
+
+## Baseline decision
+
+The twelve-question pilot finished without truncation. Its frozen rule returns
+`headroom_unresolved_format_or_truncation` because two EOS answers are outside v2's
+grammar, not because of a recognized wrong integer. Post-hoc inspection finds the
+gold value in each format miss; original scores remain unchanged. This is neither
+an arithmetic-accuracy estimate nor evidence against TEBDİL.
+
+Do not proceed to intervention utility or controller training on these results.
+The next prerequisite is a separately frozen generation/measurement contract and
+harder development questions, with an independently reserved matching test set.
+Keep all current development observations and the sixty unexecuted test questions
+intact. A new pilot must establish interpretable baseline failures before using
+rescue as its rationale. Any later utility comparison must retain correct cases
+and account for degradation and actual compute, not select only failures.

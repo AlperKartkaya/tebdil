@@ -58,9 +58,11 @@ wrong arithmetic. No rescue or held-out benefit is established.
 [Gate-2 findings and actual costs](reports/completed_answer_comparison_verification.md).
 A separate [measurement v2 audit](reports/completion_v2_verification.md) recognizes
 the known math-wrapped box without changing v1 scores or running new inference.
-Its prospective scoring contract is verified. A separate development-only native
-[baseline difficulty pilot](reports/baseline_difficulty_verification.md) has started;
-no completed campaign result or intervention utility is available yet.
+Its prospective scoring contract is verified. The development-only native
+[baseline difficulty pilot](reports/baseline_difficulty_verification.md) is finished:
+all twelve reached EOS, with 10 recognized correct, 0 recognized incorrect and
+2 invalid-format outputs. These format misses are not demonstrated wrong arithmetic.
+Headroom remains unresolved; no intervention utility or held-out benefit is established.
 
 ## Run the static observatory
 

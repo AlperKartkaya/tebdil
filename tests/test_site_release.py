@@ -833,4 +833,76 @@ def test_measurement_v2_audit_is_separate_posthoc_and_hash_bound() -> None:
     assert 'static/evidence/ouro_completion_v2_audit.json' in disclosure
     assert 'docs/baseline_difficulty_protocol.md' in disclosure
     assert 'reports/baseline_difficulty_verification.md' in disclosure
-    assert 'Baseline difficulty pilot — results pending' in disclosure
+    assert 'Baseline difficulty pilot — headroom unresolved' in disclosure
+    assert '10 recognized correct, 0 recognized incorrect, 2 invalid format, 0 budget exhausted' in disclosure
+    assert 'static/evidence/ouro_baseline_difficulty.json' in disclosure
+
+
+def test_baseline_difficulty_retains_all_development_attempts_and_actual_native_work() -> None:
+    import torch
+    from tebdil.core.state import hash_tensor
+    from tebdil.evaluation.completion import score_completion, summarize_completions
+    from tebdil.tasks.completion_v2 import evaluate_completion_v2
+
+    path = ROOT / 'reports/ouro_baseline_difficulty.json'
+    report = json.loads(path.read_text())
+    tasks = json.loads((ROOT / 'configs/completion_v1_tasks.json').read_text())['partitions']['development']
+    reference = json.loads((ROOT / report['reused_reference']).read_text())
+    assert report['all_checks_passed'] and report['protocol'] == 'development_baseline_difficulty_v1'
+    assert report['answer_extraction'] == 'completed_final_integer_v2' and report['cache_mode'] == 'disabled'
+    assert report['model_revision'] == reference['model_revision'] and report['checkpoint_sha256'] == reference['checkpoint_sha256']
+    assert report['problem_ids'] == [t['problem_id'] for t in tasks]
+    assert report['new_problem_ids'] == report['problem_ids'][1:]
+    assert report['reused_problem_ids'] == report['problem_ids'][:1]
+    assert [r['problem_id'] for r in report['records']] == report['problem_ids']
+    assert (SITE / 'static/evidence' / path.name).read_bytes() == path.read_bytes()
+    for source, digest in report['source_sha256'].items():
+        assert hashlib.sha256((ROOT / source).read_bytes()).hexdigest() == digest, source
+    events = [json.loads(line) for line in path.with_suffix('.jsonl').read_text().splitlines()]
+    assert events[0]['event'] == 'start' and events[-1]['event'] == 'finish'
+    assert events[0]['source_sha256'] == report['source_sha256']
+    assert not any(e['event'] == 'failure' for e in events)
+    finished = [e['record'] for e in events if e['event'] in ('reuse', 'completion')]
+    assert finished == report['records']
+    assert [e['problem_id'] for e in events if e['event'] == 'attempt_start'] == report['new_problem_ids']
+    for k, (row, task) in enumerate(zip(report['records'], tasks, strict=True)):
+        assert row['split'] == 'development' and row['method'] == 'S0'
+        assert row['prompt'] == task['prompt'] and row['gold_answer'] == task['gold_answer']
+        assert row['template_id'] == task['template_id']
+        fields = evaluate_completion_v2(row, report['eos_token'], row['gold_answer'])
+        assert {key: row[key] for key in fields} == fields
+        old = row['v1_evaluation']
+        assert old['answer_extraction'] == 'completed_final_integer_v1'
+        assert {key: old[key] for key in ('status', 'is_correct')} == score_completion({**row, **old}, row['gold_answer'])
+        tokens = row['generated_token_ids']
+        assert 0 < len(tokens) <= report['max_output_tokens']
+        assert row['completed'] == (tokens[-1] == report['eos_token_id'])
+        assert report['eos_token_id'] not in tokens[:-1]
+        assert row['completed'] or len(tokens) == report['max_output_tokens']
+        assert row['stop_reason'] == ('eos_token' if row['completed'] else 'max_output_tokens')
+        assert row['recurrent_block_calls'] == 4 * len(tokens)
+        assert len(row['token_ledger']) == len(tokens)
+        for i, entry in enumerate(row['token_ledger']):
+            prefix = row['prompt_token_ids'] + tokens[:i]
+            assert entry['prefix_length'] == entry['processed_sequence_length'] == len(prefix)
+            assert entry['prefix_token_ids_sha256'] == hash_tensor(torch.tensor([prefix]), 64)
+            assert entry['calls_before'] == i * 4 and entry['recurrent_block_calls'] == 4
+        assert row['recurrent_token_positions'] == sum(e['prefix_length'] * 4 for e in row['token_ledger'])
+        observed = [e for e in events if e['event'] == 'forward' and e['problem_id'] == row['problem_id']]
+        if k == 0:
+            assert row['origin'] == 'reused_gate_1' and not observed
+            assert all(row[key] == value for key, value in reference['records'][0].items() if key not in fields)
+        else:
+            assert row['origin'] == 'new_native_generation' and row['independent_forward_checks_passed']
+            assert [e['greedy_readout_token_id'] for e in observed] == tokens
+            for observation, entry in zip(observed, row['token_ledger'], strict=True):
+                assert all(observation[key] == entry[key] for key in ('prefix_length', 'prefix_token_ids_sha256', 'calls_before', 'recurrent_block_calls'))
+    assert report['summary'] == summarize_completions(report['records'])
+    for template, summary in report['by_template'].items():
+        assert summary == summarize_completions([r for r in report['records'] if r['template_id'] == template])
+    assert report['actual_new_recurrent_calls'] == sum(r['recurrent_block_calls'] for r in report['records'][1:])
+    assert report['reused_recurrent_calls'] == reference['actual_recurrent_calls']
+    assert report['summary']['recurrent_block_calls'] == report['actual_new_recurrent_calls'] + report['reused_recurrent_calls']
+    assert events[-1]['summary'] == report['summary']
+    assert events[-1]['actual_new_recurrent_calls'] == report['actual_new_recurrent_calls']
+    assert any(e['source'] == path.relative_to(ROOT).as_posix() for e in load_manifest()['evidence'])

@@ -139,3 +139,10 @@ engine. Statistical guidance separates task headroom from format/truncation erro
 retains all twelve preselected attempts and avoids test-set peeking. Mini-model
 checks precede real observations; no fixture is presented as a new Ouro completion.
 No new dependency, cloud resource, skill installation or upstream code copy.
+
+Baseline observation follow-through: all twelve attempts are published, including
+the two unsupported-format outputs. Statistical guidance keeps their post-hoc
+matching gold values separate from frozen scores; no arithmetic error, rescue
+opportunity, uncertainty interval or intervention effect is inferred. Webapp-testing
+adds the actual twelve-record download and count/cost reconciliation to the
+existing browser matrix. No redesign or new dependency was needed.
