@@ -1,7 +1,6 @@
 # Measurement v2 verification
 
-Status: implementation, offline audit and local release checks complete; public
-deployment verification pending.
+Status: **implementation, offline audit and public release verification complete**.
 The baseline difficulty pilot has **not** started. No reserved test or controller
 is evaluated here. Original page design, generation source and historical scores
 stay unchanged.
@@ -46,6 +45,9 @@ keyboard/retry/checksum checks and 320–1440 px layouts without console, networ
 overflow failures. The original layout/CSS/section identities remain protected by
 release tests. Historical manifest entries and run data are unchanged.
 
-Before baseline inference, verify the public download/hash and original browser
-flows after Pages deployment. Source/input hashes bind the offline audit; no
-clean-clone or cross-device model rerun is claimed by parser tests.
+Evidence release `2f9f96b`: [CI and Pages deployment passed](https://github.com/AlperKartkaya/tebdil/actions/runs/41273817261).
+The full public browser matrix passed independently. Deployed HTML, app, manifest
+and raw audit bytes match local files; contract and verification links return
+HTTP 200. This clears the measurement prerequisite for a separately frozen baseline
+pilot. Source/input hashes bind the offline audit; no clean-clone or cross-device
+model rerun is claimed by parser tests.
