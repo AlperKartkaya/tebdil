@@ -1,8 +1,9 @@
 # Reasoning-stall recovery: next research question
 
 Status: **Draft study design; not a frozen protocol or an executed experiment**.
-No new task set, stall detector, thresholds, controller or intervention results are
-introduced by this note. Historical protocols, scores and reserved sets stay intact.
+The separate [task/verifier protocol](reasoning_tasks_protocol.md) now freezes a
+new, unexecuted pool. No stall detector, thresholds, controller or intervention
+results are introduced by this note. Historical protocols, scores and reserved sets stay intact.
 
 ## What the arithmetic pilot did not test
 

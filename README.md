@@ -113,3 +113,8 @@ Rebuilding the export with `python scripts/build_landing_data.py` requires local
 Licensed under [Apache-2.0](LICENSE). Ouro checkpoint terms are published by ByteDance under Apache-2.0.
 
 Parallel selection caveat: all historical P0/P1 total-selection costs are unverified, including rows whose selected-output ledger sums happen to match. The 71/81 counts describe arithmetic mismatches, not the full scope of uncertain parallel execution.
+
+The [new reasoning task/verifier contract](docs/reasoning_tasks_protocol.md) freezes
+six development and twelve reserved CNF/key-planning instances before observations.
+These are unexecuted tasks, not additional experimental results. Any satisfying
+assignment or shortest legal route is accepted; old 12/60 data and scores stay intact.

@@ -972,3 +972,17 @@ def test_prompt_started_reasoning_real_smoke_preserves_actual_input_output_bound
     assert report['actual_new_recurrent_calls'] == events[-1]['actual_new_recurrent_calls'] == row['recurrent_block_calls'] == 4*len(tokens)
     assert (SITE / 'static/evidence' / path.name).read_bytes() == path.read_bytes()
     assert any(e['source'] == path.relative_to(ROOT).as_posix() for e in load_manifest()['evidence'])
+
+
+def test_reasoning_tasks_are_unexecuted_development_prompts_not_new_model_results():
+    path=SITE/'static/evidence/reasoning_v1_development.json'
+    data=json.loads(path.read_text())
+    assert data['status']=='unexecuted_task_prompts' and len(data['tasks'])==6
+    assert all(t['problem_id'].startswith('reasoning_v1_development_') for t in data['tasks'])
+    assert all(set(t)=={'problem_id','family','structural_level','prompt'} for t in data['tasks'])
+    manifest=load_manifest()
+    assert manifest['files']['static/evidence/reasoning_v1_development.json']['sha256']==hashlib.sha256(path.read_bytes()).hexdigest()
+    html=INDEX.read_text()
+    assert 'New reasoning tasks — frozen, not executed' in html
+    assert 'Development prompts (no model results)' in html
+    assert hashlib.sha256((ROOT/'configs/reasoning_v1_tasks.json').read_bytes()).hexdigest()=='016c4c8343fa3656825b63f3df6dc283d06f19ffaaba17714c8c163c10590e17'

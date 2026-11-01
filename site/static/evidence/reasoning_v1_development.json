@@ -1,0 +1,42 @@
+{
+  "protocol": "reasoning_tasks_v1",
+  "status": "unexecuted_task_prompts",
+  "tasks": [
+    {
+      "problem_id": "reasoning_v1_development_cnf_0_0",
+      "family": "cnf",
+      "structural_level": 0,
+      "prompt": "Find any satisfying Boolean assignment for x1 through x4. 1 means true, 0 means false. Formula: (NOT x4 OR NOT x3 OR NOT x2) AND (NOT x4 OR NOT x3 OR NOT x1) AND (NOT x4 OR NOT x2 OR NOT x1) AND (NOT x4 OR NOT x2 OR x1) AND (NOT x4 OR x2 OR x3) AND (NOT x3 OR NOT x2 OR NOT x1) AND (NOT x3 OR NOT x2 OR x1) AND (NOT x3 OR NOT x1 OR x4) AND (NOT x2 OR x1 OR x4) AND (NOT x1 OR x2 OR x4) AND (x1 OR x2 OR x4) AND (x1 OR x3 OR x4). The assignment array must list every variable in increasing index order. Reason through the constraints. End your final answer with exactly one line FINAL: {\"assignment\": [0, 1, ...]}. Replace the example with valid JSON using actual integers, no ellipsis, no extra keys or text after that line."
+    },
+    {
+      "problem_id": "reasoning_v1_development_key_planning_0_0",
+      "family": "key_planning",
+      "structural_level": 0,
+      "prompt": "Find a shortest legal route from room 0 to room 5. Rooms are 0 through 5. Each directed move costs 1. Start with no keys. Collect keys automatically on entering a room, including the start. Keys are reusable and never consumed. You may revisit rooms. Keys in rooms: 0: none; 1: none; 2: none; 3: K1; 4: none; 5: none. All allowed directed moves: 0->3 (requires none); 0->4 (requires none); 1->0 (requires none); 2->3 (requires none); 3->1 (requires none); 4->0 (requires none); 4->2 (requires K1); 4->5 (requires K1); 5->0 (requires K1); 5->3 (requires none); 5->4 (requires K1). List every visited room including start and target. Any shortest legal route is accepted. Reason through the constraints. End your final answer with exactly one line FINAL: {\"path\": [0, 2, ...]}. Replace the example with valid JSON using actual integers, no ellipsis, no extra keys or text after that line."
+    },
+    {
+      "problem_id": "reasoning_v1_development_cnf_1_0",
+      "family": "cnf",
+      "structural_level": 1,
+      "prompt": "Find any satisfying Boolean assignment for x1 through x6. 1 means true, 0 means false. Formula: (NOT x6 OR NOT x5 OR x4) AND (NOT x6 OR NOT x3 OR x2) AND (NOT x6 OR NOT x1 OR x3) AND (NOT x6 OR x3 OR x5) AND (NOT x6 OR x4 OR x5) AND (NOT x5 OR NOT x3 OR NOT x2) AND (NOT x5 OR NOT x3 OR x1) AND (NOT x5 OR NOT x3 OR x4) AND (NOT x5 OR x4 OR x6) AND (NOT x4 OR NOT x2 OR x3) AND (NOT x3 OR NOT x2 OR x6) AND (NOT x3 OR x2 OR x5) AND (NOT x3 OR x2 OR x6) AND (NOT x2 OR x3 OR x4) AND (NOT x1 OR x2 OR x5) AND (NOT x1 OR x5 OR x6) AND (x1 OR x2 OR x6) AND (x3 OR x5 OR x6). The assignment array must list every variable in increasing index order. Reason through the constraints. End your final answer with exactly one line FINAL: {\"assignment\": [0, 1, ...]}. Replace the example with valid JSON using actual integers, no ellipsis, no extra keys or text after that line."
+    },
+    {
+      "problem_id": "reasoning_v1_development_key_planning_1_0",
+      "family": "key_planning",
+      "structural_level": 1,
+      "prompt": "Find a shortest legal route from room 0 to room 7. Rooms are 0 through 7. Each directed move costs 1. Start with no keys. Collect keys automatically on entering a room, including the start. Keys are reusable and never consumed. You may revisit rooms. Keys in rooms: 0: none; 1: K1; 2: none; 3: none; 4: none; 5: none; 6: K2; 7: none. All allowed directed moves: 0->1 (requires K2); 0->3 (requires none); 1->5 (requires none); 2->5 (requires none); 3->1 (requires K2); 3->2 (requires none); 3->7 (requires K2); 5->1 (requires K1); 5->2 (requires K1); 5->6 (requires none); 5->7 (requires K2); 6->0 (requires none); 6->2 (requires none); 6->3 (requires none); 6->7 (requires K1); 7->0 (requires K1); 7->3 (requires K1). List every visited room including start and target. Any shortest legal route is accepted. Reason through the constraints. End your final answer with exactly one line FINAL: {\"path\": [0, 2, ...]}. Replace the example with valid JSON using actual integers, no ellipsis, no extra keys or text after that line."
+    },
+    {
+      "problem_id": "reasoning_v1_development_cnf_2_0",
+      "family": "cnf",
+      "structural_level": 2,
+      "prompt": "Find any satisfying Boolean assignment for x1 through x8. 1 means true, 0 means false. Formula: (NOT x8 OR NOT x7 OR x2) AND (NOT x8 OR NOT x2 OR x5) AND (NOT x8 OR NOT x1 OR x6) AND (NOT x8 OR x3 OR x6) AND (NOT x8 OR x4 OR x5) AND (NOT x7 OR NOT x4 OR x8) AND (NOT x7 OR NOT x1 OR x4) AND (NOT x7 OR x1 OR x2) AND (NOT x7 OR x1 OR x6) AND (NOT x7 OR x3 OR x8) AND (NOT x7 OR x6 OR x8) AND (NOT x6 OR NOT x5 OR NOT x4) AND (NOT x6 OR NOT x3 OR x1) AND (NOT x6 OR x1 OR x4) AND (NOT x6 OR x4 OR x7) AND (NOT x5 OR NOT x2 OR x4) AND (NOT x5 OR x1 OR x7) AND (NOT x5 OR x2 OR x3) AND (NOT x3 OR NOT x2 OR x8) AND (NOT x2 OR x1 OR x8) AND (NOT x1 OR x5 OR x6) AND (x2 OR x5 OR x8) AND (x3 OR x4 OR x6) AND (x3 OR x4 OR x8). The assignment array must list every variable in increasing index order. Reason through the constraints. End your final answer with exactly one line FINAL: {\"assignment\": [0, 1, ...]}. Replace the example with valid JSON using actual integers, no ellipsis, no extra keys or text after that line."
+    },
+    {
+      "problem_id": "reasoning_v1_development_key_planning_2_0",
+      "family": "key_planning",
+      "structural_level": 2,
+      "prompt": "Find a shortest legal route from room 0 to room 9. Rooms are 0 through 9. Each directed move costs 1. Start with no keys. Collect keys automatically on entering a room, including the start. Keys are reusable and never consumed. You may revisit rooms. Keys in rooms: 0: none; 1: K1; 2: none; 3: none; 4: none; 5: none; 6: none; 7: K3; 8: K2; 9: none. All allowed directed moves: 0->1 (requires none); 1->4 (requires none); 1->8 (requires none); 2->0 (requires none); 2->5 (requires none); 2->6 (requires none); 3->0 (requires K2); 3->8 (requires none); 4->5 (requires K2); 4->8 (requires K3); 5->6 (requires K2); 6->1 (requires K3); 6->3 (requires none); 6->4 (requires none); 6->9 (requires K2); 7->1 (requires K1); 7->3 (requires K3); 8->7 (requires K2); 9->1 (requires K1); 9->3 (requires K3). List every visited room including start and target. Any shortest legal route is accepted. Reason through the constraints. End your final answer with exactly one line FINAL: {\"path\": [0, 2, ...]}. Replace the example with valid JSON using actual integers, no ellipsis, no extra keys or text after that line."
+    }
+  ]
+}

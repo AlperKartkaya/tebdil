@@ -152,6 +152,12 @@ def build(root: Path = ROOT) -> None:
         url = write_file(f"static/evidence/{path.name}", path.read_bytes(), source)
         manifest["evidence"].append({"label": path.stem.replace("_", " "), "source": source, "url": url, "sha256": digest(path.read_bytes()),
                                      "historical": path.name.startswith("audit_")})
+    from tebdil.tasks.reasoning import development_prompts, validate_manifest
+    task_pool = json.loads((root / "configs/reasoning_v1_tasks.json").read_text())
+    validate_manifest(task_pool)
+    write_file("static/evidence/reasoning_v1_development.json",
+               (json.dumps(development_prompts(task_pool), indent=2, allow_nan=False)+"\n").encode(),
+               "configs/reasoning_v1_tasks.json (development prompts only; unexecuted)")
     bundle = "window.TEBDIL_DATA = " + json.dumps(manifest, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + ";\n"
     (site / "static/tebdil_data.js").write_text(bundle, encoding="utf-8")
     check(root)

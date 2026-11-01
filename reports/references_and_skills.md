@@ -171,3 +171,15 @@ opening in the input and no fabricated tag in output. It reuses an already-obser
 question; token accounting and identical continuation are not sold as an efficiency
 or reasoning gain. Public downloads and prefix/journal checks bind the new record
 to that execution rather than retroactively relabeling old False-mode artifacts.
+
+### Sequential reasoning task/verifier gate
+
+Reused the existing CNF evaluator after XERJ lookup and direct inspection; independent
+exhaustive truth-table checks test it rather than copying another generator. Added
+standard-library inventory-state BFS, with separate submitted-path legality checks.
+The statistical-analysis skill's instance-unit, prespecification and development-only
+selection guidance informs the frozen 6/12 pool; it is not a powered efficacy study.
+Webapp-testing guidance was applied through the existing complete browser matrix,
+including the unexecuted-prompt download. No dependencies or remote scripts added.
+XERJ task refresh indexed 8/8 Python files (47 records); old full-project index was
+stale, so it was not treated as complete current evidence.

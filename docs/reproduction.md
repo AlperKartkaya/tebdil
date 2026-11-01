@@ -228,3 +228,17 @@ The new encoder uses True; old runners still use False. Existing JSON or sibling
 journal paths are refused. [Protocol](prompt_started_reasoning_protocol.md) and
 [verification](../reports/prompt_started_reasoning_verification.md). An unfinished
 or malformed outcome is retained, not silently retried or scored from its thoughts.
+
+## 14. Frozen reasoning task/verifier pool (no inference)
+
+```bash
+uv run python scripts/freeze_reasoning_tasks.py --check
+uv run pytest -q tests/test_reasoning_tasks.py
+```
+
+[Protocol and exact grammar](reasoning_tasks_protocol.md). Six development and
+twelve reserved instances cover CNF satisfaction and stateful key/door planning.
+Exhaustive Boolean verification and state-space BFS accept alternate valid answers;
+no model is run by these commands. The pool is instance-held-out, not template-OOD.
+The old 12/60 arithmetic split and its recorded scores are untouched. The public
+prompt download is development only, explicitly not a recorded model experiment.
