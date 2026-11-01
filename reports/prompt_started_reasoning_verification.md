@@ -1,7 +1,7 @@
 # Explicit thinking-mode recording verification
 
-Status: **implementation, real smoke and raw audit complete; public release
-verification pending**. First sequential point only; no new task pool, passive
+Status: **complete: implementation, real smoke, raw audit and public release
+verification passed**. First sequential point only; no new task pool, passive
 stall monitor, intervention or controller experiment has begun.
 
 ## Frozen implementation
@@ -78,4 +78,12 @@ After the real run: **269 tests passed**, including the complete raw-evidence
 regression and cached real-model integration. Scoped Ruff, JS syntax, TypeScript,
 export/diff checks and the full local browser matrix passed. The new download
 recombines exact generated reasoning, closing tag, final section and EOS without
-inventing output. Public deployment and provenance links remain to be verified.
+inventing output.
+
+Public release `e73273e`: [CI and Pages deployment passed](https://github.com/AlperKartkaya/tebdil/actions/runs/41328226496).
+The full public browser matrix passed: all eight recordings, three recorded demos,
+320/390/768/1024/1440 px, keyboard, failure/retry/checksum handling; no browser
+errors, failed requests or external requests. Deployed HTML, app script, evidence
+manifest and the new raw report match repository bytes. Protocol, verification,
+raw-report and append-only-journal links returned HTTP 200. This closes point 1;
+no later research stage is inferred from these checks.
