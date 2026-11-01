@@ -165,3 +165,9 @@ Ponytail guidance keeps the fix additive and reuses the native decoder, ledger
 validator and v2 integer grammar. Regression fixtures precede the new implementation.
 No historical hash-bound source was changed, new dependency installed or upstream
 code copied. The old False-mode artifacts are not rescored as True-mode runs.
+
+The True-mode smoke subsequently recorded one actual EOS completion with the
+opening in the input and no fabricated tag in output. It reuses an already-observed
+question; token accounting and identical continuation are not sold as an efficiency
+or reasoning gain. Public downloads and prefix/journal checks bind the new record
+to that execution rather than retroactively relabeling old False-mode artifacts.

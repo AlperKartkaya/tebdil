@@ -919,3 +919,56 @@ def test_reasoning_stall_focus_is_explicitly_proposed_not_existing_monitoring() 
     assert 'does not test reasoning stalls' in disclosure
     assert 'Proposed reasoning-recovery study — not yet run' in disclosure
     assert 'docs/reasoning_stall_study.md' in disclosure
+
+
+def test_prompt_started_reasoning_real_smoke_preserves_actual_input_output_boundary() -> None:
+    import torch
+    from tebdil.core.state import hash_tensor
+    from tebdil.evaluation.reasoning import PROMPT_SUFFIX, evaluate_reasoning_integer, split_prompt_started_reasoning
+
+    path = ROOT / 'reports/ouro_prompt_started_reasoning.json'
+    report = json.loads(path.read_text())
+    assert report['protocol'] == 'prompt_started_reasoning_v1' and report['enable_thinking'] is True
+    assert report['all_checks_passed'] and report['problem_ids'] == ['completion_dev_000']
+    assert report['cache_mode'] == 'disabled' and report['recurrent_depth'] == 4
+    assert report['readout_mode'] == 'last_step' and len(report['records']) == 1
+    row = report['records'][0]
+    assert row['split'] == 'development' and row['method'] == 'S0'
+    assert row['enable_thinking'] and row['reasoning_open_in_prompt'] and row['independent_forward_checks_passed']
+    assert row['prompt_text_with_special_tokens'].endswith(PROMPT_SUFFIX)
+    assert row['reasoning_text'] + '</think>' + row['final_text'] + report['eos_token'] == row['decoded_text_with_special_tokens']
+    assert not row['decoded_text_with_special_tokens'].startswith('<think>')
+    assert row['prompt'] in row['prompt_text_with_special_tokens']
+    reference = json.loads((ROOT / 'reports/ouro_completed_answer_smoke.json').read_text())
+    assert row['prompt'] == reference['records'][0]['prompt'] and row['gold_answer'] == reference['records'][0]['gold_answer']
+    assert report['checkpoint_sha256'] == reference['checkpoint_sha256']
+    assert report['model_revision'] == reference['model_revision']
+    for source, expected in report['source_sha256'].items():
+        assert hashlib.sha256((ROOT / source).read_bytes()).hexdigest() == expected, source
+    parts = split_prompt_started_reasoning(row['decoded_text_with_special_tokens'], report['eos_token'], completed=row['completed'])
+    assert all(row[key] == value for key, value in parts.items())
+    scores = evaluate_reasoning_integer(row, row['gold_answer'])
+    assert all(row[key] == value for key, value in scores.items())
+    events = [json.loads(line) for line in path.with_suffix('.jsonl').read_text().splitlines()]
+    assert events[0]['event'] == 'start' and events[-1]['event'] == 'finish'
+    assert events[0]['source_sha256'] == report['source_sha256']
+    assert not any(e['event'] == 'failure' for e in events)
+    assert events[-1]['record'] == row
+    observed = [e for e in events if e['event'] == 'forward']
+    tokens = row['generated_token_ids']
+    assert [e['greedy_readout_token_id'] for e in observed] == tokens
+    assert 0 < len(tokens) <= report['max_output_tokens']
+    assert row['completed'] == (tokens[-1] == report['eos_token_id'])
+    assert report['eos_token_id'] not in tokens[:-1]
+    assert row['completed'] or len(tokens) == report['max_output_tokens']
+    assert len(row['token_ledger']) == len(tokens)
+    for k, (entry, observation) in enumerate(zip(row['token_ledger'], observed, strict=True)):
+        prefix = row['prompt_token_ids'] + tokens[:k]
+        assert entry['prefix_length'] == entry['processed_sequence_length'] == len(prefix)
+        assert entry['prefix_token_ids_sha256'] == hash_tensor(torch.tensor([prefix]), 64)
+        assert entry['calls_before'] == 4*k and entry['recurrent_block_calls'] == 4
+        assert all(observation[key] == entry[key] for key in ('prefix_length', 'prefix_token_ids_sha256', 'calls_before', 'recurrent_block_calls'))
+    assert row['recurrent_token_positions'] == sum(4*e['prefix_length'] for e in row['token_ledger'])
+    assert report['actual_new_recurrent_calls'] == events[-1]['actual_new_recurrent_calls'] == row['recurrent_block_calls'] == 4*len(tokens)
+    assert (SITE / 'static/evidence' / path.name).read_bytes() == path.read_bytes()
+    assert any(e['source'] == path.relative_to(ROOT).as_posix() for e in load_manifest()['evidence'])

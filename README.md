@@ -69,8 +69,9 @@ causal progress monitoring and separate recovery/efficiency endpoints; it is not
 
 The new [explicit thinking-mode recording contract](docs/prompt_started_reasoning_protocol.md)
 uses `enable_thinking=True` and separates the prompt's opening tag from generated
-reasoning/final text. Historical runners remain False; [real-smoke verification](reports/prompt_started_reasoning_verification.md)
-is pending. This is recording infrastructure, not an implemented stall monitor.
+reasoning/final text. Its [real smoke](reports/prompt_started_reasoning_verification.md)
+reached EOS after 379 tokens and 1,516 calls. Historical runners remain False.
+This verifies recording infrastructure, not a stall monitor or reasoning benefit.
 
 ## Run the static observatory
 
