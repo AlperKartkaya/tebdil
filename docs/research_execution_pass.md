@@ -16,7 +16,8 @@ uncommitted controller, counterfactual and report artifacts are not inputs to th
 | Baseline difficulty prerequisite | All twelve development S0 attempts, versioned scoring, measured costs and raw evidence | Complete: `0c1719e` freeze, `56a4eab` evidence; 12 EOS, 10 recognized correct, 0 incorrect, 2 invalid format; 26,668 new calls, 1,524 reused; 242 tests. [CI/deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41293024936) and public browser/hash checks passed. [Headroom unresolved](../reports/baseline_difficulty_verification.md), so utility prerequisite remains unmet |
 | Explicit thinking-mode recording | True-mode prompt provenance, reasoning/final boundaries, native smoke, documentation and Pages | Complete: `1402630` freeze, `e73273e` evidence; 379 tokens, 1,516 calls, closed reasoning/final boundary; 269 tests. [CI/deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41328226496), public browser/byte/provenance checks passed; [verification](../reports/prompt_started_reasoning_verification.md). Historical runners remain False |
 | Reasoning task/verifier contract | Exact new pool, final-only grammar, independent verifiers, reproducible partitions and Pages prompts | Complete: `3a989b6`, 307 tests; [CI/deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41329465971), public byte/browser/provenance checks passed. All 18 instances unexecuted; [protocol](reasoning_tasks_protocol.md), [verification](../reports/reasoning_tasks_verification.md) |
-| Reasoning-recovery design correction | Tasks that exercise multi-step reasoning; distinguish CoT signals from latent updates and correctness from efficiency | [Draft design](reasoning_stall_study.md); task/verifier implemented separately; passive monitor not implemented, no new task inference |
+| Passive reasoning recording | Gold-free CoT prefix features, actual aligned depth states, no-op parity, frozen pilot then public evidence | Implementation and mini/three-token real-checkpoint parity tested; two-case task recording pending; [protocol](passive_reasoning_protocol.md). No semantic-stall validation or intervention |
+| Reasoning-recovery design correction | Tasks that exercise multi-step reasoning; distinguish CoT signals from latent updates and correctness from efficiency | [Draft design](reasoning_stall_study.md); task/verifier implemented separately; passive recording implemented separately, new task inference pending; no validated stall detector |
 | Completed-answer gate 3 | Development timing/utility pilot, then frozen independent test with uncertainty | Not started: simple arithmetic did not test reasoning stalls; recovery and efficiency require separately frozen endpoints; all 60 reserved test questions remain unexecuted |
 | E. Controller evaluation | Unshaped and heuristic controls only after intervention utility is established | Prerequisite unmet: C/D establish sensitivity, not completed-answer utility; no new controller evaluation |
 | Publication package | Frozen held-out campaign, complete costs and immutable reproducible evidence | Not started |
@@ -61,3 +62,14 @@ and alternate-valid answers, and verify deterministic regeneration and partition
 identities. Publish development prompts only, explicitly unexecuted. Reuse the
 existing CNF evaluator; leave all historical generators/parsers and 12/60 splits
 unchanged. No dependencies, model observations, monitor, or UI redesign in this gate.
+
+## Point 3 implementation scope (before edits)
+
+Reuse the frozen native True-mode generator. Add passive hooks only: last-position
+input, pre/post-RMSNorm states at each of four depths, actual prefix alignment,
+finite scalar diagnostics and fixed-index real tensor snapshots. A label-free
+exact-token-repeat screen is a candidate flag, not a semantic stall classifier.
+Test no-op token/call parity and failure cleanup before the real checkpoint.
+Freeze the recorder, rules and selected development order before observations.
+No interventions, reserved-test inference, cross-prefix tensor subtraction,
+additional vocabulary readouts or changes to model/generation code in this gate.

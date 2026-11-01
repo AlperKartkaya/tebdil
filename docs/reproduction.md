@@ -242,3 +242,18 @@ Exhaustive Boolean verification and state-space BFS accept alternate valid answe
 no model is run by these commands. The pool is instance-held-out, not template-OOD.
 The old 12/60 arithmetic split and its recorded scores are untouched. The public
 prompt download is development only, explicitly not a recorded model experiment.
+
+## 15. Passive reasoning recorder
+
+```bash
+uv run pytest -q tests/test_passive_reasoning.py
+uv run python scripts/record_passive_reasoning.py --output-dir /tmp/passive-reasoning-new
+```
+
+[Pre-observation protocol](passive_reasoning_protocol.md). The first level-0
+CNF/planning development pair is fixed before observations; no reserved tasks or
+interventions. Reuses native True-mode generation, records actual aligned depth
+states and raw CoT, then applies the frozen task verifier offline. The exact-repeat
+screen is heuristic, not a validated semantic-stall detector. Existing/partial
+output directories are refused. MPS execution can take hours. Preserve all files,
+including failures; a start/partial journal is not a completed experiment.

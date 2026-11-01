@@ -183,3 +183,13 @@ Webapp-testing guidance was applied through the existing complete browser matrix
 including the unexecuted-prompt download. No dependencies or remote scripts added.
 XERJ task refresh indexed 8/8 Python files (47 records); old full-project index was
 stale, so it was not treated as complete current evidence.
+
+### Passive recorder
+
+Direct inspection of the already-cloned/vendored pinned Ouro recurrence located
+first-layer inputs and shared RMSNorm boundaries; hooks reuse that execution rather
+than copying or replacing its decoder. Scientific-visualization guidance keeps
+positions, norms and snapshots explicitly aligned and avoids invented latent
+geometry. Statistical-analysis guidance separates a two-case mechanical pilot
+from monitor validation or efficacy. No new package, model, checkpoint or readout
+was introduced. Actual checkpoint three-token passive/unobserved parity is tested.

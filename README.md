@@ -118,3 +118,8 @@ The [new reasoning task/verifier contract](docs/reasoning_tasks_protocol.md) fre
 six development and twelve reserved CNF/key-planning instances before observations.
 These are unexecuted tasks, not additional experimental results. Any satisfying
 assignment or shortest legal route is accepted; old 12/60 data and scores stay intact.
+
+The [passive recorder](docs/passive_reasoning_protocol.md) now instruments native
+True-mode generation without interventions. Mini-native and three-token real-
+checkpoint parity tests pass; the first new reasoning-task pair remains pending.
+Same-prefix depth-update norms and exact CoT repeats are not semantic-stall labels.

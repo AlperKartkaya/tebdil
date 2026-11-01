@@ -90,6 +90,8 @@ const base=process.env.SITE_URL||'http://127.0.0.1:8093/';
  assert.deepEqual([...new Set(tasks.tasks.map(t=>t.family))].sort(),['cnf','key_planning']);
  assert((await contract.innerText()).includes('New reasoning tasks — frozen, not executed'));
  assert.equal(await contract.locator('a[href$="docs/reasoning_tasks_protocol.md"]').count(),1);
+ assert((await contract.innerText()).includes('Passive observation — pilot pending'));
+ assert.equal(await contract.locator('a[href$="docs/passive_reasoning_protocol.md"]').count(),1);
  await contract.screenshot({path:'/tmp/tebdil-generation-evidence.png'});
  await contract.locator('summary').press('Enter');
  await page.screenshot({path:'/tmp/tebdil-final-desktop-hero.png'});
