@@ -1,6 +1,6 @@
 # Reasoning task/verifier gate
 
-Status: **implementation and local verification passed; public release pending**.
+Status: **complete: implementation, local checks and public release verified**.
 No new model observations. All six development and twelve reserved reasoning
 instances remain unexecuted; the old arithmetic observations/reserved set stay intact.
 
@@ -32,5 +32,9 @@ Limits: shared generators/wording, small instance-held-out pool, no isomorphism/
 certification, unknown model difficulty, no monitor calibration, efficacy, uncertainty
 estimate or controller result. Classical solver success is not model reasoning.
 
-Public deployment, exact bytes, download/protocol links and browser verification
-must pass before proceeding to passive recording.
+Release `3a989b6`: [CI and Pages deployment passed](https://github.com/AlperKartkaya/tebdil/actions/runs/41329465971).
+The full public browser matrix passed, including the new development-only download,
+with no browser errors or failed/external requests. Deployed HTML, app script,
+manifest and prompt JSON match repository bytes. Protocol, verification and full-pool
+GitHub links returned HTTP 200. Point 2 is closed; passive recording is next, not
+completed by these checks.
