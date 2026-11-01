@@ -906,3 +906,16 @@ def test_baseline_difficulty_retains_all_development_attempts_and_actual_native_
     assert events[-1]['summary'] == report['summary']
     assert events[-1]['actual_new_recurrent_calls'] == report['actual_new_recurrent_calls']
     assert any(e['source'] == path.relative_to(ROOT).as_posix() for e in load_manifest()['evidence'])
+
+
+def test_reasoning_stall_focus_is_explicitly_proposed_not_existing_monitoring() -> None:
+    note = (ROOT / 'docs/reasoning_stall_study.md').read_text()
+    assert 'Draft study design; not a frozen protocol or an executed experiment' in note
+    assert 'CoT repetition is a candidate signal, not proof of a reasoning stall' in note
+    assert 'same observed prefix' in note
+    assert 'ground truth, verifier feedback, future tokens or eventual outcome' in note
+    assert 'correct-to-incorrect' in note
+    disclosure = INDEX.read_text().split('id="ouroExecutionContract"', 1)[1].split('</details>', 1)[0]
+    assert 'does not test reasoning stalls' in disclosure
+    assert 'Proposed reasoning-recovery study — not yet run' in disclosure
+    assert 'docs/reasoning_stall_study.md' in disclosure

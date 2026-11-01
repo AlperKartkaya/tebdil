@@ -14,7 +14,8 @@ uncommitted controller, counterfactual and report artifacts are not inputs to th
 | Completed-answer gate 2 | Fixed intervention/donor definitions, appropriate controls and measured completed-answer costs | Technical smoke complete: `c60dbaf`, `0dcbdc3`; five EOS completions, 14,402 new calls; 178 tests, [CI/deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41254056115), public browser/hash checks passed; boxed-format limit retained, no efficacy claim |
 | Measurement v2 prerequisite | Versioned format repair, immutable v1 scores, offline diagnostic and Pages verification | Complete: `b315d22`, `2f9f96b`; 232 tests, [CI/deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41273817261), public browser/hash checks passed; no new model completions |
 | Baseline difficulty prerequisite | All twelve development S0 attempts, versioned scoring, measured costs and raw evidence | Complete: `0c1719e` freeze, `56a4eab` evidence; 12 EOS, 10 recognized correct, 0 incorrect, 2 invalid format; 26,668 new calls, 1,524 reused; 242 tests. [CI/deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41293024936) and public browser/hash checks passed. [Headroom unresolved](../reports/baseline_difficulty_verification.md), so utility prerequisite remains unmet |
-| Completed-answer gate 3 | Development timing/utility pilot, then frozen independent test with uncertainty | Not started: baseline headroom unresolved, no recognized failure to rescue; all 60 reserved test questions remain unexecuted |
+| Reasoning-recovery design correction | Tasks that exercise multi-step reasoning; distinguish CoT signals from latent updates and correctness from efficiency | [Draft design](reasoning_stall_study.md); passive monitor and new task/verifier contract not implemented, no new inference |
+| Completed-answer gate 3 | Development timing/utility pilot, then frozen independent test with uncertainty | Not started: simple arithmetic did not test reasoning stalls; recovery and efficiency require separately frozen endpoints; all 60 reserved test questions remain unexecuted |
 | E. Controller evaluation | Unshaped and heuristic controls only after intervention utility is established | Prerequisite unmet: C/D establish sensitivity, not completed-answer utility; no new controller evaluation |
 | Publication package | Frozen held-out campaign, complete costs and immutable reproducible evidence | Not started |
 
@@ -36,9 +37,14 @@ gold value in each format miss; original scores remain unchanged. This is neithe
 an arithmetic-accuracy estimate nor evidence against TEBDİL.
 
 Do not proceed to intervention utility or controller training on these results.
-The next prerequisite is a separately frozen generation/measurement contract and
-harder development questions, with an independently reserved matching test set.
+The next prerequisite is a separately frozen task/verifier and passive-monitoring
+contract on multi-step reasoning, with independently reserved matching test data.
+The [reasoning-stall study correction](reasoning_stall_study.md) distinguishes
+possible CoT stagnation from recurrent-depth update norms, and correctness recovery
+from efficiency at maintained accuracy. It is a draft, not an executed experiment.
 Keep all current development observations and the sixty unexecuted test questions
-intact. A new pilot must establish interpretable baseline failures before using
-rescue as its rationale. Any later utility comparison must retain correct cases
-and account for degradation and actual compute, not select only failures.
+intact. A new rescue pilot needs interpretable baseline failures; an efficiency study
+instead needs validated excess-compute/process endpoints and accuracy safeguards.
+Neither follows from response length or repetition alone. Any later utility
+comparison must retain correct cases and account for degradation and actual
+compute, not select only failures.

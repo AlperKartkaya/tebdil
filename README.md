@@ -63,6 +63,9 @@ Its prospective scoring contract is verified. The development-only native
 all twelve reached EOS, with 10 recognized correct, 0 recognized incorrect and
 2 invalid-format outputs. These format misses are not demonstrated wrong arithmetic.
 Headroom remains unresolved; no intervention utility or held-out benefit is established.
+This simple arithmetic pool did not test reasoning stalls. The
+[next study design](docs/reasoning_stall_study.md) targets multi-step reasoning,
+causal progress monitoring and separate recovery/efficiency endpoints; it is not yet implemented.
 
 ## Run the static observatory
 

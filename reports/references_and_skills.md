@@ -146,3 +146,14 @@ matching gold values separate from frozen scores; no arithmetic error, rescue
 opportunity, uncertainty interval or intervention effect is inferred. Webapp-testing
 adds the actual twelve-record download and count/cost reconciliation to the
 existing browser matrix. No redesign or new dependency was needed.
+
+Reasoning-stall study correction (2026-11-01): direct code inspection found that
+`compute_stagnation_ratio` is an intra-prefix depth-update norm, while the current
+adaptive trigger uses entropy/margin, not CoT progress. Statistical guidance keeps
+recovery distinct from efficiency and forbids outcome-based case/trigger selection.
+The [draft](../docs/reasoning_stall_study.md) cites primary papers inspected directly:
+[Turpin et al.](https://arxiv.org/abs/2305.04388) for CoT faithfulness limitations and
+[Chen et al.](https://arxiv.org/abs/2412.21187) for process/outcome compute efficiency.
+Neither paper supplies Ouro or TEBDİL evidence. No source code was copied, dependency
+installed, new generation experiment launched or monitoring functionality claimed
+in this correction.

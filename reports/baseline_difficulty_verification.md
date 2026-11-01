@@ -94,6 +94,14 @@ in later comparisons to measure degradation. Useful interventions must precede
 learned-controller evaluation. No TEBDİL efficacy or publishable generalization
 finding follows from this diagnostic.
 
+**Task-selection correction:** these simple arithmetic cases did not test stalled
+multi-step reasoning. Do not generalize their ceiling to TEBDİL's research question.
+The [next study design](../docs/reasoning_stall_study.md) separates suspected CoT
+stalls from latent depth-update norms, and recovery from efficiency at maintained
+accuracy. A failed baseline is needed for a rescue claim, not for every possible
+efficiency hypothesis. Monitoring and task/verifier implementation remain pending;
+this interpretation does not amend the frozen pilot decision or any score.
+
 ## Release verification
 
 241 tests passed before new model observations. After completion, **242 tests
