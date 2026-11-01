@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "protocol": "completed_answer_measurement_v2",
+  "recorded_at_utc": "2026-11-01T04:35:44.500010+00:00",
+  "base_revision": "b315d224690e7fafad57e82181f83115b6ad6ba1",
+  "source_sha256": {
+    "scripts/verify_completion_v2.py": "2d146a85446b3df38a2b347ebdfce09ca9f45665d502bd195055d406551633ef",
+    "src/tebdil/tasks/completion_v2.py": "f02026324d8845a1aa685ed13a2326475d0734cc8c733c0578b1a7a9a9cf84dd",
+    "src/tebdil/tasks/completion.py": "bb29538f5d308a7c38014bbad73ebd3507fe936e5dc1852d1d5db9f644264f63",
+    "src/tebdil/evaluation/completion.py": "aeec1717893ae9f901d70e1d5dc8cce174ce1c53d6044babe4347a68d3d19f38",
+    "tests/test_completion_v2.py": "ca64cf2090d3dd9f5dd77b47ce2c9f5622850b000fa6d0d0f5b067a218589fdc",
+    "docs/completed_answer_v2_protocol.md": "3817723624816eb7f1974bf2427fd0e2d48078c041c7dcb3f732516c3ae7a9e7"
+  },
+  "input_sha256": {
+    "reports/ouro_completed_answer_smoke.json": "a58140ec2eb330e0a1d1850340b1c67e4decd52210c479e3331d920dea4de58a",
+    "reports/ouro_completed_answer_comparison.json": "1fee8ed944ab9f81fd698b8ac3010a828c85e79b6dacc386e7667e44bb57c3a2"
+  },
+  "posthoc": true,
+  "new_model_executions": 0,
+  "independent_problems": 1,
+  "records": [
+    {
+      "source": "reports/ouro_completed_answer_smoke.json",
+      "record_index": 0,
+      "problem_id": "completion_dev_000",
+      "method": "S0",
+      "split": "development",
+      "decoded_text_sha256": "c12cd1769b0831c76e5f1b0ec079979f099c8c26799b58e2c6568b36c0eb1b58",
+      "original_v1": {
+        "answer_extraction": "completed_final_integer_v1",
+        "format_valid": true,
+        "extracted_answer": "29",
+        "status": "correct",
+        "is_correct": true
+      },
+      "v2_diagnostic": {
+        "answer_extraction": "completed_final_integer_v2",
+        "extracted_answer": "29",
+        "format_valid": true,
+        "status": "correct",
+        "is_correct": true
+      }
+    },
+    {
+      "source": "reports/ouro_completed_answer_comparison.json",
+      "record_index": 0,
+      "problem_id": "completion_dev_000",
+      "method": "B_only",
+      "split": "development",
+      "decoded_text_sha256": "a66c5370c2e585ff22c97c403f998ffb940808a0a685d2c9f71120bf8a010e38",
+      "original_v1": {
+        "answer_extraction": "completed_final_integer_v1",
+        "format_valid": false,
+        "extracted_answer": null,
+        "status": "invalid_format",
+        "is_correct": false
+      },
+      "v2_diagnostic": {
+        "answer_extraction": "completed_final_integer_v2",
+        "extracted_answer": "29",
+        "format_valid": true,
+        "status": "correct",
+        "is_correct": true
+      }
+    },
+    {
+      "source": "reports/ouro_completed_answer_comparison.json",
+      "record_index": 1,
+      "problem_id": "completion_dev_000",
+      "method": "M0",
+      "split": "development",
+      "decoded_text_sha256": "fc984feb565f8843da9c222f6dded03f630d0bc377ffd4c96e2a36ef8d991e14",
+      "original_v1": {
+        "answer_extraction": "completed_final_integer_v1",
+        "format_valid": true,
+        "extracted_answer": "29",
+        "status": "correct",
+        "is_correct": true
+      },
+      "v2_diagnostic": {
+        "answer_extraction": "completed_final_integer_v2",
+        "extracted_answer": "29",
+        "format_valid": true,
+        "status": "correct",
+        "is_correct": true
+      }
+    },
+    {
+      "source": "reports/ouro_completed_answer_comparison.json",
+      "record_index": 2,
+      "problem_id": "completion_dev_000",
+      "method": "M1",
+      "split": "development",
+      "decoded_text_sha256": "63b9cfc17f4e05ea91fa40d88d1c9be1103018c771af97ed4712b43ec2fcc887",
+      "original_v1": {
+        "answer_extraction": "completed_final_integer_v1",
+        "format_valid": true,
+        "extracted_answer": "29",
+        "status": "correct",
+        "is_correct": true
+      },
+      "v2_diagnostic": {
+        "answer_extraction": "completed_final_integer_v2",
+        "extracted_answer": "29",
+        "format_valid": true,
+        "status": "correct",
+        "is_correct": true
+      }
+    },
+    {
+      "source": "reports/ouro_completed_answer_comparison.json",
+      "record_index": 3,
+      "problem_id": "completion_dev_000",
+      "method": "E0",
+      "split": "development",
+      "decoded_text_sha256": "91ec656ca31522b26d92243108aa72839fa8d742bca6cc4b853d44350df4684a",
+      "original_v1": {
+        "answer_extraction": "completed_final_integer_v1",
+        "format_valid": true,
+        "extracted_answer": "29",
+        "status": "correct",
+        "is_correct": true
+      },
+      "v2_diagnostic": {
+        "answer_extraction": "completed_final_integer_v2",
+        "extracted_answer": "29",
+        "format_valid": true,
+        "status": "correct",
+        "is_correct": true
+      }
+    },
+    {
+      "source": "reports/ouro_completed_answer_comparison.json",
+      "record_index": 4,
+      "problem_id": "completion_dev_000",
+      "method": "E1",
+      "split": "development",
+      "decoded_text_sha256": "386e90cf4d17875513183494a073eff1db4f819595c0576a2c3031f1da2c4989",
+      "original_v1": {
+        "answer_extraction": "completed_final_integer_v1",
+        "format_valid": true,
+        "extracted_answer": "29",
+        "status": "correct",
+        "is_correct": true
+      },
+      "v2_diagnostic": {
+        "answer_extraction": "completed_final_integer_v2",
+        "extracted_answer": "29",
+        "format_valid": true,
+        "status": "correct",
+        "is_correct": true
+      }
+    }
+  ],
+  "all_checks_passed": true,
+  "limitations": [
+    "Known development outputs; parser amendment motivated by an observed format failure",
+    "Original model outputs and v1 scores remain unchanged; v2 fields are a separate diagnostic",
+    "Recognition is not new reasoning success, rescue, held-out accuracy or universal format coverage"
+  ]
+}

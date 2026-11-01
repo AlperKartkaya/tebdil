@@ -56,6 +56,9 @@ question: mixing and excursion methods retain the recognized correct answer;
 donor-only uses a boxed answer rejected by the frozen parser, not demonstrated
 wrong arithmetic. No rescue or held-out benefit is established.
 [Gate-2 findings and actual costs](reports/completed_answer_comparison_verification.md).
+A separate [measurement v2 audit](reports/completion_v2_verification.md) recognizes
+the known math-wrapped box without changing v1 scores or running new inference.
+Its prospective scoring contract must be verified before the baseline difficulty pilot.
 
 ## Run the static observatory
 

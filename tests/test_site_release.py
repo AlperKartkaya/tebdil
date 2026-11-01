@@ -805,3 +805,29 @@ def test_fixed_completion_evidence_retains_every_arm_and_reconciles_real_costs()
     assert report['reused_baseline_recurrent_calls'] == report['baseline_record']['recurrent_block_calls']
     assert (SITE / 'static/evidence' / path.name).read_bytes() == path.read_bytes()
     assert any(e['source'] == 'reports/ouro_completed_answer_comparison.json' for e in load_manifest()['evidence'])
+
+
+def test_measurement_v2_audit_is_separate_posthoc_and_hash_bound() -> None:
+    from tebdil.tasks.completion_v2 import evaluate_completion_v2
+
+    path = ROOT / 'reports/ouro_completion_v2_audit.json'
+    report = json.loads(path.read_text())
+    assert report['all_checks_passed'] and report['posthoc']
+    assert report['new_model_executions'] == 0 and report['independent_problems'] == 1
+    assert report['protocol'] == 'completed_answer_measurement_v2' and len(report['records']) == 6
+    assert (SITE / 'static/evidence' / path.name).read_bytes() == path.read_bytes()
+    for source, digest in {**report['source_sha256'], **report['input_sha256']}.items():
+        assert hashlib.sha256((ROOT / source).read_bytes()).hexdigest() == digest, source
+    for row in report['records']:
+        source = json.loads((ROOT / row['source']).read_text())
+        raw = source['records'][row['record_index']]
+        assert row['problem_id'] == raw['problem_id'] == 'completion_dev_000'
+        assert row['method'] == raw['method']
+        assert row['original_v1'] == {k: raw[k] for k in row['original_v1']}
+        assert hashlib.sha256(raw['decoded_text_with_special_tokens'].encode()).hexdigest() == row['decoded_text_sha256']
+        assert row['v2_diagnostic'] == evaluate_completion_v2(raw, '<|im_end|>', raw['gold_answer'])
+    assert any(e['source'] == path.relative_to(ROOT).as_posix() for e in load_manifest()['evidence'])
+    disclosure = INDEX.read_text().split('id="ouroExecutionContract"', 1)[1].split('</details>', 1)[0]
+    assert 'Measurement v2 — offline format audit' in disclosure
+    assert 'original v1 scores and model outputs remain unchanged' in disclosure
+    assert 'static/evidence/ouro_completion_v2_audit.json' in disclosure

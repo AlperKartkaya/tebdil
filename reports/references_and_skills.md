@@ -124,3 +124,11 @@ parser repair or favorable filtering. The boxed-answer miss is reported separate
 from reasoning correctness. Webapp-testing/release checks bind public downloads to
 raw report hashes, all-arm journals and every reconstructed prefix. No new skills,
 references, dependencies or copied upstream implementations were added in this gate.
+
+Measurement v2 applies the existing statistical-analysis guidance: separate
+completion, formatting and correctness; label known-output recalibration as
+post-hoc rather than model improvement. Ponytail guidance kept the repair versioned
+and additive because v1 sources/scores are immutable provenance inputs. Synthetic
+negative cases precede implementation; webapp-testing verifies the separate raw
+audit in the original disclosure. No new dependency, skill install or upstream
+code copy was needed.

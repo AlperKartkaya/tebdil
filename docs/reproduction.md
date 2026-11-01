@@ -169,3 +169,17 @@ leaves partial evidence; there is intentionally no silent restart/overwrite.
 No reserved test inference or controller evaluation. Check the
 [verification status](../reports/completed_answer_comparison_verification.md)
 before claiming any result. See the [frozen scope and cost caveats](completed_answer_comparison_protocol.md).
+
+## 11. Measurement v2 (offline only)
+
+```bash
+uv run pytest -q tests/test_completion_v2.py
+uv run python scripts/verify_completion_v2.py --output /tmp/completion-v2-new.json
+```
+
+Requires no checkpoint or inference server. Reads only the two committed development
+smoke reports, preserves all originals and refuses an existing output. The new
+report contains original v1 fields and separate post-hoc v2 diagnostics, not new
+model outcomes. [Contract](completed_answer_v2_protocol.md) and
+[verification](../reports/completion_v2_verification.md). Future pilot generation
+must explicitly apply v2 after validating its actual token/call ledger.

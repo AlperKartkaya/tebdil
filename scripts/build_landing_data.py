@@ -133,6 +133,7 @@ def build(root: Path = ROOT) -> None:
         "reports/ouro_normalization.json",
         "reports/ouro_completed_answer_smoke.json",
         "reports/ouro_completed_answer_comparison.json",
+        "reports/ouro_completion_v2_audit.json",
         "reports/mvp_audit_fresh_test.json",
         "artifacts/evidence/model_provenance.json",
         "artifacts/evidence/phase1_excursion_verification.json",
