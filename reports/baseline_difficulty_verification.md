@@ -1,7 +1,7 @@
 # Development baseline difficulty pilot
 
-Status: **real serial run and raw-evidence audit complete; public release
-verification pending**. Measurement v2 was completed and publicly verified first.
+Status: **real serial run, raw-evidence audit and public release verification
+complete**. Measurement v2 was completed and publicly verified first.
 The [protocol](../docs/baseline_difficulty_protocol.md), runner and nine tests were
 frozen at `0c1719e` before new observations. No subagents or cloud resources.
 
@@ -106,4 +106,11 @@ the new twelve-record download, keyboard controls, retry/checksum failure paths
 and 320–1440 px layouts, with no console, network or overflow errors. The expanded
 evidence disclosure and mobile layout were inspected visually. Original CSS,
 section identities, historical run entries and all previous evidence metadata are
-unchanged. Public Pages verification remains pending until deployment completes.
+unchanged.
+
+Evidence release `56a4eab`: [CI and Pages deployment passed](https://github.com/AlperKartkaya/tebdil/actions/runs/41293024936).
+The full public browser matrix passed independently, including the new baseline
+download. Deployed HTML, app, manifest and baseline report match local bytes;
+protocol, findings, raw report and journal provenance links return HTTP 200.
+This closes the baseline execution/release point, **not** the intervention-utility
+or publication-efficacy gate.
