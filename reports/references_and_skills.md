@@ -132,3 +132,10 @@ and additive because v1 sources/scores are immutable provenance inputs. Syntheti
 negative cases precede implementation; webapp-testing verifies the separate raw
 audit in the original disclosure. No new dependency, skill install or upstream
 code copy was needed.
+
+The baseline difficulty pilot reuses native generation and the original ledger
+validator, adding independent forward observations instead of another inference
+engine. Statistical guidance separates task headroom from format/truncation errors,
+retains all twelve preselected attempts and avoids test-set peeking. Mini-model
+checks precede real observations; no fixture is presented as a new Ouro completion.
+No new dependency, cloud resource, skill installation or upstream code copy.

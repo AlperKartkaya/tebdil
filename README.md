@@ -58,7 +58,9 @@ wrong arithmetic. No rescue or held-out benefit is established.
 [Gate-2 findings and actual costs](reports/completed_answer_comparison_verification.md).
 A separate [measurement v2 audit](reports/completion_v2_verification.md) recognizes
 the known math-wrapped box without changing v1 scores or running new inference.
-Its prospective scoring contract must be verified before the baseline difficulty pilot.
+Its prospective scoring contract is verified. A separate development-only native
+[baseline difficulty pilot](reports/baseline_difficulty_verification.md) has started;
+no completed campaign result or intervention utility is available yet.
 
 ## Run the static observatory
 

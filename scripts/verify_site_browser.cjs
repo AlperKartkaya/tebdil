@@ -55,6 +55,9 @@ const base=process.env.SITE_URL||'http://127.0.0.1:8093/';
  assert(audit.posthoc&&audit.all_checks_passed);assert.equal(audit.new_model_executions,0);
  assert.equal(audit.records.length,6);assert.equal(audit.independent_problems,1);
  assert((await contract.innerText()).includes('original v1 scores and model outputs remain unchanged'));
+ for(const source of ['docs/baseline_difficulty_protocol.md','reports/baseline_difficulty_verification.md']){
+   assert.equal(await contract.locator(`a[href$="${source}"]`).count(),1);
+ }
  await contract.screenshot({path:'/tmp/tebdil-generation-evidence.png'});
  await contract.locator('summary').press('Enter');
  await page.screenshot({path:'/tmp/tebdil-final-desktop-hero.png'});

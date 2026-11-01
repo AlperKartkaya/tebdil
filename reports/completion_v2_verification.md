@@ -1,9 +1,10 @@
 # Measurement v2 verification
 
 Status: **implementation, offline audit and public release verification complete**.
-The baseline difficulty pilot has **not** started. No reserved test or controller
-is evaluated here. Original page design, generation source and historical scores
-stay unchanged.
+Baseline inference was not part of this measurement step; see the subsequent
+[baseline difficulty status](baseline_difficulty_verification.md). No reserved test
+or controller is evaluated here. Original page design, generation source and
+historical scores stay unchanged.
 
 ## Change and scope
 

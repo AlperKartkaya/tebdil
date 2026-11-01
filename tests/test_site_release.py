@@ -831,3 +831,6 @@ def test_measurement_v2_audit_is_separate_posthoc_and_hash_bound() -> None:
     assert 'Measurement v2 — offline format audit' in disclosure
     assert 'original v1 scores and model outputs remain unchanged' in disclosure
     assert 'static/evidence/ouro_completion_v2_audit.json' in disclosure
+    assert 'docs/baseline_difficulty_protocol.md' in disclosure
+    assert 'reports/baseline_difficulty_verification.md' in disclosure
+    assert 'Baseline difficulty pilot — results pending' in disclosure

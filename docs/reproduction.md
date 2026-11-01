@@ -183,3 +183,19 @@ report contains original v1 fields and separate post-hoc v2 diagnostics, not new
 model outcomes. [Contract](completed_answer_v2_protocol.md) and
 [verification](../reports/completion_v2_verification.md). Future pilot generation
 must explicitly apply v2 after validating its actual token/call ledger.
+
+## 12. Development baseline difficulty pilot
+
+```bash
+uv run pytest -q tests/test_baseline_difficulty.py
+uv run python scripts/run_baseline_difficulty.py --output-dir /tmp/baseline-difficulty-new
+```
+
+Requires the exact cached checkpoint and the frozen MPS/software contract from
+native S0. Reuses question 000's prior output; runs questions 001–011 serially.
+No intervention or reserved-test inference. A new output directory is mandatory;
+there is no silent resume/overwrite. Independent forward proposals are validated
+against actual returned tokens before a question is marked finished. Partial
+journals are diagnostic progress, not completed outcomes. This may take hours.
+[Protocol](baseline_difficulty_protocol.md) and
+[current verification](../reports/baseline_difficulty_verification.md).
