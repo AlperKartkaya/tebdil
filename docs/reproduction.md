@@ -214,3 +214,17 @@ It audits recorded evidence, not a clean-clone or cross-device generation rerun.
 The outcome is 10 recognized correct, 0 recognized incorrect, 2 invalid format,
 0 budget exhausted. Do not repair these scores or infer arithmetic accuracy from
 format failures. No intervention or reserved-test execution is implied.
+
+## 13. Prompt-started thinking-mode recording
+
+```bash
+uv run pytest -q tests/test_prompt_started_reasoning.py
+uv run python scripts/verify_prompt_started_reasoning.py --output /tmp/thinking-smoke-new.json
+```
+
+Requires the exact cached checkpoint and frozen BF16 MPS/software contract. Uses
+only already-observed development question 000, not the new reasoning task pool.
+The new encoder uses True; old runners still use False. Existing JSON or sibling
+journal paths are refused. [Protocol](prompt_started_reasoning_protocol.md) and
+[verification](../reports/prompt_started_reasoning_verification.md). An unfinished
+or malformed outcome is retained, not silently retried or scored from its thoughts.

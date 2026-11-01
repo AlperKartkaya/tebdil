@@ -157,3 +157,11 @@ The [draft](../docs/reasoning_stall_study.md) cites primary papers inspected dir
 Neither paper supplies Ouro or TEBDİL evidence. No source code was copied, dependency
 installed, new generation experiment launched or monitoring functionality claimed
 in this correction.
+
+Prompt-started reasoning gate: XERJ retrieval over the pinned Ouro tokenizer sources
+was followed by direct inspection of the cached chat template. True appends an
+opening tag to the input; it is not a model-internal guarantee of useful reasoning.
+Ponytail guidance keeps the fix additive and reuses the native decoder, ledger
+validator and v2 integer grammar. Regression fixtures precede the new implementation.
+No historical hash-bound source was changed, new dependency installed or upstream
+code copied. The old False-mode artifacts are not rescored as True-mode runs.

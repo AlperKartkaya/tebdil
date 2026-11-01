@@ -67,6 +67,11 @@ This simple arithmetic pool did not test reasoning stalls. The
 [next study design](docs/reasoning_stall_study.md) targets multi-step reasoning,
 causal progress monitoring and separate recovery/efficiency endpoints; it is not yet implemented.
 
+The new [explicit thinking-mode recording contract](docs/prompt_started_reasoning_protocol.md)
+uses `enable_thinking=True` and separates the prompt's opening tag from generated
+reasoning/final text. Historical runners remain False; [real-smoke verification](reports/prompt_started_reasoning_verification.md)
+is pending. This is recording infrastructure, not an implemented stall monitor.
+
 ## Run the static observatory
 
 No checkpoint, backend, or raw `results/` directory is needed to serve the committed export:
