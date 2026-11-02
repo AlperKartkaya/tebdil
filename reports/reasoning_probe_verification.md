@@ -1,6 +1,6 @@
 # Reasoning CoT sensitivity: verification and findings
 
-Status: actual probe, raw audit and local release checks complete; public release pending. No rescue claim.
+Status: actual probe, raw audit and public release verified. No rescue claim.
 [Protocol](../docs/reasoning_probe_protocol.md), source and six mini-native tests
 were frozen at `09b7f1f` before any new intervention observation. The full suite
 passed 321 tests including real-checkpoint tests. Freeze CI/Pages passed
@@ -119,5 +119,22 @@ Verified before release:
   errors, unexpected external requests or failed normal requests were observed.
   Original CSS is unchanged.
 
-Public CI/Pages, deployed-byte and browser verification are pending deployment;
-local success is not yet evidence of the live site's new behavior.
+Public release verified for evidence/viewer commit `10d3a69`:
+
+- [CI/Pages run 41410963859](https://github.com/AlperKartkaya/tebdil/actions/runs/41410963859):
+  verify, package and deploy all passed for that exact revision.
+- The full browser matrix passed on
+  [the deployed site](https://alperkartkaya.github.io/tebdil/), including all new
+  task/index/method selections and both independent failure/retry/checksum paths.
+  All five widths passed; no page errors, failed normal requests or unexpected
+  external requests were observed.
+- Thirteen deployed files match local committed bytes exactly: HTML, application
+  JS, unchanged CSS, manifest, development prompts, both probe files and all six
+  passive-recording files. The protocol, findings and frozen-source provenance
+  links return HTTP 200.
+
+This closes this diagnostic's release, not the research efficacy gate. No repeated
+intervention, larger task, alternative donor or new decoding-policy sweep was run.
+The next prerequisite remains baseline completion/budget adequacy and a separately
+frozen decoder-visible intervention/causal-selection contract, not selecting a
+more dramatic trace from this development pair.
