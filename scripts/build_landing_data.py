@@ -158,6 +158,14 @@ def build(root: Path = ROOT) -> None:
     write_file("static/evidence/reasoning_v1_development.json",
                (json.dumps(development_prompts(task_pool), indent=2, allow_nan=False)+"\n").encode(),
                "configs/reasoning_v1_tasks.json (development prompts only; unexecuted)")
+    passive = root / "reports/passive_reasoning_v1"
+    for path in sorted(passive.glob("*.json")) + sorted(passive.glob("*.jsonl")):
+        write_file(f"static/evidence/passive_reasoning_v1/{path.name}", path.read_bytes(), path.relative_to(root).as_posix())
+    summary = passive / "report.json"
+    if summary.exists():
+        manifest["evidence"].append({"label": "passive reasoning v1", "source": summary.relative_to(root).as_posix(),
+                                     "url": "static/evidence/passive_reasoning_v1/report.json",
+                                     "sha256": digest(summary.read_bytes()), "historical": False})
     bundle = "window.TEBDIL_DATA = " + json.dumps(manifest, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + ";\n"
     (site / "static/tebdil_data.js").write_text(bundle, encoding="utf-8")
     check(root)

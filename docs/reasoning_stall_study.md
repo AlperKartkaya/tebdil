@@ -2,7 +2,8 @@
 
 Status: **Draft study design; not a frozen protocol or an executed experiment**.
 The separate [task/verifier protocol](reasoning_tasks_protocol.md) now freezes a
-new, unexecuted pool. No stall detector, thresholds, controller or intervention
+new pool before observations; its first pair is now separately
+[passively recorded](../reports/passive_reasoning_verification.md). No stall detector, thresholds, controller or intervention
 results are introduced by this note. Historical protocols, scores and reserved sets stay intact.
 
 ## What the arithmetic pilot did not test

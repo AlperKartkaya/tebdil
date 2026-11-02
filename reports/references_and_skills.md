@@ -193,3 +193,11 @@ positions, norms and snapshots explicitly aligned and avoids invented latent
 geometry. Statistical-analysis guidance separates a two-case mechanical pilot
 from monitor validation or efficacy. No new package, model, checkpoint or readout
 was introduced. Actual checkpoint three-token passive/unobserved parity is tested.
+
+The completed passive pilot retains two budget-exhausted, open-reasoning attempts;
+no thought is promoted to a final answer. Scientific/statistical guidance keeps
+exact-repeat flags separate from semantic labels and retrospective error diagnosis
+separate from causal trigger selection. Prefix-only process warnings were published
+while planning was still running. Actual snapshots are dtype/hash-audited rather
+than projected into invented geometry; all incomplete outcomes and measured costs
+remain visible. No claimed efficacy, false-positive rate or learned policy follows.

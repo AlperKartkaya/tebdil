@@ -1,8 +1,8 @@
 # Reasoning task/verifier gate
 
 Status: **complete: implementation, local checks and public release verified**.
-No new model observations. All six development and twelve reserved reasoning
-instances remain unexecuted; the old arithmetic observations/reserved set stay intact.
+At this task-freeze gate there were no model observations: all six development
+and twelve reserved reasoning instances were unexecuted; the old arithmetic observations/reserved set stay intact.
 
 The [frozen protocol](../docs/reasoning_tasks_protocol.md) defines structural
 selection, exact prompts/partitions, True-mode generation/stopping, final-only JSON
@@ -38,3 +38,7 @@ with no browser errors or failed/external requests. Deployed HTML, app script,
 manifest and prompt JSON match repository bytes. Protocol, verification and full-pool
 GitHub links returned HTTP 200. Point 2 is closed; passive recording is next, not
 completed by these checks.
+
+Subsequent stage: the first development pair was recorded under the separately
+frozen [passive protocol](../docs/passive_reasoning_protocol.md). This task-freeze
+verification and pre-observation prompt download are not live execution status.

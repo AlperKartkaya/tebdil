@@ -116,10 +116,15 @@ Parallel selection caveat: all historical P0/P1 total-selection costs are unveri
 
 The [new reasoning task/verifier contract](docs/reasoning_tasks_protocol.md) freezes
 six development and twelve reserved CNF/key-planning instances before observations.
-These are unexecuted tasks, not additional experimental results. Any satisfying
+This download preserves the pre-observation specification, not model results. Any satisfying
 assignment or shortest legal route is accepted; old 12/60 data and scores stay intact.
 
 The [passive recorder](docs/passive_reasoning_protocol.md) now instruments native
 True-mode generation without interventions. Mini-native and three-token real-
-checkpoint parity tests pass; the first new reasoning-task pair remains pending.
-Same-prefix depth-update norms and exact CoT repeats are not semantic-stall labels.
+checkpoint parity tests pass. The [recorded first pair](reports/passive_reasoning_v1/report.json)
+used 16,384 recurrent calls; both attempts exhausted 2,048 tokens with reasoning
+open and no eligible final answer. They are unfinished, not recognized wrong answers.
+[Prefix reviews](reports/passive_process_review.md) show the first repeat flags
+arise during input restatement. Same-prefix update norms and exact CoT repeats are
+not semantic-stall labels; intervention utility remains untested. Four further
+development instances and all twelve new reserved instances remain unexecuted.

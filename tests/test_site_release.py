@@ -983,6 +983,133 @@ def test_reasoning_tasks_are_unexecuted_development_prompts_not_new_model_result
     manifest=load_manifest()
     assert manifest['files']['static/evidence/reasoning_v1_development.json']['sha256']==hashlib.sha256(path.read_bytes()).hexdigest()
     html=INDEX.read_text()
-    assert 'New reasoning tasks — frozen, not executed' in html
+    assert 'New reasoning tasks — frozen specification' in html
     assert 'Development prompts (no model results)' in html
     assert hashlib.sha256((ROOT/'configs/reasoning_v1_tasks.json').read_bytes()).hexdigest()=='016c4c8343fa3656825b63f3df6dc283d06f19ffaaba17714c8c163c10590e17'
+
+
+def test_passive_reasoning_artifacts_reconcile_real_states_prefixes_costs_and_scores():
+    import math
+    import torch
+    from tebdil.core.state import hash_tensor
+    from tebdil.evaluation.monitoring import SNAPSHOT_TOKEN_INDICES
+    from tebdil.tasks.reasoning import evaluate_reasoning_task
+    folder=ROOT/'reports/passive_reasoning_v1'
+    report=json.loads((folder/'report.json').read_text())
+    assert report['protocol']=='passive_reasoning_v1' and report['all_checks_passed']
+    assert report['enable_thinking'] is True and report['recurrent_depth']==4
+    assert report['checkpoint_sha256']==json.loads((ROOT/'reports/ouro_prompt_started_reasoning.json').read_text())['checkpoint_sha256']
+    assert all(hashlib.sha256((ROOT/p).read_bytes()).hexdigest()==h for p,h in report['source_sha256'].items())
+    tasks=json.loads((ROOT/'configs/reasoning_v1_tasks.json').read_text())['partitions']['development'][:2]
+    assert report['selected_problem_ids']==[t['problem_id'] for t in tasks]
+    assert len(report['records'])==2
+    run=[json.loads(line) for line in (folder/'run.jsonl').read_text().splitlines()]
+    assert [e['event'] for e in run]==['start','case_start','case_finish','case_start','case_finish','finish']
+    assert run[-1]['report_sha256']==hashlib.sha256((folder/'report.json').read_bytes()).hexdigest()
+    for p in folder.iterdir():
+        assert p.read_bytes()==(SITE/'static/evidence/passive_reasoning_v1'/p.name).read_bytes()
+    calls=0
+    for task,summary in zip(tasks,report['records'],strict=True):
+        path=folder/summary['raw_file']
+        assert hashlib.sha256(path.read_bytes()).hexdigest()==summary['raw_sha256']
+        case=json.loads(path.read_text())
+        assert case['all_checks_passed'] and case['source_sha256']==report['source_sha256']
+        row,observations=case['record'],case['observations']
+        assert row['problem_id']==task['problem_id'] and row['prompt']==task['prompt']
+        assert row['split']=='development' and row['method']=='S0'
+        assert all(row[k]==v for k,v in evaluate_reasoning_task(task,row).items())
+        n=len(row['generated_token_ids'])
+        assert n==summary['generated_tokens']==len(observations)==len(row['token_ledger'])
+        assert row['recurrent_block_calls']==summary['recurrent_block_calls']==4*n
+        assert row['status']==summary['status'] and row['reasoning_status']==summary['reasoning_status']
+        assert n<=2048 and (row['completed'] or n==2048)
+        journal=folder/summary['journal_file']
+        assert hashlib.sha256(journal.read_bytes()).hexdigest()==summary['journal_sha256']
+        events=[json.loads(line) for line in journal.read_text().splitlines()]
+        assert [e['event'] for e in events]==['case_start']+['observation']*n+['case_finish']
+        assert events[-1]['record']==row
+        flags=[]
+        for k,(entry,ledger) in enumerate(zip(observations,row['token_ledger'],strict=True)):
+            prefix=row['prompt_token_ids']+row['generated_token_ids'][:k]
+            assert entry['token_index']==entry['generated_prefix_token_count']==k
+            assert entry['greedy_readout_token_id']==row['generated_token_ids'][k]
+            for key in ('prefix_length','prefix_token_ids_sha256','calls_before','recurrent_block_calls'):
+                assert entry[key]==ledger[key]
+            assert entry['prefix_length']==len(prefix) and entry['calls_before']==4*k
+            assert entry['prefix_token_ids_sha256']==hash_tensor(torch.tensor([prefix]),64)
+            assert {key:value for key,value in events[k+1].items() if key!='event'}==entry
+            window=row['generated_token_ids'][max(0,k-128):k]
+            matches=sum(window[i:i+8]==window[-8:] for i in range(len(window)-8)) if len(window)>=8 else 0
+            assert entry['prior_exact_8gram_matches']==matches
+            flag=entry['phase']=='reasoning' and k>=128 and matches>=2
+            assert entry['candidate_repeat_flag']==flag
+            if flag:
+                flags.append(k)
+            depths=entry['depth_states']
+            assert len(depths)==4
+            for t,state in enumerate(depths):
+                assert state['depth']==t and state['position']==len(prefix)-1 and state['prefix_length']==len(prefix)
+                assert state['positions_sha256']==hash_tensor(torch.arange(len(prefix))[None],64)
+                assert state['dtype']=='torch.bfloat16'
+                assert all(math.isfinite(state[key]) and state[key]>=0 for key in ('input_l2','raw_l2','normalized_l2','postnorm_update_l2'))
+                if t:
+                    assert state['input_sha256']==depths[t-1]['normalized_sha256']
+                    assert state['input_l2']==depths[t-1]['normalized_l2']
+                assert ('input_vector' in state)==(k in SNAPSHOT_TOKEN_INDICES)
+                if k in SNAPSHOT_TOKEN_INDICES:
+                    vectors={key:torch.tensor(state[key+'_vector'],dtype=torch.bfloat16) for key in ('input','raw','normalized')}
+                    assert all(hash_tensor(v,64)==state[key+'_sha256'] for key,v in vectors.items())
+                    assert float(vectors['input'].float().norm())==pytest.approx(state['input_l2'],rel=2e-6,abs=2e-6)
+                    assert float(vectors['raw'].float().norm())==pytest.approx(state['raw_l2'],rel=2e-6,abs=2e-6)
+                    assert float(vectors['normalized'].float().norm())==pytest.approx(state['normalized_l2'],rel=2e-6,abs=2e-6)
+                    delta=float((vectors['normalized'].float()-vectors['input'].float()).norm())
+                    assert delta==pytest.approx(state['postnorm_update_l2'],rel=2e-6,abs=2e-6)
+        assert len(flags)==summary['candidate_repeat_flags']
+        assert (flags[0] if flags else None)==summary['first_candidate_flag_token_index']
+        assert row['recurrent_token_positions']==summary['recurrent_token_positions']==sum(4*len(row['prompt_token_ids']+row['generated_token_ids'][:k]) for k in range(n))
+        calls+=row['recurrent_block_calls']
+    assert report['actual_new_recurrent_calls']==calls
+
+
+@pytest.mark.real_model
+def test_passive_reasoning_recorded_phase_and_raw_text_match_pinned_tokenizer():
+    from transformers import AutoTokenizer
+    from tebdil.evaluation.monitoring import repeat_features
+    from tebdil.evaluation.reasoning import PROMPT_SUFFIX, split_prompt_started_reasoning
+    from tebdil.models.ouro_adapter import PINNED_OURO_THINKING_REV
+    tok=AutoTokenizer.from_pretrained('ByteDance/Ouro-1.4B-Thinking',revision=PINNED_OURO_THINKING_REV,local_files_only=True)
+    folder=ROOT/'reports/passive_reasoning_v1'
+    report=json.loads((folder/'report.json').read_text())
+    for summary in report['records']:
+        case=json.loads((folder/summary['raw_file']).read_text())
+        row=case['record']
+        assert tok.decode(row['prompt_token_ids'],skip_special_tokens=False)==row['prompt_text_with_special_tokens']
+        assert row['prompt_text_with_special_tokens'].endswith(PROMPT_SUFFIX)
+        text=tok.decode(row['generated_token_ids'],skip_special_tokens=False)
+        assert text==row['decoded_text_with_special_tokens']
+        parts=split_prompt_started_reasoning(text,tok.eos_token,completed=row['completed'])
+        assert all(row[k]==v for k,v in parts.items())
+        assert row['completed']==(row['generated_token_ids'][-1]==tok.eos_token_id)
+        assert tok.eos_token_id not in row['generated_token_ids'][:-1]
+        for k,entry in enumerate(case['observations']):
+            assert all(entry[key]==value for key,value in repeat_features(tok,row['generated_token_ids'][:k]).items())
+
+
+def test_passive_process_review_does_not_turn_thoughts_into_final_answers():
+    from tebdil.tasks.reasoning import evaluate_reasoning_task, solve_planning
+    folder=ROOT/'reports/passive_reasoning_v1'
+    report=json.loads((folder/'report.json').read_text())
+    review=(ROOT/'reports/passive_process_review.md').read_text()
+    assert [r['first_candidate_flag_token_index'] for r in report['records']]==[176,207]
+    for summary in report['records']:
+        case=json.loads((folder/summary['raw_file']).read_text())
+        assert case['observations'][summary['first_candidate_flag_token_index']]['prefix_token_ids_sha256'] in review
+        assert case['record']['status']=='budget_exhausted' and case['record']['extracted_answer'] is None
+    task=json.loads((ROOT/'configs/reasoning_v1_tasks.json').read_text())['partitions']['development'][1]
+    raw=json.loads((folder/report['records'][1]['raw_file']).read_text())['record']
+    assert '0->3->0->4->5' in raw['reasoning_text']
+    assert not any(u==3 and v==0 for u,v,_ in task['instance']['edges'])
+    assert solve_planning(task['instance'])==[0,3,1,0,4,5]
+    synthetic=dict(completed=True,reasoning_status='closed',final_text='{"path":[0,3,0,4,5]}')
+    assert evaluate_reasoning_task(task,synthetic)['status']=='incorrect'
+    assert raw['status']=='budget_exhausted'  # A diagnostic on text never rescores the actual unfinished attempt.

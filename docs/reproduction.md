@@ -257,3 +257,15 @@ states and raw CoT, then applies the frozen task verifier offline. The exact-rep
 screen is heuristic, not a validated semantic-stall detector. Existing/partial
 output directories are refused. MPS execution can take hours. Preserve all files,
 including failures; a start/partial journal is not a completed experiment.
+
+The committed [passive recordings](../reports/passive_reasoning_v1/report.json)
+retain both 2,048-token unfinished attempts, actual depth states and append-only
+journals. Audit them without a new generation run:
+
+```bash
+uv run pytest -q tests/test_site_release.py -k passive_reasoning
+```
+
+One audit uses only JSON/tensor operations; the other requires the pinned cached
+tokenizer (marked `real_model`, excluded in hosted CI), not new checkpoint inference.
+[Findings and limits](../reports/passive_reasoning_verification.md).

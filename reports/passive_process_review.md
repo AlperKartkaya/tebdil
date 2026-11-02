@@ -66,3 +66,25 @@ while planning is still running. The two prefix-only reviews retain their origin
 review timestamps above. This is transparent exploratory annotation, not a
 preregistered or independently blinded human-label study. No trigger rule, selected
 case, source file or generation budget changes as a result.
+
+## Post-recording diagnostic (separate from the prefix-only reviews)
+
+Both attempts ended at the frozen 2,048-token limit, reasoning open, without EOS
+or an eligible final answer. They remain budget exhausted. CNF has 38 candidate
+repeat flags; planning has four, at 207, 1891, 1892 and 1893. No later flag is selected
+retroactively for an intervention because its surrounding text looks more useful.
+
+The planning tail repeatedly considers `0->3->0->4->5` and calls it four moves.
+The actual problem has **no `3->0` edge**: from 3, only `3->1` is allowed. Independent
+BFS yields `0->3->1->0->4->5` (five moves). A synthetic final-only call to the frozen
+verifier rejects the four-move shortcut; this checks a concrete process error,
+not a new model output, new scoring rule or a rescored final answer. No model
+completion is recognized from thought text. The observer never sees this offline
+constraint/BFS check or the eventual outcome.
+
+This is evidence of an observable constraint error and repeated checking in this
+trace, not proof that its hidden states represent a semantic loop, that every
+repeated passage lacks progress, or that TEBDİL would repair it. Its first eligible
+flag was still accurate input organization. Proper causal monitor validation must
+precede a claim of recovery from stalls; ordinary perturbation at that first flag
+would instead be a differently scoped experiment.

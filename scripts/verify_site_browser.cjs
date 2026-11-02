@@ -88,10 +88,25 @@ const base=process.env.SITE_URL||'http://127.0.0.1:8093/';
  assert.equal(tasks.status,'unexecuted_task_prompts');assert.equal(tasks.tasks.length,6);
  assert(tasks.tasks.every(t=>t.problem_id.includes('_development_')&&t.prompt.includes('FINAL:')));
  assert.deepEqual([...new Set(tasks.tasks.map(t=>t.family))].sort(),['cnf','key_planning']);
- assert((await contract.innerText()).includes('New reasoning tasks — frozen, not executed'));
+ assert((await contract.innerText()).includes('New reasoning tasks — frozen specification'));
  assert.equal(await contract.locator('a[href$="docs/reasoning_tasks_protocol.md"]').count(),1);
- assert((await contract.innerText()).includes('Passive observation — pilot pending'));
+ assert((await contract.innerText()).includes('Passive observation — recorded pilot'));
  assert.equal(await contract.locator('a[href$="docs/passive_reasoning_protocol.md"]').count(),1);
+ const passiveResponse=await page.request.get(new URL('static/evidence/passive_reasoning_v1/report.json',base).href);
+ assert(passiveResponse.ok());const passive=await passiveResponse.json();
+ assert(passive.all_checks_passed&&passive.enable_thinking);assert.equal(passive.records.length,2);
+ assert.equal(passive.actual_new_recurrent_calls,16384);
+ assert(passive.records.every(r=>r.status==='budget_exhausted'&&!r.completed&&r.reasoning_status==='open'&&r.generated_tokens===2048));
+ assert.deepEqual(passive.records.map(r=>r.first_candidate_flag_token_index),[176,207]);
+ for(const summary of passive.records){
+   const response=await page.request.get(new URL('static/evidence/passive_reasoning_v1/'+summary.raw_file,base).href);
+   assert(response.ok());const raw=await response.json();
+   assert(raw.all_checks_passed);assert.equal(raw.observations.length,raw.record.generated_token_ids.length);
+   assert(raw.record.prompt_text_with_special_tokens.endsWith('<|im_start|>assistant\n<think>\n'));
+   assert.equal(raw.record.final_text,null);assert.equal(raw.record.reasoning_text,raw.record.decoded_text_with_special_tokens);
+   assert(raw.observations.every((e,k)=>e.greedy_readout_token_id===raw.record.generated_token_ids[k]&&e.depth_states.length===4));
+ }
+ assert((await contract.innerText()).includes('not established semantic stalls'));
  await contract.screenshot({path:'/tmp/tebdil-generation-evidence.png'});
  await contract.locator('summary').press('Enter');
  await page.screenshot({path:'/tmp/tebdil-final-desktop-hero.png'});
