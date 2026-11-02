@@ -1,5 +1,13 @@
 # Sequential research pass
 
+**Execution hold, 2026-11-02:** the user suspended new computation/experiments until
+the complete process is understood and explicitly approved for resumption. Only
+the existing `2309ea0` bounded run may finish; no retry, extension, mini-model run,
+controller training or new benchmark. Source review, existing-artifact audits and
+static/recorded Pages verification remain allowed. See [walkthrough](computation_walkthrough.md)
+and repository [AGENTS.md](../AGENTS.md). This hold overrides future execution
+commands in older protocols; those commands remain historical reproduction records.
+
 The public page's original design and historical recordings stay unchanged. New
 verification is separate from historical task-performance evidence. Existing
 uncommitted controller, counterfactual and report artifacts are not inputs to this pass.

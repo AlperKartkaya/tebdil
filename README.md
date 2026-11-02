@@ -1,5 +1,10 @@
 # TEBDİL — Self-Directed Latent Relocation for Recurrent Reasoning
 
+> **Research computation is on hold by user decision (2026-11-02).** No new model
+> runs, mini-model experiments, benchmarks or controller training until explicit
+> resumption. Only the already-running frozen budget follow-up may finish.
+> [End-to-end computation walkthrough (Türkçe)](docs/computation_walkthrough.md).
+
 **Visit another latent region. Compute there. Bring the update back.**
 
 TEBDİL investigates whether a recurrent language model can recover from an unproductive reasoning trajectory through temporary latent excursions. It uses the real, open-weight `ByteDance/Ouro-1.4B-Thinking` model with shared weights and instrumented hidden-state access.
