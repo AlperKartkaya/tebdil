@@ -1,6 +1,6 @@
 # Passive reasoning recording verification
 
-Status: **real recording and offline raw audit complete; public release pending**.
+Status: **real recording, offline raw audit and public release verified**.
 The recorder is verified; the **semantic-monitor / controlled-continuation gate is
 not cleared**. No new intervention or controller experiment has begun.
 
@@ -87,8 +87,8 @@ After recording, **315 full tests passed in 54.77 seconds**, including both
 raw-evidence audits and a process-review regression that keeps a synthetic
 constraint check separate from the actual unfinished model record. The hosted-CI
 selection also passes locally: 312 tests, 3 real-model-marked tests deselected
-(35.17 seconds). Scoped Ruff,
-JavaScript syntax checks, TypeScript, frozen-task regeneration, committed-export
+(35.17 seconds). Scoped Ruff, JavaScript syntax checks, TypeScript, frozen-task
+regeneration, committed-export
 checksums/pairing and `git diff --check` pass. No full export regeneration used the
 unrelated dirty historical artifacts.
 
@@ -99,5 +99,16 @@ three recorded comparison cases, error/retry/checksum handling and five widths
 responses. Prior manifest contents are unchanged; only six files and one evidence
 entry are added. Original CSS/sections and recorded stage stay intact.
 
-Public deployment, deployed bytes and GitHub provenance checks remain pending;
-local checks do not establish a successful public release.
+Evidence release `35a59fa` passed [CI and Pages deployment](https://github.com/AlperKartkaya/tebdil/actions/runs/41395341355).
+The complete browser matrix also passes at the public `/tebdil/` base path,
+including the actual pilot downloads, five widths, keyboard, controls and
+failure/retry/checksum checks, with no page errors or failed/external requests.
+Deployed HTML, app script, manifest, frozen development prompts and all six new
+evidence files match repository bytes. Six GitHub protocol, verification, process
+review, task-pool and raw-summary provenance links return HTTP 200. Fresh desktop
+and mobile entry screenshots were inspected locally; the mobile menu starts
+collapsed and opens/closes by keyboard. Original CSS/section regression checks pass.
+
+The **recording/evidence release** is closed. The **semantic-selection and utility
+prerequisite remains unmet**; no controlled continuation, learned controller,
+reserved-task inference or TEBDİL recovery claim is enabled by this release.
