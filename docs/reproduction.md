@@ -269,3 +269,19 @@ uv run pytest -q tests/test_site_release.py -k passive_reasoning
 One audit uses only JSON/tensor operations; the other requires the pinned cached
 tokenizer (marked `real_model`, excluded in hosted CI), not new checkpoint inference.
 [Findings and limits](../reports/passive_reasoning_verification.md).
+
+
+### Reasoning CoT sensitivity (not a recovery benchmark)
+
+```bash
+uv run pytest -q tests/test_reasoning_probe.py
+uv run pytest -q tests/test_site_release.py -k 'reasoning_cot_probe or reasoning_viewer'
+uv run python scripts/probe_reasoning_cot.py --output-dir /tmp/reasoning-cot-probe-new
+```
+
+The [frozen protocol](reasoning_probe_protocol.md) probes every fixed snapshot index
+of both previously observed development cases. Existing directories are refused.
+The committed result has zero E1 token divergences and therefore zero conditional
+native continuation windows; no missing CoT suffix is synthesized. The tokenizer
+text audit is real-model-marked but loads no model weights; hosted CI excludes it.
+No full-answer rescue/accuracy or compute-matched efficacy is measured.

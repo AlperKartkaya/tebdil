@@ -166,6 +166,14 @@ def build(root: Path = ROOT) -> None:
         manifest["evidence"].append({"label": "passive reasoning v1", "source": summary.relative_to(root).as_posix(),
                                      "url": "static/evidence/passive_reasoning_v1/report.json",
                                      "sha256": digest(summary.read_bytes()), "historical": False})
+    probe = root / "reports/reasoning_cot_probe_v1"
+    for path in sorted(probe.glob("*.json")) + sorted(probe.glob("*.jsonl")):
+        write_file(f"static/evidence/reasoning_cot_probe_v1/{path.name}", path.read_bytes(), path.relative_to(root).as_posix())
+    summary = probe / "report.json"
+    if summary.exists():
+        manifest["evidence"].append({"label": "reasoning CoT probe v1", "source": summary.relative_to(root).as_posix(),
+                                     "url": "static/evidence/reasoning_cot_probe_v1/report.json",
+                                     "sha256": digest(summary.read_bytes()), "historical": False})
     bundle = "window.TEBDIL_DATA = " + json.dumps(manifest, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + ";\n"
     (site / "static/tebdil_data.js").write_text(bundle, encoding="utf-8")
     check(root)

@@ -159,7 +159,7 @@
     if(el("loadStatus")){el("loadStatus").textContent=message;el("loadStatus").setAttribute("aria-busy",String(loading));}
     if(button("retryLoad"))button("retryLoad").hidden=!failed;
     ["caseSelect","methodSelect","tokenSelect","stepSelect"].forEach((id)=>{const target=select(id);if(target)target.disabled=loading||failed;});
-    document.querySelectorAll(".stage-grid,.output-terminal,.recording-evidence:not(#ouroExecutionContract),.question-box-live").forEach((item)=>{if(item instanceof HTMLElement)item.hidden=loading||failed;});
+    document.querySelectorAll("#historicalReplay .stage-grid,#historicalReplay .output-terminal,#historicalReplay .recording-evidence:not(#ouroExecutionContract),#historicalReplay .question-box-live").forEach((item)=>{if(item instanceof HTMLElement)item.hidden=loading||failed;});
     document.querySelectorAll(".step-pill,#playLoopBtn").forEach((item)=>{if(item instanceof HTMLButtonElement)item.disabled=loading||failed;});
     if(loading||failed){if(el("comparisonContext"))el("comparisonContext").textContent="";if(el("runSummary"))el("runSummary").textContent=message;}
     if(loading||failed)document.querySelectorAll(".metric-num").forEach((item)=>{item.textContent=loading?"Loading…":"Unavailable";});
@@ -475,6 +475,46 @@
     select("caseSelect")?.focus({preventScroll:true});
   }
 
+
+  async function loadReasoningProbe() {
+    const status=el("cotStatus");if(!status)return;
+    el("cotContent").hidden=true;button("cotRetry").hidden=true;
+    ["cotCase","cotStep","cotMethod"].forEach(id=>{select(id).disabled=true;});
+    status.textContent="Loading recorded CoT comparison…";
+    try {
+      const item=DATA.evidence.find(e=>e.label==="reasoning CoT probe v1");
+      if(!item)throw new Error("No verified recording in this export");
+      const evidence=await fetchVerifiedJson(item.url,item.sha256);
+      const taskUrl="static/evidence/reasoning_v1_development.json";
+      const tasks=await fetchVerifiedJson(taskUrl,DATA.files[taskUrl].sha256);
+      if(evidence.protocol!=="reasoning_cot_probe_v1"||!evidence.all_checks_passed||evidence.probes.length!==12)throw new Error("Incomplete CoT probe");
+      const cases=[...new Set(evidence.probes.map(p=>p.problem_id))];
+      setOptions(select("cotCase"),cases.map(id=>[String(id),String(id).includes("key_planning")?"Key / door planning":"Constraint satisfaction"]),cases[0]);
+      setOptions(select("cotMethod"),[["E1","Excursion-and-return · E1"],["M0","Direct state mixing · M0"],["M1","Linear update mixing · M1"],["R_output","Output-matched random correction"]],"E1");
+      const render=()=>{
+        const id=select("cotCase").value,k=Number(select("cotStep").value),method=select("cotMethod").value;
+        const p=evidence.probes.find(p=>p.problem_id===id&&p.token_index===k);
+        const baseline=p.measurements.find(m=>m.method==="S0"),current=p.measurements.find(m=>m.method===method);
+        el("cotPrefix").textContent=p.reasoning_prefix||"No generated tokens yet. The opening <think> is in the actual prompt.";
+        el("cotQuestion").textContent=tasks.tasks.find(task=>task.problem_id===id).prompt;
+        el("cotBaseline").textContent=JSON.stringify(baseline.next_token_text)+" · token ID "+baseline.next_token_id;
+        el("cotProposal").textContent=JSON.stringify(current.next_token_text)+" · token ID "+current.next_token_id;
+        el("cotMethodTitle").textContent=select("cotMethod").selectedOptions[0].textContent;
+        el("cotDifference").textContent=(current.changed_vs_S0?"Different greedy token. This establishes text sensitivity, not progress or correctness.":"Same greedy token despite latent intervention. No different emitted thought at this selected point.")+" Logit L2 change: "+num(current.logit_l2_vs_S0,3)+". Shared diagnostic work: "+p.recurrent_calls+" recurrent calls; not compute-matched independent arms.";
+        const windows=evidence.windows.filter(w=>w.problem_id===id&&w.token_index===k);
+        const a=windows.find(w=>w.method==="S0"),b=windows.find(w=>w.method===method);
+        el("cotWindowBaseline").textContent=a?.decoded_generated_text||"No continuation window selected at this index.";
+        el("cotWindowMethod").textContent=b?.decoded_generated_text||(b?.execution==="not_executed_same_first_token"?"Not executed: the first token equals S0; no new CoT is claimed.":"No continuation executed at this index.");
+        el("cotWindowStatus").textContent=b?"Selection: first E1 token divergence for this problem, not a detected stall. Execution: "+b.execution+"; stop: "+b.stop_reason+". Final-only evaluation: "+(b.final_evaluation?.status||"no eligible completed final answer")+". Text below includes the shared prefix; only its suffix may differ.":"Short windows are recorded only at the first fixed index where E1 changes the greedy token. A missing window is not an invented baseline copy or a rescue result.";
+      };
+      const sync=()=>{const rows=evidence.probes.filter(p=>p.problem_id===select("cotCase").value);setOptions(select("cotStep"),rows.map(p=>[p.token_index,String(p.token_index)]),rows[0].token_index);render();};
+      select("cotCase").onchange=sync;select("cotStep").onchange=render;select("cotMethod").onchange=render;
+      const changes=evidence.probes.filter(p=>p.measurements.find(m=>m.method==="E1").changed_vs_S0).length;
+      status.textContent="SHA-256 verified recorded experiment. E1 changes the next token in "+changes+" / 12 fixed contexts across two reused problems. No full-answer rescue established. New physical calls: "+evidence.actual_new_recurrent_calls+".";
+      sync();el("cotContent").hidden=false;
+    }catch(error){status.textContent="CoT recording unavailable: "+error.message+". No results substituted.";button("cotRetry").hidden=false;}
+  }
+
   let grid=[],dimensions=[],auxiliaryPromise;
   async function fetchVerifiedJson(url,expectedHash) {
     const response=await fetch(url);if(!response.ok)throw new Error(`HTTP ${response.status}`);
@@ -521,6 +561,8 @@
     document.querySelectorAll(".load-case-btn").forEach((item)=>item.addEventListener("click",()=>inspectCase(item.getAttribute("data-run"),item.getAttribute("data-problem"),item.getAttribute("data-seed"),item.getAttribute("data-method"))));
   }
   initControls();
+  button("cotRetry")?.addEventListener("click",loadReasoningProbe);
+  loadReasoningProbe();
   renderResultTables();
   loadRun();
 })();

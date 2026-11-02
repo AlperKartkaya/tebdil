@@ -201,3 +201,18 @@ separate from causal trigger selection. Prefix-only process warnings were publis
 while planning was still running. Actual snapshots are dtype/hash-audited rather
 than projected into invented geometry; all incomplete outcomes and measured costs
 remain visible. No claimed efficacy, false-positive rate or learned policy follows.
+
+
+## Reasoning CoT sensitivity pass
+
+Reused the existing Ouro adapter, branching/excursion/mixing/output-matched-control
+operators and native generation helper, rather than another latent engine or decoder.
+No new upstream code or dependency was copied. Statistical-analysis guidance keeps
+twelve contexts clustered within two reused tasks and forbids an accuracy/rescue
+claim from next-token sensitivity. Frontend-design guidance preserves the explicitly
+requested original style; accessibility/webapp-testing guidance requires labeled
+native selectors, independent error/retry states, checksum rejection and actual
+selection checks. Scientific-visualization guidance keeps raw CoT/token IDs and
+state hashes, not invented latent trajectories or after-intervention explanations.
+The former XERJ node was not reachable in this session; direct source inspection
+compensated. No claim that its older partial index covers this new code is made.

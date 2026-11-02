@@ -852,7 +852,29 @@
       </div>
     </div>
 
-    <div class="stage-card">
+    <div class="stage-card" id="reasoningCotPanel">
+      <h3>Reasoning CoT: does relocation change the next token?</h3>
+      <p class="recording-status">Recorded development diagnostic, not live inference or demonstrated rescue. Two baseline attempts remained unfinished. Compare actual next-token proposals at the same CoT prefix; different wording is not a verified solution.</p>
+      <div class="stage-toolbar">
+        <div class="stage-select-group"><label for="cotCase">Reasoning problem</label><select class="stage-select" id="cotCase" disabled></select></div>
+        <div class="stage-select-group"><label for="cotStep">Emitted tokens before intervention</label><select class="stage-select" id="cotStep" disabled></select></div>
+        <div class="stage-select-group"><label for="cotMethod">Comparison method</label><select class="stage-select" id="cotMethod" disabled></select></div>
+      </div>
+      <p class="recording-status" id="cotStatus" role="status" aria-live="polite">Loading recorded CoT comparison…</p>
+      <button class="stage-btn" type="button" id="cotRetry" hidden>Retry CoT recording</button>
+      <div id="cotContent" hidden>
+        <details class="recording-evidence"><summary>Actual question and shared reasoning before this token</summary><p id="cotQuestion"></p><pre id="cotPrefix" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:20rem;overflow:auto;" tabindex="0" aria-label="Shared recorded reasoning prefix"></pre></details>
+        <div class="stage-grid">
+          <div class="mini-panel"><h4>Ordinary recurrence · S0</h4><pre id="cotBaseline" style="white-space:pre-wrap;overflow-wrap:anywhere;"></pre></div>
+          <div class="mini-panel"><h4 id="cotMethodTitle">Excursion-and-return · E1</h4><pre id="cotProposal" style="white-space:pre-wrap;overflow-wrap:anywhere;"></pre></div>
+        </div>
+        <p class="recording-status" id="cotDifference"></p>
+        <details class="recording-evidence"><summary>Conditional short continuation · not a full-answer benchmark</summary><p id="cotWindowStatus"></p><div class="stage-grid"><div class="mini-panel"><h4>Previously recorded S0</h4><pre id="cotWindowBaseline" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:22rem;overflow:auto;" tabindex="0" aria-label="Baseline continuation window"></pre></div><div class="mini-panel"><h4>Selected method</h4><pre id="cotWindowMethod" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:22rem;overflow:auto;" tabindex="0" aria-label="Selected method continuation window"></pre></div></div></details>
+      </div>
+      <p class="recording-status"><a href="static/evidence/reasoning_cot_probe_v1/report.json">All recorded comparisons, state hashes and costs</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/docs/reasoning_probe_protocol.md">Frozen probe protocol</a> · <a href="https://github.com/AlperKartkaya/tebdil/blob/main/reports/reasoning_probe_verification.md">Findings, task suitability and limits</a>. Historical arithmetic/graph replays remain below; they do not supply CoT recovery evidence.</p>
+    </div>
+
+    <div class="stage-card" id="historicalReplay">
       <div class="stage-toolbar">
         <div class="stage-controls-left">
           <div class="round-badge-live" id="stageStepBadge">

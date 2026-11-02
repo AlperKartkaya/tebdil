@@ -11,6 +11,30 @@ const base=process.env.SITE_URL||'http://127.0.0.1:8093/';
  page.on('response',r=>{if(r.status()>=400)failed.push([r.status(),r.url()])});
  await page.goto(base,{waitUntil:'networkidle'});
  await page.waitForFunction(()=>document.querySelector('#loadStatus')?.textContent.includes('SHA-256 verified'));
+ await page.waitForFunction(()=>document.querySelector('#cotStatus')?.textContent.includes('SHA-256 verified'));
+ const cotResponse=await page.request.get(new URL('static/evidence/reasoning_cot_probe_v1/report.json',base).href);
+ assert(cotResponse.ok());const cot=await cotResponse.json();assert(cot.all_checks_passed);assert.equal(cot.probes.length,12);
+ for(const problem of [...new Set(cot.probes.map(p=>p.problem_id))]){
+  await page.selectOption('#cotCase',problem);
+  for(const p of cot.probes.filter(p=>p.problem_id===problem)){
+   await page.selectOption('#cotStep',String(p.token_index));
+   assert.equal(await page.locator('#cotPrefix').textContent(),p.reasoning_prefix||'No generated tokens yet. The opening <think> is in the actual prompt.');
+   for(const method of ['E1','M0','M1','R_output']){
+    await page.selectOption('#cotMethod',method);
+    const m=p.measurements.find(m=>m.method===method);
+    assert((await page.locator('#cotProposal').innerText()).includes('token ID '+m.next_token_id));
+    assert((await page.locator('#cotDifference').innerText()).includes(m.changed_vs_S0?'Different greedy token':'Same greedy token'));
+    const w=cot.windows.find(w=>w.problem_id===problem&&w.token_index===p.token_index&&w.method===method);
+    if(w?.decoded_generated_text)assert.equal(await page.locator('#cotWindowMethod').textContent(),w.decoded_generated_text);
+   }
+  }
+ }
+ await page.selectOption('#cotCase','reasoning_v1_development_key_planning_0_0');
+ await page.selectOption('#cotStep','1023');await page.selectOption('#cotMethod','E1');
+ await page.locator('#cotContent > details').first().locator('summary').focus();await page.keyboard.press('Enter');
+ assert(await page.locator('#cotPrefix').isVisible());
+ await page.locator('#reasoningCotPanel').scrollIntoViewIfNeeded();
+ await page.screenshot({path:'/tmp/tebdil-reasoning-cot-desktop.png'});
  const contract=page.locator('#ouroExecutionContract');
  await contract.locator('summary').focus();await page.keyboard.press('Enter');
  assert(await contract.getByText('Fresh Apple MPS checks',{exact:false}).isVisible());
@@ -181,11 +205,11 @@ const base=process.env.SITE_URL||'http://127.0.0.1:8093/';
    const details=await page.locator('#stageStepNarrative').innerText();assert(details.includes('learned_mlp_gated_selected_EXCURSION_d1_a0.65_b0.65_full'));assert(details.includes('not a probability'));assert(details.includes('11 recurrent calls'));
    assert((await page.locator('#terminalCallCost').innerText()).includes('22'));
   }else{assert(narrative.includes('ID not captured'));assert(narrative.includes('Unavailable'));}
-  await page.locator('.recording-evidence summary').first().click();
+  await page.locator('#historicalReplay .recording-evidence summary').first().click();
   const download=page.waitForEvent('download');await page.locator('#downloadTrace').click();
   assert.deepEqual(JSON.parse(fs.readFileSync(await (await download).path(),'utf8')),raw);
   for(const id of ['downloadRun','downloadConfig']){const response=await page.request.get(new URL(await page.locator('#'+id).getAttribute('href'),page.url()).href);assert(response.ok());}
-  await page.locator('.recording-evidence summary').first().click();
+  await page.locator('#historicalReplay .recording-evidence summary').first().click();
  }
  // Neither the select nor method chips may silently replace a requested depth.
  await page.locator('#demo .load-case-btn').first().click();
@@ -229,17 +253,34 @@ const base=process.env.SITE_URL||'http://127.0.0.1:8093/';
  await isolated.route('**/static/data/**',r=>r.fulfill({status:503,body:'unavailable'}));
  await isolated.goto(base,{waitUntil:'networkidle'});
  await isolated.waitForFunction(()=>document.querySelector('#loadStatus').textContent.includes('Recording unavailable'));
- assert(await isolated.locator('.stage-grid').isHidden());assert(await isolated.locator('#retryLoad').isVisible());
+ assert(await isolated.locator('#historicalReplay .stage-grid').isHidden());assert(await isolated.locator('#retryLoad').isVisible());
  assert(await isolated.locator('#ouroExecutionContract').isVisible());
+ await isolated.waitForFunction(()=>document.querySelector('#cotStatus').textContent.includes('SHA-256 verified'));
+ assert(await isolated.locator('#cotContent').isVisible());
  assert(await isolated.locator('#caseSelect').isDisabled());
  await isolated.unroute('**/static/data/**');await isolated.click('#retryLoad');
  await isolated.waitForFunction(()=>document.querySelector('#loadStatus').textContent.includes('SHA-256 verified'));
- assert(await isolated.locator('.stage-grid').isVisible());
+ assert(await isolated.locator('#historicalReplay .stage-grid').isVisible());
  await isolated.route('**/static/data/**',r=>r.fulfill({status:200,body:'[]'}));
  await isolated.selectOption('#runSelect','phase1_smoke');
  await isolated.waitForFunction(()=>document.querySelector('#loadStatus').textContent.includes('checksum mismatch'));
  assert(await isolated.locator('.output-terminal').isHidden());assert((await isolated.locator('#runSummary').innerText()).includes('checksum mismatch'));
  assert((await isolated.locator('.metric-num').first().innerText()).includes('Unavailable'));
+ const cotFailure=await browser.newPage();
+ await cotFailure.route('**/static/evidence/reasoning_cot_probe_v1/report.json',r=>r.fulfill({status:503,body:'unavailable'}));
+ await cotFailure.goto(base,{waitUntil:'networkidle'});
+ await cotFailure.waitForFunction(()=>document.querySelector('#cotStatus').textContent.includes('unavailable'));
+ assert(await cotFailure.locator('#cotContent').isHidden());assert(await cotFailure.locator('#cotRetry').isVisible());assert(await cotFailure.locator('#cotCase').isDisabled());
+ await cotFailure.waitForFunction(()=>document.querySelector('#loadStatus').textContent.includes('SHA-256 verified'));
+ assert(await cotFailure.locator('#historicalReplay .stage-grid').isVisible());
+ await cotFailure.unroute('**/static/evidence/reasoning_cot_probe_v1/report.json');await cotFailure.locator('#cotRetry').click();
+ await cotFailure.waitForFunction(()=>document.querySelector('#cotStatus').textContent.includes('SHA-256 verified'));
+ assert(await cotFailure.locator('#cotContent').isVisible());
+ await cotFailure.route('**/static/evidence/reasoning_cot_probe_v1/report.json',r=>r.fulfill({status:200,body:'{}'}));
+ await cotFailure.reload({waitUntil:'networkidle'});
+ await cotFailure.waitForFunction(()=>document.querySelector('#cotStatus').textContent.includes('checksum mismatch'));
+ assert(await cotFailure.locator('#cotContent').isHidden());assert(await cotFailure.locator('#cotMethod').isDisabled());
+ await cotFailure.close();
  assert.deepEqual(errors,[]);assert.deepEqual(external,[]);assert.deepEqual(failed,[]);
  const result={base,checks,widths,errors,external,failed,math:await page.locator('mjx-container').count(),failureRetryAndChecksum:'pass',keyboard:'pass',controls:'pass',demoRehearsal:'3 recorded cases; downloads/manifests; preserved/missing context; keyboard comparison'};
  fs.writeFileSync('/tmp/tebdil-original-restoration-browser.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));await browser.close();

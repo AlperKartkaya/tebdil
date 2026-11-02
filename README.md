@@ -128,3 +128,11 @@ open and no eligible final answer. They are unfinished, not recognized wrong ans
 arise during input restatement. Same-prefix update norms and exact CoT repeats are
 not semantic-stall labels; intervention utility remains untested. Four further
 development instances and all twelve new reserved instances remain unexecuted.
+
+
+The [reasoning CoT sensitivity probe](reports/reasoning_probe_verification.md)
+compares both tasks at twelve fixed contexts against mixing and output-matched
+random controls. All methods changed hidden states/logits but none changed the
+greedy next token; no conditional continuation was executed. This is not a
+full-answer or stall-rescue result. Pages exposes the actual paired token proposals
+and shared CoT without replacing missing evidence with a success narrative.

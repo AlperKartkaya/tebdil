@@ -1113,3 +1113,83 @@ def test_passive_process_review_does_not_turn_thoughts_into_final_answers():
     synthetic=dict(completed=True,reasoning_status='closed',final_text='{"path":[0,3,0,4,5]}')
     assert evaluate_reasoning_task(task,synthetic)['status']=='incorrect'
     assert raw['status']=='budget_exhausted'  # A diagnostic on text never rescores the actual unfinished attempt.
+
+
+def test_reasoning_cot_probe_matches_original_prefixes_physical_work_and_journal():
+    folder=ROOT/'reports/reasoning_cot_probe_v1'
+    report=json.loads((folder/'report.json').read_text())
+    passive=ROOT/'reports/passive_reasoning_v1'
+    original=json.loads((passive/'report.json').read_text())
+    assert report['protocol']=='reasoning_cot_probe_v1' and report['all_checks_passed']
+    assert report['enable_thinking'] and report['recurrent_depth']==4 and report['cache_mode']=='disabled'
+    assert report['base_revision'].startswith('09b7f1f')
+    assert report['checkpoint_sha256']==original['checkpoint_sha256']
+    assert all(hashlib.sha256((ROOT/p).read_bytes()).hexdigest()==h for p,h in report['source_sha256'].items())
+    assert all(hashlib.sha256((ROOT/p).read_bytes()).hexdigest()==h for p,h in report['input_sha256'].items())
+    for p in folder.iterdir():
+        assert p.read_bytes()==(SITE/'static/evidence/reasoning_cot_probe_v1'/p.name).read_bytes()
+    journal=[json.loads(line) for line in (folder/'journal.jsonl').read_text().splitlines()]
+    assert [e['event'] for e in journal]==['start']+['probe']*12+['finish']
+    assert journal[-1]['report_sha256']==hashlib.sha256((folder/'report.json').read_bytes()).hexdigest()
+    assert [{k:v for k,v in e.items() if k!='event'} for e in journal[1:-1]]==report['probes']
+    assert report['windows']==[]  # No invented CoT continuation when every E1 proposal stays unchanged.
+    assert report['probe_indices']==[0,127,255,511,1023,2047]
+    assert len(report['probes'])==12
+    for summary in original['records']:
+        case=json.loads((passive/summary['raw_file']).read_text())
+        probes=[p for p in report['probes'] if p['problem_id']==summary['problem_id']]
+        assert [p['token_index'] for p in probes]==report['probe_indices']
+        for p in probes:
+            k=p['token_index']
+            old=case['observations'][k]
+            assert p['prefix_length']==old['prefix_length']
+            assert p['prefix_sha256']==old['prefix_token_ids_sha256']
+            assert p['positions_sha256']==old['depth_states'][0]['positions_sha256']
+            assert p['branch_seed']==20261102+131*k and p['inputs_unchanged']
+            assert p['recurrent_calls']==sum(s['recurrent_calls'] for s in p['stages'])==16
+            assert [s['recurrent_calls'] for s in p['stages']]==[1,1,1,1,3,2,2,1,1,1,1,1]
+            assert p['recurrent_token_positions']==16*p['prefix_length']
+            assert [m['method'] for m in p['measurements']]==['S0','M0','M1','E1','R_output']
+            baseline=p['measurements'][0]
+            assert baseline['next_token_id']==case['record']['generated_token_ids'][k]
+            assert baseline['final_last_position_hash']==old['depth_states'][-1]['normalized_sha256']
+            assert baseline['logit_l2_vs_S0']==baseline['shift_vs_ordinary']==0
+            for m in p['measurements']:
+                assert m['next_token_id']==baseline['next_token_id'] and not m['changed_vs_S0']
+                assert all(math.isfinite(m[key]) and m[key]>=0 for key in ('logit_l2_vs_S0','shift_vs_ordinary','kl_method_to_S0'))
+                assert SHA256.fullmatch(m['post_intervention_hash']) and SHA256.fullmatch(m['final_last_position_hash'])
+                if m['method']!='S0':
+                    assert m['logit_l2_vs_S0']>0 and m['shift_vs_ordinary']>0
+            t=p['intervention']
+            assert not t['skipped_unstable'] and t['post_finite'] and t['returned_shift_vs_normal_frob']>0
+            assert t['visit_state_hash']!=t['receiving_state_hash']
+            assert p['random_relative_norm_error']==pytest.approx(abs(p['random_realized_norm']-p['random_target_norm'])/p['random_target_norm'])
+    assert report['actual_new_recurrent_calls']==sum(p['recurrent_calls'] for p in report['probes'])==192
+    assert report['recurrent_token_positions']==sum(p['recurrent_token_positions'] for p in report['probes'])==178944
+    assert report['reused_baseline_calls']==16384
+
+
+@pytest.mark.real_model
+def test_reasoning_cot_probe_text_is_decoded_from_actual_recorded_ids():
+    from transformers import AutoTokenizer
+    from tebdil.models.ouro_adapter import PINNED_OURO_THINKING_REV
+    tok=AutoTokenizer.from_pretrained('ByteDance/Ouro-1.4B-Thinking',revision=PINNED_OURO_THINKING_REV,local_files_only=True)
+    report=json.loads((ROOT/'reports/reasoning_cot_probe_v1/report.json').read_text())
+    for p in report['probes']:
+        raw=json.loads((ROOT/'reports/passive_reasoning_v1'/(p['problem_id']+'.json')).read_text())['record']
+        tokens=raw['generated_token_ids'][:p['token_index']]
+        assert p['reasoning_prefix']==tok.decode(tokens,skip_special_tokens=False)
+        for m in p['measurements']:
+            assert m['next_token_text']==tok.decode([m['next_token_id']],skip_special_tokens=False)
+            assert m['text_with_proposal']==tok.decode(tokens+[m['next_token_id']],skip_special_tokens=False)
+
+
+def test_reasoning_viewer_does_not_conflate_tokens_with_verified_recovery():
+    html=INDEX.read_text()
+    script=(SITE/'static/app.js').read_text()
+    assert 'Reasoning CoT: does relocation change the next token?' in html
+    assert 'not live inference or demonstrated rescue' in html
+    assert 'Historical arithmetic/graph replays remain below' in html
+    assert '#historicalReplay .stage-grid' in script
+    assert 'No results substituted' in script
+    assert 'no eligible completed final answer' in script
