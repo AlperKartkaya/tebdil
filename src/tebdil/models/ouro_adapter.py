@@ -118,8 +118,12 @@ class OuroRecurrentAdapter:
         total_ut_steps: Optional[int] = None,
         local_files_only: bool = False,
         attn_implementation: str = "eager",
+        cache_mode: str = "disabled",
+        model_id: Optional[str] = None,
     ) -> "OuroRecurrentAdapter":
         """Load pinned Ouro checkpoint into vendored OuroForCausalLM."""
+        if model_id is not None:
+            repo_id = model_id
         if device is None:
             if torch.cuda.is_available():
                 device = "cuda"
@@ -149,6 +153,7 @@ class OuroRecurrentAdapter:
             readout_mode=readout_mode,
             model_id=repo_id,
             model_revision=revision,
+            cache_mode=cache_mode,
         )
 
     @property
