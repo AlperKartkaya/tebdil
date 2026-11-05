@@ -700,12 +700,23 @@ def generate_tebdil_cached(
     excursion_token_indices: List[int] = []
     window_remaining = 0
     eos_id = getattr(tokenizer, "eos_token_id", None)
+    think_close_id: Optional[int] = None
+    if tokenizer is not None and hasattr(tokenizer, "convert_tokens_to_ids"):
+        try:
+            cid = tokenizer.convert_tokens_to_ids("</think>")
+            if isinstance(cid, int) and cid >= 0:
+                think_close_id = cid
+        except Exception:
+            think_close_id = None
+    thinking_closed = False
     stop_reason = "max_output_tokens"
+    unconditional_methods = ("S0", "S1", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1")
 
     for k in range(max_new_tokens):
-        if window_remaining > 0 and method not in (
-            "S0", "S1", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1"
-        ):
+        if thinking_closed and method not in unconditional_methods:
+            step_method = "S0"
+            was_window_continuation = False
+        elif window_remaining > 0 and method not in unconditional_methods:
             step_method = "E1"
             window_remaining -= 1
             was_window_continuation = True
@@ -741,6 +752,9 @@ def generate_tebdil_cached(
 
         tok_id = int(res.primary_logits[:, -1, :].argmax(dim=-1).item())
         generated_tokens.append(tok_id)
+        if think_close_id is not None and tok_id == think_close_id:
+            thinking_closed = True
+            window_remaining = 0
         if eos_id is not None and tok_id == eos_id:
             stop_reason = "eos_token"
             break
