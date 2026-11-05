@@ -194,7 +194,9 @@ def _fake_bundle_repo(tmp_path: Path) -> Path:
     b_state = s1.clone("B")
     b_state.hidden = s1.hidden + 0.05 * torch.randn_like(s1.hidden)
     b2 = adapter.transition(b_state)
-    cfg = ExcursionConfig(alpha=0.65, beta=0.65, max_relative_norm=10.0, visit_step=2)
+    cfg = ExcursionConfig(
+        alpha=0.65, beta=0.65, max_relative_norm=10.0, visit_step=2, update_space="post_norm"
+    )
     na, _, telem = execute_excursion_step(adapter, a2.clone(), b2.clone(), cfg)
     vis = a2.clone("V")
     vis.hidden = (1 - telem.effective_alpha) * a2.hidden + telem.effective_alpha * b2.hidden

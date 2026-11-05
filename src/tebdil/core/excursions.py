@@ -256,7 +256,12 @@ def execute_excursion_step(
             rand_c = rand_c * (norm_curvature / rand_c_norm)
         effective_v_visit = v_mix + rand_c
     else:
-        effective_v_visit = v_visit
+        curv_gain = (
+            min(4.0, 1.0 / max(0.20, 2.0 * eff_alpha * (1.0 - eff_alpha)))
+            if use_pre_norm
+            else 1.0
+        )
+        effective_v_visit = v_mix + curv_gain * curvature
 
     delta_v = (effective_v_visit - v_a) * scope_mask
     eff_topk_frac = (
@@ -279,9 +284,14 @@ def execute_excursion_step(
 
     if use_pre_norm:
         ra_scoped_norm = float(torch.linalg.vector_norm(f_a_f * scope_mask).item())
-        dv_norm = float(torch.linalg.vector_norm(delta_v).item())
+        vmix_scoped_norm = float(torch.linalg.vector_norm((v_mix - v_a) * scope_mask).item())
+        ref_dv_norm = (
+            vmix_scoped_norm
+            if vmix_scoped_norm > 1e-12
+            else float(torch.linalg.vector_norm(delta_v).item())
+        )
         contraction_comp = (
-            max(1.0, (visit_rel * ra_scoped_norm) / dv_norm) if dv_norm > 1e-12 else 1.0
+            max(1.0, (visit_rel * ra_scoped_norm) / ref_dv_norm) if ref_dv_norm > 1e-12 else 1.0
         )
         raw_a_prime = (
             f_a_f + config.beta * gate_scale * contraction_comp * delta_v

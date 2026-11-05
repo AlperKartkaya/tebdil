@@ -140,6 +140,11 @@ def execute_update_mixing_step(
     norm_v_b = float(torch.linalg.vector_norm(v_b).item())
 
     v_mix = (1.0 - eff_alpha) * v_a + eff_alpha * v_b
+    raw_a_prime = (
+        next_a_normal.raw_hidden.detach().clone()
+        if next_a_normal.raw_hidden is not None
+        else None
+    )
     if config.beta == 0.0 or config.alpha == 0.0:
         h_a_prime = next_a_normal.hidden.detach().clone()
     elif use_pre_norm:

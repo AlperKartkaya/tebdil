@@ -95,23 +95,28 @@ def apply_perturbation(
     )
 
     if effective_method == "competitive_logit" and lm_head_weight is not None:
-        w_u = lm_head_weight.detach().to(device=base.device, dtype=torch.float32)
+        w_u = lm_head_weight.detach()
+        if w_u.device != base.device:
+            w_u = w_u.to(device=base.device)
         h_last = base_f32[:, -1, :]  # [B, d]
-        logits_last = torch.matmul(h_last, w_u.t())  # [B, V]
+        logits_last = torch.matmul(base[:, -1, :].to(dtype=w_u.dtype), w_u.t()).float()  # [B, V]
         k_cand = min(int(w_u.shape[0]), max(8, int(branch_index) + 5))
         top_vals, top_idx = torch.topk(logits_last, k=k_cand, dim=-1)
-        w_top1 = w_u[top_idx[:, 0]]  # [B, d]
+        w_top1 = w_u[top_idx[:, 0]].float()  # [B, d]
 
         if branch_index <= 1:
             m_end = min(5, k_cand)
             comp_vals = top_vals[:, 1:m_end]
             comp_probs = torch.softmax(comp_vals, dim=-1).unsqueeze(-1)  # [B, m, 1]
-            comp_vecs = w_u[top_idx[:, 1:m_end]]  # [B, m, d]
+            comp_vecs = w_u[top_idx[:, 1:m_end]].float()  # [B, m, d]
             w_alt = (comp_probs * comp_vecs).sum(dim=1)  # [B, d]
         else:
             j_main = min(int(branch_index), k_cand - 1)
             j_next = min(j_main + 1, k_cand - 1)
-            w_alt = 0.75 * w_u[top_idx[:, j_main]] + 0.25 * w_u[top_idx[:, j_next]]
+            w_alt = (
+                0.75 * w_u[top_idx[:, j_main]].float()
+                + 0.25 * w_u[top_idx[:, j_next]].float()
+            )
 
         d_raw = w_alt - w_top1  # [B, d]
         h_sq = h_last.square().sum(dim=-1, keepdim=True).clamp_min(1e-12)

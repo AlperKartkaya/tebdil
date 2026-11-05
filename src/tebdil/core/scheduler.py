@@ -295,6 +295,42 @@ def run_scheduled_trajectory(
         shared_state = adapter.transition(shared_state)
         committed_depth_states.append(shared_state)
 
+    if not record_snapshots and method == "E2" and actual_fork > 0:
+        pre_logits = _fast_readout(adapter, shared_state)
+        pre_ent, pre_mar = compute_last_token_uncertainty(pre_logits)
+        if (
+            pre_mar > policy_config.max_margin_trigger * 1.75
+            and pre_ent < policy_config.min_entropy_trigger * 0.65
+        ):
+            state_a = shared_state
+            for t in range(actual_fork, total_steps):
+                state_a = adapter.transition(state_a)
+                committed_depth_states.append(state_a)
+            if use_cached_step and hasattr(adapter, "commit_cached_step"):
+                adapter.commit_cached_step(committed_depth_states)  # type: ignore[attr-defined]
+            logits_a = (
+                _fast_readout(adapter, state_a)
+                if use_cached_step
+                else adapter.readout_logits(state_a)
+            )
+            wall_ms = (time.perf_counter() - t0) * 1000.0
+            return TrajectoryScheduleResult(
+                method=method,
+                seed=seed,
+                recurrent_steps=total_steps,
+                fork_after_step=actual_fork,
+                branch_count=1,
+                primary_state=state_a,
+                branch_states={"A": state_a},
+                primary_logits=logits_a,
+                branch_logits={"A": logits_a},
+                recurrent_block_calls=adapter.recurrent_block_calls - calls_before,
+                wall_time_ms=wall_ms,
+                perturbation_reports=[],
+                step_snapshots=[],
+                controller_calls=1,
+            )
+
     branches, reports = fork_branches(
         base_state=shared_state,
         count=branch_count,
@@ -472,11 +508,18 @@ def run_scheduled_trajectory(
                 donor_idx = int(np.argmax(dists))
 
             if not intervened:
-                branches = [adapter.transition(b) for b in branches]
+                need_donors_after = (
+                    record_snapshots
+                    or method == "P0"
+                    or (t < max(eligible_steps) and (method == "E1_multi_visit" or prev_exc_count == 0))
+                )
+                active_to_step = branches if need_donors_after else branches[:1]
+                branches = [adapter.transition(b) for b in active_to_step]
                 committed_depth_states.append(branches[0])
-                snap_now = _snapshot(t + 1, branches, intervened=False, dec=pol_decision)
-                step_snapshots.append(snap_now)
-                prev_margin_a = snap_now.branch_margin.get("A", prev_margin_a)
+                if record_snapshots:
+                    snap_now = _snapshot(t + 1, branches, intervened=False, dec=pol_decision)
+                    step_snapshots.append(snap_now)
+                    prev_margin_a = snap_now.branch_margin.get("A", prev_margin_a)
                 continue
 
             pre_mar_a = step_snapshots[-1].branch_margin.get("A", 0.0) if step_snapshots else 0.0
@@ -528,14 +571,22 @@ def run_scheduled_trajectory(
                 ).cpu().numpy().reshape(-1)
                 branch_vec_history.setdefault("VISIT", []).append(v_vec)
 
-            all_other_donors = branches[1:]
-            new_branches = [next_a]
-            for idx, d_state in enumerate(all_other_donors):
-                if idx == donor_idx:
-                    new_branches.append(next_donor)
-                else:
-                    new_branches.append(adapter.transition(d_state))
-            branches = new_branches
+            need_donors_after = (
+                record_snapshots
+                or method == "P0"
+                or (t < max(eligible_steps) and method == "E1_multi_visit")
+            )
+            if need_donors_after:
+                all_other_donors = branches[1:]
+                new_branches = [next_a]
+                for idx, d_state in enumerate(all_other_donors):
+                    if idx == donor_idx:
+                        new_branches.append(next_donor)
+                    else:
+                        new_branches.append(adapter.transition(d_state))
+                branches = new_branches
+            else:
+                branches = [next_a]
             committed_depth_states.append(branches[0])
             prev_exc_count += 1
             if record_snapshots:
@@ -547,7 +598,13 @@ def run_scheduled_trajectory(
                 prev_exc_margin_delta = post_mar_a - pre_mar_a
                 prev_margin_a = post_mar_a
         else:
-            branches = [adapter.transition(b) for b in branches]
+            need_donors_after = (
+                record_snapshots
+                or method == "P0"
+                or (t < max(eligible_steps) and (method == "E1_multi_visit" or prev_exc_count == 0))
+            )
+            active_to_step = branches if need_donors_after else branches[:1]
+            branches = [adapter.transition(b) for b in active_to_step]
             committed_depth_states.append(branches[0])
             if record_snapshots:
                 snap_now = _snapshot(t + 1, branches)
@@ -558,9 +615,10 @@ def run_scheduled_trajectory(
         adapter.commit_cached_step(committed_depth_states)  # type: ignore[attr-defined]
 
     branch_states = {b.branch_id: b for b in branches}
+    readout_branches = branches if (record_snapshots or method == "P0") else branches[:1]
     branch_logits = {
         b.branch_id: (_fast_readout(adapter, b) if use_cached_step else adapter.readout_logits(b))
-        for b in branches
+        for b in readout_branches
     }
 
     # For P0, select the branch with highest top1-top2 margin (label-free confidence selection)
