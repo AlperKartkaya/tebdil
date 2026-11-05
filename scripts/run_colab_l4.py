@@ -7,6 +7,7 @@ from dataclasses import asdict, replace
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import re
 import time
 
 import torch
@@ -157,6 +158,23 @@ def run_completion_reasoning_suite(
                 **split_info,
             }
             eval_res = evaluate_reasoning_integer(row, task["gold_answer"])
+            if (
+                eval_res["status"] == "invalid_format"
+                and row["completed"]
+                and row["reasoning_status"] == "closed"
+                and isinstance(row["final_text"], str)
+            ):
+                m_eq = re.fullmatch(r"\s*[a-zA-Z]\s*=\s*([+-]?[0-9]+)\s*\.?\s*", row["final_text"])
+                if m_eq:
+                    ans_val = m_eq.group(1)
+                    is_ok = ans_val == str(task["gold_answer"])
+                    eval_res = {
+                        "answer_extraction": "prompt_started_reasoning_equation_v1",
+                        "extracted_answer": ans_val,
+                        "format_valid": True,
+                        "status": "correct" if is_ok else "incorrect",
+                        "is_correct": is_ok,
+                    }
             row["evaluation"] = eval_res
             records.append(row)
             print(
