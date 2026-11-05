@@ -20,7 +20,7 @@ from tebdil.core.controls import execute_direct_state_mixing_step, execute_updat
 from tebdil.core.excursions import execute_excursion_step
 from tebdil.core.scheduler import generate_tebdil_cached, run_scheduled_trajectory
 from tebdil.core.state import ExcursionConfig
-from tebdil.evaluation.reasoning import encode_prompt_started_reasoning
+from tebdil.evaluation.reasoning import encode_reasoning_prompt
 from tebdil.models.ouro_adapter import OuroRecurrentAdapter, PINNED_OURO_THINKING_REV
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,7 +30,7 @@ MODEL_ID = "ByteDance/Ouro-1.4B-Thinking"
 @torch.no_grad()
 def test_kv_cache_parity_and_speedup(adapter: OuroRecurrentAdapter, tokenizer) -> dict:
     prompt = "Find the least positive integer x such that x mod 7 = 3 and x mod 11 = 5."
-    ids = encode_prompt_started_reasoning(tokenizer, prompt).to(adapter.device)
+    ids = encode_reasoning_prompt(tokenizer, prompt).to(adapter.device)
 
     # 1. Parity over 16 generated tokens (S0 cached vs S0 uncached)
     t0 = time.monotonic()
