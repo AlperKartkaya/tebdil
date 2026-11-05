@@ -61,9 +61,9 @@ class BranchState:
 
 @dataclass(frozen=True)
 class ExcursionConfig:
-    alpha: float = 0.65
-    beta: float = 0.65
-    max_relative_norm: float = 0.25
+    alpha: float = 0.75
+    beta: float = 0.80
+    max_relative_norm: float = 0.35
     visit_step: int = 2
     token_scope: str = "last_token"  # full | last_token | selected
     donor_strategy: str = "competitive_logit"  # competitive_logit | fixed | random | diversity | adaptive | oracle

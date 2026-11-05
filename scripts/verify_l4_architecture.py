@@ -96,16 +96,16 @@ def compare_legacy_vs_v2_on_stall_prefixes(adapter: OuroRecurrentAdapter, tokeni
         update_space="post_norm",
     )
     v2_cfg = ExcursionConfig(
-        alpha=0.65,
-        beta=0.65,
-        max_relative_norm=0.25,
+        alpha=0.75,
+        beta=0.80,
+        max_relative_norm=0.35,
         visit_step=2,
         token_scope="last_token",
         donor_strategy="competitive_logit",
         update_space="pre_norm",
     )
 
-    probe_indices = [127, 176, 207, 255, 511]
+    probe_indices = [127, 176, 207, 255, 511, 1023]
     for summary in report["records"]:
         case = json.loads((passive_dir / summary["raw_file"]).read_text())
         row = case["record"]

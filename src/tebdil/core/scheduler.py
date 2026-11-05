@@ -141,6 +141,7 @@ def run_scheduled_trajectory(
     extra_steps_for_s1: int = 3,
     record_pca: bool = True,
     use_cached_step: bool = False,
+    record_snapshots: bool = True,
 ) -> TrajectoryScheduleResult:
     """Execute a complete recurrent trajectory under the specified intervention method.
 
@@ -261,7 +262,8 @@ def run_scheduled_trajectory(
         for t in range(total_steps):
             state_a = adapter.transition(state_a)
             committed_depth_states.append(state_a)
-            step_snapshots.append(_snapshot(t + 1, [state_a]))
+            if record_snapshots:
+                step_snapshots.append(_snapshot(t + 1, [state_a]))
 
         if use_cached_step and hasattr(adapter, "commit_cached_step"):
             adapter.commit_cached_step(committed_depth_states)  # type: ignore[attr-defined]
@@ -304,7 +306,7 @@ def run_scheduled_trajectory(
         lm_head_weight=getattr(adapter, "lm_head_weight", None),
     )
     pert_reports = [asdict(r) for r in reports]
-    if actual_fork > 0:
+    if actual_fork > 0 and record_snapshots:
         step_snapshots.append(_snapshot(actual_fork, branches))
 
     # Map controller method names to SelfDirectedController mode
@@ -535,20 +537,22 @@ def run_scheduled_trajectory(
                     new_branches.append(adapter.transition(d_state))
             branches = new_branches
             committed_depth_states.append(branches[0])
-            snap_now = _snapshot(
-                t + 1, branches, intervened=True, telem=exc_telemetry, dec=pol_decision
-            )
-            step_snapshots.append(snap_now)
             prev_exc_count += 1
-            post_mar_a = snap_now.branch_margin.get("A", pre_mar_a)
-            prev_exc_margin_delta = post_mar_a - pre_mar_a
-            prev_margin_a = post_mar_a
+            if record_snapshots:
+                snap_now = _snapshot(
+                    t + 1, branches, intervened=True, telem=exc_telemetry, dec=pol_decision
+                )
+                step_snapshots.append(snap_now)
+                post_mar_a = snap_now.branch_margin.get("A", pre_mar_a)
+                prev_exc_margin_delta = post_mar_a - pre_mar_a
+                prev_margin_a = post_mar_a
         else:
             branches = [adapter.transition(b) for b in branches]
             committed_depth_states.append(branches[0])
-            snap_now = _snapshot(t + 1, branches)
-            step_snapshots.append(snap_now)
-            prev_margin_a = snap_now.branch_margin.get("A", prev_margin_a)
+            if record_snapshots:
+                snap_now = _snapshot(t + 1, branches)
+                step_snapshots.append(snap_now)
+                prev_margin_a = snap_now.branch_margin.get("A", prev_margin_a)
 
     if use_cached_step and hasattr(adapter, "commit_cached_step"):
         adapter.commit_cached_step(committed_depth_states)  # type: ignore[attr-defined]
@@ -666,8 +670,12 @@ def generate_tebdil_cached(
             seed=seed + 131 * k,
             record_pca=False,
             use_cached_step=use_kv,
+            record_snapshots=False,
         )
-        did_intervene = any(s.intervention_applied for s in res.step_snapshots)
+        did_intervene = (
+            res.excursion_telemetry is not None
+            or any(s.intervention_applied for s in res.step_snapshots)
+        )
         if did_intervene:
             excursion_token_indices.append(k)
             if not was_window_continuation and excursion_config.excursion_window_tokens > 1:

@@ -46,15 +46,16 @@ def main() -> int:
         dtype=dtype,
         device=device,
         attn_implementation=args.attn,
+        cache_mode="branched_kv",
     )
 
     tasks_data = json.loads((ROOT / "configs/reasoning_v1_tasks.json").read_text(encoding="utf-8"))
     tasks = tasks_data["partitions"][args.partition][: args.max_tasks]
 
     exc_cfg = ExcursionConfig(
-        alpha=0.65,
-        beta=0.65,
-        max_relative_norm=0.25,
+        alpha=0.75,
+        beta=0.80,
+        max_relative_norm=0.35,
         visit_step=2,
         token_scope="last_token",
         donor_strategy="competitive_logit",
@@ -63,10 +64,10 @@ def main() -> int:
     )
     pol_cfg = AdaptivePolicyConfig(
         min_relative_divergence=0.002,
-        max_relative_divergence=0.65,
-        min_entropy_trigger=1.10,
-        max_margin_trigger=0.85,
-        stagnation_ratio_threshold=0.35,
+        max_relative_divergence=0.85,
+        min_entropy_trigger=0.65,
+        max_margin_trigger=2.50,
+        stagnation_ratio_threshold=0.55,
         donor_selection="confidence_gain",
     )
 
@@ -86,7 +87,7 @@ def main() -> int:
                 fork_after_step=1,
                 branch_count=2,
                 perturbation_method="competitive_logit",
-                perturbation_relative_norm=0.12,
+                perturbation_relative_norm=0.25,
                 excursion_config=exc_cfg,
                 policy_config=pol_cfg,
                 seed=args.seed,
@@ -97,7 +98,7 @@ def main() -> int:
             row = {
                 "problem_id": task["problem_id"],
                 "family": task["family"],
-                "level": task["level"],
+                "level": task.get("structural_level", task.get("level")),
                 **gen,
                 **split_info,
             }

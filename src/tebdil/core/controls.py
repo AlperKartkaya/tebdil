@@ -114,11 +114,6 @@ def execute_update_mixing_step(
         else next_b.hidden.detach().float()
     )
 
-    v_a = f_a_f - h_a_f
-    v_b = f_b_f - h_b_f
-    norm_v_a = float(torch.linalg.vector_norm(v_a).item())
-    norm_v_b = float(torch.linalg.vector_norm(v_b).item())
-
     _, eff_alpha, clipped, visit_norm, visit_rel = build_visit_state(state_a, state_b, config)
     scope_mask = build_scope_mask(
         h_a_f.shape,
@@ -128,20 +123,44 @@ def execute_update_mixing_step(
         selected_positions=config.selected_positions,
     )
 
+    if use_pre_norm:
+        dh_ab = (h_b_f - h_a_f) * scope_mask
+        dr_ab = (f_b_f - f_a_f) * scope_mask
+        rho = float(
+            ((dr_ab * dh_ab).sum() / dh_ab.square().sum().clamp_min(1e-12))
+            .clamp(min=0.0, max=1.0)
+            .item()
+        )
+    else:
+        rho = 1.0
+
+    v_a = f_a_f - rho * h_a_f
+    v_b = f_b_f - rho * h_b_f
+    norm_v_a = float(torch.linalg.vector_norm(v_a).item())
+    norm_v_b = float(torch.linalg.vector_norm(v_b).item())
+
     v_mix = (1.0 - eff_alpha) * v_a + eff_alpha * v_b
-    combined_update = (1.0 - config.beta) * v_a + config.beta * (
-        v_a * (1.0 - scope_mask) + v_mix * scope_mask
-    )
-    raw_a_prime = (h_a_f + combined_update).to(dtype=state_a.hidden.dtype)
     if config.beta == 0.0 or config.alpha == 0.0:
         h_a_prime = next_a_normal.hidden.detach().clone()
     elif use_pre_norm:
+        delta_v = (v_mix - v_a) * scope_mask
+        ra_scoped_norm = float(torch.linalg.vector_norm(f_a_f * scope_mask).item())
+        dv_norm = float(torch.linalg.vector_norm(delta_v).item())
+        contraction_comp = (
+            max(1.0, (visit_rel * ra_scoped_norm) / dv_norm) if dv_norm > 1e-12 else 1.0
+        )
+        raw_a_prime = (f_a_f + config.beta * contraction_comp * delta_v).to(
+            dtype=state_a.hidden.dtype
+        )
         normed_prime = adapter.normalize_hidden(raw_a_prime)
         h_a_prime = torch.where(
             scope_mask > 0.5, normed_prime, next_a_normal.hidden.detach().clone()
         )
     else:
-        h_a_prime = raw_a_prime
+        combined_update = (1.0 - config.beta) * v_a + config.beta * (
+            v_a * (1.0 - scope_mask) + v_mix * scope_mask
+        )
+        h_a_prime = (h_a_f + combined_update).to(dtype=state_a.hidden.dtype)
     gate_history = next_a_normal.gate_history
     if gate_history and hasattr(adapter, "compute_gate"):
         gate_history = gate_history[:-1] + (adapter.compute_gate(h_a_prime),)

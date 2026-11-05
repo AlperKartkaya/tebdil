@@ -230,27 +230,36 @@ class OuroRecurrentAdapter:
             past_seq_len, past_seq_len + seq_len, device=inputs_embeds.device
         )
         position_ids = cache_position.unsqueeze(0)
-        mask_kwargs = {
-            "config": ouro_base.config,
-            "input_embeds": inputs_embeds,
-            "attention_mask": None,
-            "cache_position": cache_position,
-            "past_key_values": self._active_kv_cache,
-            "position_ids": position_ids,
-        }
-        causal_mask_mapping: Dict[str, Optional[Tensor]] = {
-            "full_attention": create_causal_mask(**mask_kwargs),
-        }
-        if ouro_base.has_sliding_layers:
-            causal_mask_mapping["sliding_attention"] = (
-                create_sliding_window_causal_mask(**mask_kwargs)
-            )
+        if seq_len == 1 and not ouro_base.has_sliding_layers:
+            causal_mask_mapping: Dict[str, Optional[Tensor]] = {"full_attention": None}
+        else:
+            mask_kwargs = {
+                "config": ouro_base.config,
+                "input_embeds": inputs_embeds,
+                "attention_mask": None,
+                "cache_position": cache_position,
+                "past_key_values": self._active_kv_cache,
+                "position_ids": position_ids,
+            }
+            causal_mask_mapping = {
+                "full_attention": create_causal_mask(**mask_kwargs),
+            }
+            if ouro_base.has_sliding_layers:
+                causal_mask_mapping["sliding_attention"] = (
+                    create_sliding_window_causal_mask(**mask_kwargs)
+                )
         position_embeddings = ouro_base.rotary_emb(inputs_embeds, position_ids)
 
-        tok_hash = hash_tensor(token_ids)
-        mask_tensor = causal_mask_mapping["full_attention"]
-        mask_hash = hash_tensor(mask_tensor) if mask_tensor is not None else "causal_kv"
-        pos_hash = hash_tensor(position_ids)
+        if seq_len == 1:
+            tok_hash = f"tok_{int(token_ids[0, 0].item())}"
+            mask_hash = f"kv_{past_seq_len}"
+            pos_hash = f"pos_{past_seq_len}"
+            self._step_context_store.clear()
+        else:
+            tok_hash = hash_tensor(token_ids)
+            mask_tensor = causal_mask_mapping["full_attention"]
+            mask_hash = hash_tensor(mask_tensor) if mask_tensor is not None else "causal_kv"
+            pos_hash = hash_tensor(position_ids)
         ctx_key = f"{tok_hash}:{mask_hash}:{pos_hash}"
         self._step_context_store[ctx_key] = _OuroStepContextData(
             causal_mask_mapping=causal_mask_mapping,

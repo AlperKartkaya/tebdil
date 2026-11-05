@@ -150,8 +150,27 @@ def execute_excursion_step(
     f_a_f = next_a_normal.raw_hidden.detach().float() if use_pre_norm else f_a_post
     f_b_f = next_b.raw_hidden.detach().float() if use_pre_norm else next_b.hidden.detach().float()
 
-    v_a = f_a_f - h_a_f
-    v_b = f_b_f - h_b_f
+    scope_mask = build_scope_mask(
+        h_a_f.shape,
+        token_scope=config.token_scope,
+        device=h_a_f.device,
+        dtype=torch.float32,
+        selected_positions=config.selected_positions,
+    )
+
+    if use_pre_norm:
+        dh_ab = (h_b_f - h_a_f) * scope_mask
+        dr_ab = (f_b_f - f_a_f) * scope_mask
+        rho = float(
+            ((dr_ab * dh_ab).sum() / dh_ab.square().sum().clamp_min(1e-12))
+            .clamp(min=0.0, max=1.0)
+            .item()
+        )
+    else:
+        rho = 1.0
+
+    v_a = f_a_f - rho * h_a_f
+    v_b = f_b_f - rho * h_b_f
     norm_v_a = float(torch.linalg.vector_norm(v_a).item())
     norm_v_b = float(torch.linalg.vector_norm(v_b).item())
 
@@ -218,7 +237,7 @@ def execute_excursion_step(
         if (use_pre_norm and next_visit.raw_hidden is not None)
         else next_visit.hidden.detach().float()
     )
-    v_visit = f_visit_f - h_visit_f
+    v_visit = f_visit_f - rho * h_visit_f
     norm_v_visit = float(torch.linalg.vector_norm(v_visit).item())
 
     # Linear update mix vs nonlinear excursion update
@@ -226,14 +245,6 @@ def execute_excursion_step(
     curvature = v_visit - v_mix
     norm_curvature = float(torch.linalg.vector_norm(curvature).item())
     rel_curvature = norm_curvature / (norm_v_a + 1e-12)
-
-    scope_mask = build_scope_mask(
-        h_a_f.shape,
-        token_scope=config.token_scope,
-        device=h_a_f.device,
-        dtype=torch.float32,
-        selected_positions=config.selected_positions,
-    )
 
     if ablate_curvature:
         effective_v_visit = v_mix
@@ -266,21 +277,28 @@ def execute_excursion_step(
         g_prob = torch.sigmoid(next_a_normal.gate_history[-1].detach().float())
         gate_scale = 1.0 - 0.5 * g_prob
 
-    if eff_topk_frac >= 1.0 and not config.gate_modulated:
-        combined_update = (1.0 - config.beta) * v_a + config.beta * (
-            v_a * (1.0 - scope_mask) + effective_v_visit * scope_mask
-        )
-    else:
-        combined_update = v_a + config.beta * gate_scale * delta_v
-
-    raw_a_prime = (h_a_f + combined_update).to(dtype=state_a.hidden.dtype)
     if use_pre_norm:
+        ra_scoped_norm = float(torch.linalg.vector_norm(f_a_f * scope_mask).item())
+        dv_norm = float(torch.linalg.vector_norm(delta_v).item())
+        contraction_comp = (
+            max(1.0, (visit_rel * ra_scoped_norm) / dv_norm) if dv_norm > 1e-12 else 1.0
+        )
+        raw_a_prime = (
+            f_a_f + config.beta * gate_scale * contraction_comp * delta_v
+        ).to(dtype=state_a.hidden.dtype)
         normed_prime = adapter.normalize_hidden(raw_a_prime)
         h_a_prime = torch.where(
             scope_mask > 0.5, normed_prime, next_a_normal.hidden.detach().clone()
         )
+        combined_update = (f_a_f - h_a_f) + config.beta * gate_scale * contraction_comp * delta_v
     else:
-        h_a_prime = raw_a_prime
+        if eff_topk_frac >= 1.0 and not config.gate_modulated:
+            combined_update = (1.0 - config.beta) * v_a + config.beta * (
+                v_a * (1.0 - scope_mask) + effective_v_visit * scope_mask
+            )
+        else:
+            combined_update = v_a + config.beta * gate_scale * delta_v
+        h_a_prime = (h_a_f + combined_update).to(dtype=state_a.hidden.dtype)
 
     is_finite = check_tensor_finite(h_a_prime)
     post_rms = compute_rms(h_a_prime) if is_finite else float("inf")
