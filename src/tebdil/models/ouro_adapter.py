@@ -57,6 +57,7 @@ class OuroRecurrentAdapter:
         readout_mode: str = "last_step",
         model_id: str = "ByteDance/Ouro-1.4B-Thinking",
         model_revision: str = PINNED_OURO_THINKING_REV,
+        cache_mode: str = "disabled",
     ):
         if readout_mode not in ("last_step", "native_gate"):
             raise ValueError(f"Unsupported readout_mode: {readout_mode}")
@@ -66,6 +67,7 @@ class OuroRecurrentAdapter:
         self.readout_mode = readout_mode
         self.model_id = model_id
         self.model_revision = model_revision
+        self.cache_mode = cache_mode
         self._recurrent_block_calls = 0
         self._step_context_store: Dict[str, _OuroStepContextData] = {}
         self._active_kv_cache: Optional[UniversalTransformerCache] = None
