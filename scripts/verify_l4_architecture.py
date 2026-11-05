@@ -36,10 +36,10 @@ def test_kv_cache_parity_and_speedup(adapter: OuroRecurrentAdapter, tokenizer) -
     t0 = time.monotonic()
     cached_res = generate_tebdil_cached(
         adapter,
+        tokenizer,
         ids,
         method="S0",
         max_new_tokens=16,
-        eos_token_id=tokenizer.eos_token_id,
     )
     cached_elapsed = time.monotonic() - t0
 
