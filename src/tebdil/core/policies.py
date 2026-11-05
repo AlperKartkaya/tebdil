@@ -52,12 +52,19 @@ def compute_last_token_uncertainty(logits: Tensor) -> tuple[float, float]:
     return entropy, margin
 
 
+def _fast_readout(adapter: RecurrentAdapter, state: BranchState) -> Tensor:
+    try:
+        return adapter.readout_logits(state, last_token_only=True)  # type: ignore[call-arg]
+    except TypeError:
+        return adapter.readout_logits(state)
+
+
 def compute_stagnation_ratio(state: BranchState) -> float:
-    """Compute relative step update norm ||H_t - H_{t-1}||_F / (||H_t||_F + eps)."""
+    """Compute last-token relative step update norm ||h_t - h_{t-1}||_2 / (||h_t||_2 + eps)."""
     if len(state.hidden_history) < 2:
         return 0.5
-    h_curr = state.hidden_history[-1].detach().float()
-    h_prev = state.hidden_history[-2].detach().float()
+    h_curr = state.hidden_history[-1][:, -1, :].detach().float()
+    h_prev = state.hidden_history[-2][:, -1, :].detach().float()
     delta = float(torch.linalg.vector_norm(h_curr - h_prev).item())
     base = float(torch.linalg.vector_norm(h_curr).item())
     return delta / (base + 1e-12)
@@ -127,7 +134,7 @@ class AdaptiveExcursionPolicy:
                 adaptive_beta=base_beta,
             )
 
-        logits_a = adapter.readout_logits(state_a)
+        logits_a = _fast_readout(adapter, state_a)
         entropy_a, margin_a = compute_last_token_uncertainty(logits_a)
         stag_a = compute_stagnation_ratio(state_a)
 
@@ -138,10 +145,12 @@ class AdaptiveExcursionPolicy:
                 continue
             if compute_rms(d_state.hidden) > self.config.rms_Instability_limit:
                 continue
-            _, rel_div, _ = compute_branch_similarity(state_a.hidden, d_state.hidden)
+            _, rel_div, _ = compute_branch_similarity(
+                state_a.hidden[:, -1:, :], d_state.hidden[:, -1:, :]
+            )
             if rel_div < self.config.min_relative_divergence or rel_div > self.config.max_relative_divergence:
                 continue
-            d_logits = adapter.readout_logits(d_state)
+            d_logits = _fast_readout(adapter, d_state)
             d_ent, d_margin = compute_last_token_uncertainty(d_logits)
             valid_candidates.append((idx, rel_div, d_ent, d_margin))
 
@@ -179,17 +188,18 @@ class AdaptiveExcursionPolicy:
 
         chosen_idx, rel_div, d_ent, d_margin = chosen
 
-        # Trigger condition calibrated on validation split:
-        # Visit only when A has low intermediate margin and high entropy, and donor is in trust bounds
         uncertain_a = (margin_a <= self.config.max_margin_trigger) and (
             entropy_a >= self.config.min_entropy_trigger
         )
+        stagnated_a = (stag_a <= self.config.stagnation_ratio_threshold) and (
+            margin_a <= self.config.max_margin_trigger * 1.35
+        ) and (d_margin > margin_a)
 
-        if uncertain_a:
+        if uncertain_a or stagnated_a:
             return PolicyDecision(
                 action="visit",
                 donor_index=chosen_idx,
-                reason="triggered_branch_a_uncertainty",
+                reason="triggered_branch_a_uncertainty" if uncertain_a else "triggered_branch_a_stagnation",
                 entropy_a=entropy_a,
                 margin_a=margin_a,
                 donor_entropy=d_ent,

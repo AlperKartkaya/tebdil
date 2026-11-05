@@ -191,7 +191,14 @@ def main():
                     answer_ids = tokenizer.encode(str(pilot['gold_answer']), add_special_tokens=False)
                     for radius in (.1, .005):
                         print(f"{dtype} {pilot['problem_id']} radius={radius}", flush=True)
-                        config = ExcursionConfig(alpha=.65, beta=.65, max_relative_norm=radius, visit_step=2)
+                        config = ExcursionConfig(
+                            alpha=.65,
+                            beta=.65,
+                            max_relative_norm=radius,
+                            visit_step=2,
+                            token_scope='full',
+                            update_space='post_norm',
+                        )
                         record = probe_pair(adapter, a, b, config, answer_ids[0])
                         record.update({'problem_id': pilot['problem_id'], 'family': pilot['family'],
                                        'dtype': str(dtype), 'device': str(adapter.device),

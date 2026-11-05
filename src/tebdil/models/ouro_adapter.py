@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import sys
-from typing import Dict, Optional
+from typing import Dict, Optional, Sequence, Tuple
 import torch
 from torch import Tensor
 
@@ -23,7 +23,10 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from vendor.ouro_1_4b_thinking.configuration_ouro import OuroConfig
-from vendor.ouro_1_4b_thinking.modeling_ouro import OuroForCausalLM
+from vendor.ouro_1_4b_thinking.modeling_ouro import (
+    OuroForCausalLM,
+    UniversalTransformerCache,
+)
 
 
 PINNED_OURO_THINKING_REV = "3aaa2224253a92ca45cf2e3d427c360e1ef9c93d"
@@ -36,6 +39,7 @@ class _OuroStepContextData:
     position_ids: Tensor
     cache_position: Tensor
     position_embeddings: tuple[Tensor, Tensor]
+    past_seq_len: int = 0
 
 
 class OuroRecurrentAdapter:
@@ -64,6 +68,7 @@ class OuroRecurrentAdapter:
         self.model_revision = model_revision
         self._recurrent_block_calls = 0
         self._step_context_store: Dict[str, _OuroStepContextData] = {}
+        self._active_kv_cache: Optional[UniversalTransformerCache] = None
 
     @classmethod
     def from_mini_config(
@@ -112,6 +117,7 @@ class OuroRecurrentAdapter:
         readout_mode: str = "last_step",
         total_ut_steps: Optional[int] = None,
         local_files_only: bool = False,
+        attn_implementation: str = "eager",
     ) -> "OuroRecurrentAdapter":
         """Load pinned Ouro checkpoint into vendored OuroForCausalLM."""
         if device is None:
@@ -127,7 +133,7 @@ class OuroRecurrentAdapter:
             local_files_only=local_files_only,
         )
         config.use_cache = False
-        config._attn_implementation = "eager"
+        config._attn_implementation = attn_implementation
         if total_ut_steps is not None:
             config.total_ut_steps = total_ut_steps
         model = OuroForCausalLM.from_pretrained(
@@ -169,8 +175,129 @@ class OuroRecurrentAdapter:
     def dtype(self) -> torch.dtype:
         return next(self.model.parameters()).dtype
 
+    @property
+    def lm_head_weight(self) -> Tensor:
+        return self.model.lm_head.weight.detach()
+
     def reset_call_counter(self) -> None:
         self._recurrent_block_calls = 0
+
+    @torch.no_grad()
+    def normalize_hidden(self, raw_hidden: Tensor) -> Tensor:
+        """Apply native boundary OuroRMSNorm formula without triggering module forward hooks."""
+        norm_mod = self.model.model.norm
+        input_dtype = raw_hidden.dtype
+        x = raw_hidden.to(torch.float32)
+        variance = x.pow(2).mean(-1, keepdim=True)
+        x = x * torch.rsqrt(variance + norm_mod.variance_epsilon)
+        return norm_mod.weight * x.to(input_dtype)
+
+    @torch.no_grad()
+    def prefill_kv_cache(self, prefix_ids: Tensor) -> UniversalTransformerCache:
+        """Prefill UniversalTransformerCache on `prefix_ids` across all recurrent depths."""
+        if prefix_ids.dim() == 1:
+            prefix_ids = prefix_ids.unsqueeze(0)
+        ouro_base = self.model.model
+        max_cache_size = self.num_layers * self.total_steps
+        cache = UniversalTransformerCache(max_cache_size=max_cache_size)
+        if prefix_ids.shape[1] > 0:
+            prefix_ids = prefix_ids.to(device=self.device)
+            ouro_base(input_ids=prefix_ids, past_key_values=cache, use_cache=True)
+            self._recurrent_block_calls += self.total_steps
+        self._active_kv_cache = cache
+        return cache
+
+    @torch.no_grad()
+    def initialize_cached_step(self, token_ids: Tensor) -> BranchState:
+        """Initialize a 1-token (or window) recurrent state backed by `_active_kv_cache`."""
+        if self._active_kv_cache is None:
+            raise ValueError("Call prefill_kv_cache() before initialize_cached_step()")
+        if token_ids.dim() == 1:
+            token_ids = token_ids.unsqueeze(0)
+        token_ids = token_ids.to(device=self.device)
+        ouro_base = self.model.model
+        inputs_embeds = ouro_base.embed_tokens(token_ids)
+        past_seq_len = self._active_kv_cache.get_seq_length(0)
+        seq_len = inputs_embeds.shape[1]
+        cache_position = torch.arange(
+            past_seq_len, past_seq_len + seq_len, device=inputs_embeds.device
+        )
+        position_ids = cache_position.unsqueeze(0)
+        mask_kwargs = {
+            "config": ouro_base.config,
+            "input_embeds": inputs_embeds,
+            "attention_mask": None,
+            "cache_position": cache_position,
+            "past_key_values": self._active_kv_cache,
+            "position_ids": position_ids,
+        }
+        causal_mask_mapping: Dict[str, Optional[Tensor]] = {
+            "full_attention": create_causal_mask(**mask_kwargs),
+        }
+        if ouro_base.has_sliding_layers:
+            causal_mask_mapping["sliding_attention"] = (
+                create_sliding_window_causal_mask(**mask_kwargs)
+            )
+        position_embeddings = ouro_base.rotary_emb(inputs_embeds, position_ids)
+
+        tok_hash = hash_tensor(token_ids)
+        mask_tensor = causal_mask_mapping["full_attention"]
+        mask_hash = hash_tensor(mask_tensor) if mask_tensor is not None else "causal_kv"
+        pos_hash = hash_tensor(position_ids)
+        ctx_key = f"{tok_hash}:{mask_hash}:{pos_hash}"
+        self._step_context_store[ctx_key] = _OuroStepContextData(
+            causal_mask_mapping=causal_mask_mapping,
+            position_ids=position_ids,
+            cache_position=cache_position,
+            position_embeddings=position_embeddings,
+            past_seq_len=past_seq_len,
+        )
+        ctx = TransitionContext(
+            step=0,
+            token_ids_hash=tok_hash,
+            mask_hash=mask_hash,
+            positions_hash=pos_hash,
+            cache_mode="branched_kv",
+        )
+        return BranchState(
+            branch_id="root",
+            recurrent_step=0,
+            hidden=inputs_embeds.detach().clone(),
+            context=ctx,
+            gate_history=(),
+            hidden_history=(inputs_embeds.detach().clone(),),
+            raw_hidden=inputs_embeds.detach().clone(),
+        )
+
+    @torch.no_grad()
+    def commit_cached_step(self, depth_states: Sequence[BranchState]) -> None:
+        """Commit the chosen trajectory's per-depth K/V slices into `_active_kv_cache`."""
+        if self._active_kv_cache is None or not depth_states:
+            return
+        first_ctx = depth_states[0].context
+        ctx_key = f"{first_ctx.token_ids_hash}:{first_ctx.mask_hash}:{first_ctx.positions_hash}"
+        step_data = self._step_context_store.get(ctx_key)
+        past_len = step_data.past_seq_len if step_data is not None else 0
+        for st in depth_states:
+            if st.step_kv is None or st.recurrent_step < 1:
+                continue
+            ut_idx = st.recurrent_step - 1
+            for layer_idx, (k_slice, v_slice) in enumerate(st.step_kv):
+                slot_idx = ut_idx * self.num_layers + layer_idx
+                k_prev = self._active_kv_cache.key_cache[slot_idx]
+                v_prev = self._active_kv_cache.value_cache[slot_idx]
+                if k_prev is None or past_len == 0:
+                    self._active_kv_cache.key_cache[slot_idx] = k_slice.detach().clone()
+                    self._active_kv_cache.value_cache[slot_idx] = v_slice.detach().clone()
+                else:
+                    self._active_kv_cache.key_cache[slot_idx] = torch.cat(
+                        [k_prev[:, :, :past_len, :], k_slice], dim=2
+                    )
+                    self._active_kv_cache.value_cache[slot_idx] = torch.cat(
+                        [v_prev[:, :, :past_len, :], v_slice], dim=2
+                    )
+        if self._active_kv_cache.key_cache and self._active_kv_cache.key_cache[0] is not None:
+            self._active_kv_cache._seen_tokens = self._active_kv_cache.key_cache[0].shape[2]
 
     def estimate_step_flops(self, seq_len: int, batch_size: int = 1) -> int:
         """Estimate FLOPs for a single recurrent step across all shared layers.
@@ -270,8 +397,8 @@ class OuroRecurrentAdapter:
     @torch.no_grad()
     def transition(self, state: BranchState) -> BranchState:
         """Execute one shared-stack step, preserving native boundary RMSNorm and gate."""
-        if state.context.cache_mode != "disabled":
-            raise ValueError("Ouro excursions require cache_mode='disabled'")
+        if state.context.cache_mode not in ("disabled", "branched_kv"):
+            raise ValueError("Unsupported cache_mode for Ouro transition")
         if state.context.step != state.recurrent_step or state.recurrent_step < 0:
             raise ValueError("TransitionContext step must match the nonnegative recurrent step")
         ctx_key = f"{state.context.token_ids_hash}:{state.context.mask_hash}:{state.context.positions_hash}"
@@ -282,6 +409,22 @@ class OuroRecurrentAdapter:
         step_data = self._step_context_store[ctx_key]
         ouro_base = self.model.model
         current_ut = state.recurrent_step
+        use_kv = state.context.cache_mode == "branched_kv" and self._active_kv_cache is not None
+
+        if use_kv:
+            past_len = step_data.past_seq_len
+            for layer_idx in range(ouro_base.config.num_hidden_layers):
+                slot_idx = current_ut * ouro_base.config.num_hidden_layers + layer_idx
+                if slot_idx < len(self._active_kv_cache.key_cache):
+                    k_cached = self._active_kv_cache.key_cache[slot_idx]
+                    v_cached = self._active_kv_cache.value_cache[slot_idx]
+                    if k_cached is not None and v_cached is not None:
+                        if past_len == 0:
+                            self._active_kv_cache.key_cache[slot_idx] = None
+                            self._active_kv_cache.value_cache[slot_idx] = None
+                        elif k_cached.shape[2] > past_len:
+                            self._active_kv_cache.key_cache[slot_idx] = k_cached[:, :, :past_len, :]
+                            self._active_kv_cache.value_cache[slot_idx] = v_cached[:, :, :past_len, :]
 
         hidden_states = state.hidden.detach().clone()
         for decoder_layer in ouro_base.layers[: ouro_base.config.num_hidden_layers]:
@@ -289,16 +432,34 @@ class OuroRecurrentAdapter:
                 hidden_states,
                 attention_mask=step_data.causal_mask_mapping[decoder_layer.attention_type],
                 position_ids=step_data.position_ids,
-                past_key_value=None,
-                use_cache=False,
+                past_key_value=self._active_kv_cache if use_kv else None,
+                use_cache=use_kv,
                 cache_position=step_data.cache_position,
                 position_embeddings=step_data.position_embeddings,
                 current_ut=current_ut,
             )
 
+        raw_hidden = hidden_states.detach().clone()
         hidden_states = ouro_base.norm(hidden_states)
         gate_out = ouro_base.early_exit_gate(hidden_states)
         self._recurrent_block_calls += 1
+
+        step_kv: Optional[Tuple[Tuple[Tensor, Tensor], ...]] = None
+        if use_kv:
+            past_len = step_data.past_seq_len
+            kv_list = []
+            for layer_idx in range(ouro_base.config.num_hidden_layers):
+                slot_idx = current_ut * ouro_base.config.num_hidden_layers + layer_idx
+                k_full = self._active_kv_cache.key_cache[slot_idx]
+                v_full = self._active_kv_cache.value_cache[slot_idx]
+                assert k_full is not None and v_full is not None
+                kv_list.append(
+                    (
+                        k_full[:, :, past_len:, :].detach().clone(),
+                        v_full[:, :, past_len:, :].detach().clone(),
+                    )
+                )
+            step_kv = tuple(kv_list)
 
         next_step = state.recurrent_step + 1
         next_ctx = TransitionContext(
@@ -315,6 +476,8 @@ class OuroRecurrentAdapter:
             context=next_ctx,
             gate_history=state.gate_history + (gate_out,),
             hidden_history=state.hidden_history + (hidden_states,),
+            raw_hidden=raw_hidden,
+            step_kv=step_kv,
         )
 
     @torch.no_grad()
@@ -323,20 +486,23 @@ class OuroRecurrentAdapter:
         return self.model.model.early_exit_gate(hidden_states)
 
     @torch.no_grad()
-    def readout_logits(self, state: BranchState) -> Tensor:
+    def readout_logits(self, state: BranchState, last_token_only: bool = False) -> Tensor:
         """Project state to vocabulary logits according to configured readout_mode."""
         if self.readout_mode == "last_step" or not state.gate_history:
-            return self.model.lm_head(state.hidden)
+            h_in = state.hidden[:, -1:, :] if last_token_only else state.hidden
+            return self.model.lm_head(h_in)
 
         # Native gate readout matching OuroForCausalLM.forward (align post-step hidden states with gate_history)
         gate_list = list(state.gate_history)
         hidden_states_list = list(state.hidden_history[-len(gate_list) :])
         forced_step = self.model.early_exit_step
         if forced_step is not None and 0 <= forced_step < len(hidden_states_list):
-            return self.model.lm_head(hidden_states_list[forced_step])
+            h_sel = hidden_states_list[forced_step]
+            return self.model.lm_head(h_sel[:, -1:, :] if last_token_only else h_sel)
         exit_threshold = self.model.early_exit_threshold
         if exit_threshold is None or len(gate_list) != len(hidden_states_list):
-            return self.model.lm_head(state.hidden)
+            h_in = state.hidden[:, -1:, :] if last_token_only else state.hidden
+            return self.model.lm_head(h_in)
 
         pdf_list = []
         remaining_prob = torch.ones_like(gate_list[0].squeeze(-1))
@@ -363,7 +529,8 @@ class OuroRecurrentAdapter:
             .expand(-1, -1, 1, stacked_hidden.size(-1))
         )
         final_hidden_states = torch.gather(stacked_hidden, 2, gather_index).squeeze(2)
-        return self.model.lm_head(final_hidden_states)
+        h_out = final_hidden_states[:, -1:, :] if last_token_only else final_hidden_states
+        return self.model.lm_head(h_out)
 
     def validate_compatibility(self, a: BranchState, b: BranchState) -> None:
         validate_state_compatibility(a, b)

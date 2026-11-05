@@ -36,10 +36,12 @@ class TransitionContext:
 class BranchState:
     branch_id: str
     recurrent_step: int
-    hidden: Tensor  # [batch, tokens, hidden]
+    hidden: Tensor  # [batch, tokens, hidden] (post-boundary RMSNorm)
     context: TransitionContext
     gate_history: Tuple[Tensor, ...] = field(default_factory=tuple)
     hidden_history: Tuple[Tensor, ...] = field(default_factory=tuple)
+    raw_hidden: Optional[Tensor] = None  # [batch, tokens, hidden] (pre-boundary RMSNorm)
+    step_kv: Optional[Tuple[Tuple[Tensor, Tensor], ...]] = None  # per-layer (K, V) slice for cached token
 
     def clone(self, new_branch_id: Optional[str] = None) -> BranchState:
         """Deep-clone the branch state with isolated tensor storage."""
@@ -50,17 +52,21 @@ class BranchState:
             context=self.context,
             gate_history=tuple(g.detach().clone() for g in self.gate_history),
             hidden_history=tuple(h.detach().clone() for h in self.hidden_history),
+            raw_hidden=self.raw_hidden.detach().clone() if self.raw_hidden is not None else None,
+            step_kv=tuple((k.detach().clone(), v.detach().clone()) for k, v in self.step_kv)
+            if self.step_kv is not None
+            else None,
         )
 
 
 @dataclass(frozen=True)
 class ExcursionConfig:
-    alpha: float = 0.5
-    beta: float = 0.5
-    max_relative_norm: float = 0.10
+    alpha: float = 0.65
+    beta: float = 0.65
+    max_relative_norm: float = 0.25
     visit_step: int = 2
-    token_scope: str = "full"  # full | last_token | selected
-    donor_strategy: str = "fixed"  # fixed | random | diversity | adaptive | oracle
+    token_scope: str = "last_token"  # full | last_token | selected
+    donor_strategy: str = "competitive_logit"  # competitive_logit | fixed | random | diversity | adaptive | oracle
     selected_positions: Tuple[int, ...] = ()
     fallback_if_unstable: str = "skip_intervention"
     rms_Instability_threshold: float = 50.0
@@ -68,6 +74,8 @@ class ExcursionConfig:
     coordinate_topk_fraction: float = 1.0
     gate_modulated: bool = False
     eligible_visit_steps: Tuple[int, ...] = ()
+    update_space: str = "pre_norm"  # pre_norm | post_norm
+    excursion_window_tokens: int = 4
 
 
 def check_tensor_finite(tensor: Tensor, name: str = "hidden") -> bool:

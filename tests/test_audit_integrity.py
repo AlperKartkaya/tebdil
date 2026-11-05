@@ -46,7 +46,7 @@ def test_update_cosine_uses_h0_and_never_substitutes_h1():
     s2 = adapter.transition(s1)
     cos2, avail2 = _compute_recent_update_cosine(s2)
     assert avail2 is True
-    h0, h1, h2 = (h.float().reshape(-1) for h in s2.hidden_history[-3:])
+    h0, h1, h2 = (h[:, -1, :].float().reshape(-1) for h in s2.hidden_history[-3:])
     v1, v2 = h1 - h0, h2 - h1
     expected = float(torch.dot(v2, v1) / (v1.norm() * v2.norm()))
     assert cos2 == pytest.approx(expected, abs=1e-5)

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
+from torch import Tensor
 from tebdil.core.perturbations import PerturbationReport, apply_perturbation
 from tebdil.core.state import BranchState
 
@@ -15,11 +16,12 @@ def fork_branches(
     seed: int = 42,
     token_scope: str = "full",
     selected_positions: Tuple[int, ...] = (),
+    lm_head_weight: Optional[Tensor] = None,
 ) -> tuple[List[BranchState], List[PerturbationReport]]:
     """Fork `base_state` into `count` isolated branches.
 
     Branch 0 ('A') is always an exact unperturbed clone of `base_state`.
-    Branches 1..count-1 ('B', 'C', ...) receive seeded perturbations with distinct seeds.
+    Branches 1..count-1 ('B', 'C', ...) receive seeded or competitive-logit perturbations.
     """
     if count < 1:
         raise ValueError(f"Branch count must be >= 1, got {count}")
@@ -52,6 +54,8 @@ def fork_branches(
             seed=branch_seed,
             token_scope=token_scope,
             selected_positions=selected_positions,
+            lm_head_weight=lm_head_weight,
+            branch_index=idx,
         )
         cloned.hidden = perturbed_hidden
         branches.append(cloned)

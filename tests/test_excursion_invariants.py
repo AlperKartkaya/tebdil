@@ -5,7 +5,9 @@ import torch
 from tebdil.core.branching import fork_branches
 from tebdil.core.controls import execute_update_mixing_step
 from tebdil.core.excursions import execute_excursion_step
+from tebdil.core.scheduler import generate_tebdil_cached, run_scheduled_trajectory
 from tebdil.core.state import ExcursionConfig
+from tebdil.evaluation.runner import ByteLevelToyTokenizer
 from tebdil.models.ouro_adapter import OuroRecurrentAdapter
 
 
@@ -71,3 +73,44 @@ def test_excursion_trust_region_clipping_and_nan_fallback():
     assert tel_safe.skipped_unstable is True
     assert tel_safe.post_finite is True
     assert torch.equal(na_safe.hidden, expected_a.hidden)
+
+
+def test_branched_kv_cache_parity_and_competitive_logit_donors():
+    adapter = OuroRecurrentAdapter.from_mini_config(seed=101)
+    ids = torch.tensor([[3, 6, 9, 12, 15]])
+
+    # 1. Verify S0 KV-cached step matches full-prefix uncached step on last token
+    res_full = run_scheduled_trajectory(adapter, ids, method="S0", record_pca=False, use_cached_step=False)
+    adapter.prefill_kv_cache(ids[:, :-1])
+    res_kv = run_scheduled_trajectory(adapter, ids[:, -1:], method="S0", record_pca=False, use_cached_step=True)
+    torch.testing.assert_close(res_kv.primary_state.hidden, res_full.primary_state.hidden[:, -1:, :], atol=1e-5, rtol=1e-5)
+    torch.testing.assert_close(res_kv.primary_logits, res_full.primary_logits[:, -1:, :], atol=1e-5, rtol=1e-5)
+
+    # 2. Verify competitive_logit donor branching produces distinct finite branches
+    s1 = adapter.transition(adapter.initialize(ids))
+    branches, reports = fork_branches(
+        s1,
+        count=3,
+        perturbation_method="competitive_logit",
+        relative_norm=0.10,
+        token_scope="last_token",
+        lm_head_weight=adapter.lm_head_weight,
+    )
+    assert len(branches) == 3
+    assert not torch.allclose(branches[0].hidden[:, -1, :], branches[1].hidden[:, -1, :])
+    assert not torch.allclose(branches[1].hidden[:, -1, :], branches[2].hidden[:, -1, :])
+    assert torch.equal(branches[0].hidden[:, :-1, :], branches[1].hidden[:, :-1, :])
+    assert abs(reports[1].actual_relative_norm - 0.10) < 1e-4
+
+    # 3. Verify generate_tebdil_cached multi-token excursion execution
+    tok = ByteLevelToyTokenizer(vocab_size=256)
+    gen_out = generate_tebdil_cached(
+        adapter=adapter,
+        tokenizer=tok,
+        prompt_ids=ids,
+        method="E1",
+        max_new_tokens=3,
+        excursion_config=ExcursionConfig(alpha=0.65, beta=0.65, token_scope="last_token", update_space="pre_norm"),
+    )
+    assert len(gen_out["generated_token_ids"]) == 3
+    assert gen_out["excursion_count"] == 3

@@ -58,7 +58,13 @@ def test_native_boundary_observer_and_probe_on_mini_model():
     b = a.clone('B')
     b.hidden += .1
     try:
-        result = module.probe_norms(adapter, a, b, ExcursionConfig(alpha=.65, beta=.65), lambda name, operation: operation())
+        result = module.probe_norms(
+            adapter,
+            a,
+            b,
+            ExcursionConfig(alpha=.65, beta=.65, token_scope='full', update_space='post_norm'),
+            lambda name, operation: operation(),
+        )
     finally:
         handle.remove()
     assert all(result['checks'].values())

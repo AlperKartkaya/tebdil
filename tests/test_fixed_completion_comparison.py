@@ -86,7 +86,7 @@ def test_callback_failure_preserves_evidence_and_removes_hook():
 
 
 def test_invalid_method_and_nonfrozen_scope_are_rejected():
-    for method, config in [("E3_mlp", ExcursionConfig()), ("E1", ExcursionConfig(token_scope="last_token"))]:
+    for method, config in [("E3_mlp", ExcursionConfig()), ("E1", ExcursionConfig(token_scope="selected"))]:
         with pytest.raises(ValueError):
             generate_fixed_completion(adapter(), Tokenizer(), "question", method, config, seed=1, budget=1)
 

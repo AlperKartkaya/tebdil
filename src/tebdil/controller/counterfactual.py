@@ -134,7 +134,7 @@ def compute_action_utility(
     margin_a: float = 0.50,
     entropy_a: float = 1.50,
     alpha: float = 0.65,
-    shaped: bool = True,
+    shaped: bool = False,
 ) -> Tuple[float, float, float, float]:
     """Compute (task_reward, compute_cost_norm, utility, advantage_vs_continue).
 
@@ -810,7 +810,7 @@ def _get_action_utility_and_advantage(
 
 def _build_training_matrices(
     records: Sequence[Dict[str, Any]],
-    use_shaped_utility: bool = True,
+    use_shaped_utility: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, List[Tuple[int, int, float]]]:
     """Build (X, y_advantage, sample_weights, preference_pairs) from counterfactual state records."""
     rows_x: List[List[float]] = []
@@ -871,8 +871,8 @@ def _build_training_matrices(
 def _calibrate_thresholds_on_records(
     ckpt: LearnedControllerCheckpoint,
     records: Sequence[Dict[str, Any]],
-    use_heuristic_gates: bool = True,
-    use_shaped_utility: bool = True,
+    use_heuristic_gates: bool = False,
+    use_shaped_utility: bool = False,
 ) -> Tuple[float, float, Dict[str, Any]]:
     """Calibrate (exit_min_advantage, excursion_min_advantage) strictly on validation counterfactuals.
 
@@ -1003,10 +1003,10 @@ def train_learned_controller(
         (0.35, 0.50),
         (0.85, 0.85),
     ),
-    token_scopes: Sequence[str] = ("full",),
+    token_scopes: Sequence[str] = ("last_token",),
     allow_exit: bool = True,
-    use_heuristic_gates: bool = True,
-    use_shaped_utility: bool = True,
+    use_heuristic_gates: bool = False,
+    use_shaped_utility: bool = False,
     seed: int = 42,
 ) -> LearnedControllerCheckpoint:
     """Train a Ridge or 2-layer MLP action-advantage controller on counterfactual data."""

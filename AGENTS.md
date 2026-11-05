@@ -1,25 +1,22 @@
-# TEBDİL — research computation hold
+# TEBDİL — Computation & Architecture Guidelines
 
-The user explicitly suspended new research computation and experiments on
-2026-11-02 until they understand and approve the end-to-end computational process.
-Only an explicit user decision to resume computation lifts this hold; a generic
-"continue" on documentation or code review does not.
+Computation hold lifted by explicit user instruction on 2026-11-05 following core
+architectural fixes:
 
-- Do not load model checkpoints, execute model forwards/generation, run mini/toy
-  model experiments, train controllers, benchmark, sweep parameters or start a backend.
-- Do not run the full pytest suite or merely exclude `real_model`: unmarked tests
-  also execute mini-model forwards. During the hold, the reviewed artifact/static
-  release suite is `uv run pytest -q tests/test_site_release.py -m "not real_model"`.
-- There are **no grandfathered running experiments**. At the user's later explicit
-  request, the `2309ea0` follow-up (PID 58098) was forcibly stopped with SIGKILL,
-  exit 137. Its partial journal is preserved; no terminal report exists. Do not
-  relaunch, resume, retry or extend it. No execution exception remains.
-- Allowed: source/documentation inspection, explanation, existing-file checksum
-  and ledger audits, static frontend checks, and browser tests of recorded data
-  with no inference backend. These do not authorize new scientific observations.
-- Keep frozen scientific sources and historical results unchanged. Preserve the
-  original page design. Never regenerate historical exports from dirty artifacts;
-  use `scripts/build_landing_data.py --check` only.
-
-Start with [the computation walkthrough](docs/computation_walkthrough.md) and
-[the sequential research status](docs/research_execution_pass.md).
+1. **Branched KV-Cache (`UniversalTransformerCache`) & Single-Token Readout:**
+   `OuroRecurrentAdapter` supports `prefill_kv_cache`, `initialize_cached_step`, and
+   `commit_cached_step` so excursion-modified K/V states persist across generated tokens
+   without $O(L^2)$ full-prefix recomputation.
+2. **Pre-RMSNorm Residual Update Transport (`update_space="pre_norm"`):**
+   Excursion updates $V_t = \tilde{F}(H_t) - H_t$ are computed in pre-RMSNorm residual
+   space and normalized back onto the native `OuroRMSNorm` manifold after combination.
+3. **Scoped Trust-Region & Competitive Logit Donors (`competitive_logit`):**
+   Perturbations and trust-region clipping operate on the active `last_token` scope
+   using competitive unembedding directions ($w_{y_j} - w_{y_1}$) rather than full-prefix
+   isotropic Gaussian noise.
+4. **Unshaped Counterfactual Controller & Multi-Token Excursion Windows:**
+   Reward shaping (`state_shaping`) and hard-coded heuristic gating (`use_heuristic_gates`)
+   are disabled by default; excursions persist over `excursion_window_tokens`.
+5. **Execution Target:**
+   Heavy Ouro-1.4B-Thinking runs target Google Colab Pro **NVIDIA L4 (24GB)** or **A100**
+   GPUs via `scripts/run_colab_l4.py`. Local unit/mini-model verification is unrestricted.

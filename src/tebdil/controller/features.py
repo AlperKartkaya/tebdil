@@ -9,7 +9,11 @@ from torch import Tensor
 
 from tebdil.controller.action_space import ControllerAction
 from tebdil.core.excursions import compute_branch_similarity
-from tebdil.core.policies import compute_last_token_uncertainty, compute_stagnation_ratio
+from tebdil.core.policies import (
+    _fast_readout,
+    compute_last_token_uncertainty,
+    compute_stagnation_ratio,
+)
 from tebdil.core.state import BranchState, RecurrentAdapter, compute_rms
 
 
@@ -106,16 +110,16 @@ def _compute_top1_prob_and_token(logits: Tensor) -> Tuple[float, int]:
 
 
 def _compute_recent_update_cosine(state: BranchState) -> Tuple[float, bool]:
-    """Cosine similarity between V_{t-1} = H_t - H_{t-1} and V_{t-2} = H_{t-1} - H_{t-2}.
+    """Cosine similarity between V_{t-1} = H_t - H_{t-1} and V_{t-2} = H_{t-1} - H_{t-2} on last token.
 
     Requires at least 3 history states (e.g., H_0, H_1, H_2). Never substitutes H_1 for H_1 - H_0.
     Returns (cosine_similarity, is_available).
     """
     if len(state.hidden_history) < 3:
         return 0.0, False
-    h_curr = state.hidden_history[-1].detach().float().reshape(-1)
-    h_prev = state.hidden_history[-2].detach().float().reshape(-1)
-    h_prev2 = state.hidden_history[-3].detach().float().reshape(-1)
+    h_curr = state.hidden_history[-1][:, -1, :].detach().float().reshape(-1)
+    h_prev = state.hidden_history[-2][:, -1, :].detach().float().reshape(-1)
+    h_prev2 = state.hidden_history[-3][:, -1, :].detach().float().reshape(-1)
     v_last = h_curr - h_prev
     v_prev = h_prev - h_prev2
     n1 = float(torch.linalg.vector_norm(v_last).item())
@@ -144,12 +148,12 @@ def extract_state_features(
     prev_margin_a: Optional[float] = None,
 ) -> StateFeatures:
     """Extract strictly causal, label-free inference-time features z_t."""
-    logits_a = adapter.readout_logits(state_a)
+    logits_a = _fast_readout(adapter, state_a)
     entropy_a, margin_a = compute_last_token_uncertainty(logits_a)
     top1_prob_a, top1_tok_a = _compute_top1_prob_and_token(logits_a)
     stag_a = compute_stagnation_ratio(state_a)
     upd_cos_a, upd_cos_avail = _compute_recent_update_cosine(state_a)
-    rms_a = compute_rms(state_a.hidden)
+    rms_a = compute_rms(state_a.hidden[:, -1:, :])
     gate_prob_a = _compute_native_gate_prob(state_a)
 
     delta_prob = (top1_prob_a - prev_top1_prob_a) if prev_top1_prob_a is not None else 0.0
@@ -157,8 +161,10 @@ def extract_state_features(
 
     donor_feats: List[DonorFeatures] = []
     for idx, d_state in enumerate(donors):
-        frob_d, rel_d, cos_d = compute_branch_similarity(state_a.hidden, d_state.hidden)
-        logits_d = adapter.readout_logits(d_state)
+        frob_d, rel_d, cos_d = compute_branch_similarity(
+            state_a.hidden[:, -1:, :], d_state.hidden[:, -1:, :]
+        )
+        logits_d = _fast_readout(adapter, d_state)
         ent_d, mar_d = compute_last_token_uncertainty(logits_d)
         prob_d, tok_d = _compute_top1_prob_and_token(logits_d)
         jsd_d = _last_token_jsd(logits_a, logits_d)

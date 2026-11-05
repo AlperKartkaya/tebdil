@@ -88,11 +88,15 @@ class ToyLoopedModel(nn.Module):
         mask = torch.full((seq_len, seq_len), float("-inf"), device=device, dtype=dtype)
         return torch.triu(mask, diagonal=1)
 
-    def forward_step(self, hidden: Tensor, causal_mask: Tensor, step: int) -> Tensor:
+    def forward_step_with_raw(self, hidden: Tensor, causal_mask: Tensor, step: int) -> tuple[Tensor, Tensor]:
         h = hidden
         for layer in self.layers:
             h = layer(h, causal_mask, step=step)
-        return self.norm(h)
+        return h, self.norm(h)
+
+    def forward_step(self, hidden: Tensor, causal_mask: Tensor, step: int) -> Tensor:
+        _, normed = self.forward_step_with_raw(hidden, causal_mask, step=step)
+        return normed
 
     def forward(self, input_ids: Tensor, num_steps: Optional[int] = None) -> Tensor:
         steps = num_steps if num_steps is not None else self.total_steps
@@ -129,8 +133,16 @@ class ToyRecurrentAdapter:
     def recurrent_block_calls(self) -> int:
         return self._recurrent_block_calls
 
+    @property
+    def lm_head_weight(self) -> Tensor:
+        return self.model.lm_head.weight.detach()
+
     def reset_call_counter(self) -> None:
         self._recurrent_block_calls = 0
+
+    @torch.no_grad()
+    def normalize_hidden(self, raw_hidden: Tensor) -> Tensor:
+        return self.model.norm(raw_hidden)
 
     @torch.no_grad()
     def initialize(self, input_ids: Tensor) -> BranchState:
@@ -171,7 +183,7 @@ class ToyRecurrentAdapter:
         else:
             causal_mask, _ = self._context_cache[key]
 
-        h_next = self.model.forward_step(state.hidden, causal_mask, step=state.recurrent_step)
+        raw_next, h_next = self.model.forward_step_with_raw(state.hidden, causal_mask, step=state.recurrent_step)
         self._recurrent_block_calls += 1
         next_step = state.recurrent_step + 1
         next_ctx = TransitionContext(
@@ -188,11 +200,13 @@ class ToyRecurrentAdapter:
             context=next_ctx,
             gate_history=state.gate_history,
             hidden_history=state.hidden_history + (h_next,),
+            raw_hidden=raw_next,
         )
 
     @torch.no_grad()
-    def readout_logits(self, state: BranchState) -> Tensor:
-        return self.model.lm_head(state.hidden)
+    def readout_logits(self, state: BranchState, last_token_only: bool = False) -> Tensor:
+        h_in = state.hidden[:, -1:, :] if last_token_only else state.hidden
+        return self.model.lm_head(h_in)
 
     def validate_compatibility(self, a: BranchState, b: BranchState) -> None:
         validate_state_compatibility(a, b)

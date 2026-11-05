@@ -94,10 +94,25 @@ def execute_update_mixing_step(
     next_a_normal = adapter.transition(state_a)
     next_b = adapter.transition(state_b)
 
+    use_pre_norm = (
+        config.update_space == "pre_norm"
+        and next_a_normal.raw_hidden is not None
+        and next_b.raw_hidden is not None
+        and hasattr(adapter, "normalize_hidden")
+    )
+
     h_a_f = state_a.hidden.detach().float()
     h_b_f = state_b.hidden.detach().float()
-    f_a_f = next_a_normal.hidden.detach().float()
-    f_b_f = next_b.hidden.detach().float()
+    f_a_f = (
+        next_a_normal.raw_hidden.detach().float()
+        if use_pre_norm
+        else next_a_normal.hidden.detach().float()
+    )
+    f_b_f = (
+        next_b.raw_hidden.detach().float()
+        if use_pre_norm
+        else next_b.hidden.detach().float()
+    )
 
     v_a = f_a_f - h_a_f
     v_b = f_b_f - h_b_f
@@ -117,7 +132,16 @@ def execute_update_mixing_step(
     combined_update = (1.0 - config.beta) * v_a + config.beta * (
         v_a * (1.0 - scope_mask) + v_mix * scope_mask
     )
-    h_a_prime = (h_a_f + combined_update).to(dtype=state_a.hidden.dtype)
+    raw_a_prime = (h_a_f + combined_update).to(dtype=state_a.hidden.dtype)
+    if config.beta == 0.0 or config.alpha == 0.0:
+        h_a_prime = next_a_normal.hidden.detach().clone()
+    elif use_pre_norm:
+        normed_prime = adapter.normalize_hidden(raw_a_prime)
+        h_a_prime = torch.where(
+            scope_mask > 0.5, normed_prime, next_a_normal.hidden.detach().clone()
+        )
+    else:
+        h_a_prime = raw_a_prime
     gate_history = next_a_normal.gate_history
     if gate_history and hasattr(adapter, "compute_gate"):
         gate_history = gate_history[:-1] + (adapter.compute_gate(h_a_prime),)
@@ -129,6 +153,8 @@ def execute_update_mixing_step(
         context=next_a_normal.context,
         gate_history=gate_history,
         hidden_history=state_a.hidden_history + (h_a_prime,),
+        raw_hidden=raw_a_prime if use_pre_norm else None,
+        step_kv=next_a_normal.step_kv,
     )
     telemetry = ExcursionTelemetry(
         step=step,

@@ -131,11 +131,58 @@ class UniversalTransformerCache(Cache):
 
     def __init__(self, max_cache_size: Optional[int] = None):
         # We intentionally don't call super().__init__ because the parent assumes static cache sizes.
-        self.key_cache: list[Optional[torch.Tensor]] = []
-        self.value_cache: list[Optional[torch.Tensor]] = []
+        self._key_cache: list[Optional[torch.Tensor]] = []
+        self._value_cache: list[Optional[torch.Tensor]] = []
         self.layers: list[Any] = []  # attribute expected by HF Cache utilities
         self._seen_tokens = 0
         self.max_cache_size = max_cache_size
+
+    @property
+    def key_cache(self) -> list[Optional[torch.Tensor]]:
+        return self._key_cache
+
+    @key_cache.setter
+    def key_cache(self, value: list[Optional[torch.Tensor]]) -> None:
+        self._key_cache = list(value)
+
+    @property
+    def value_cache(self) -> list[Optional[torch.Tensor]]:
+        return self._value_cache
+
+    @value_cache.setter
+    def value_cache(self, value: list[Optional[torch.Tensor]]) -> None:
+        self._value_cache = list(value)
+
+    def __len__(self) -> int:
+        return len(self._key_cache)
+
+    def clone(self) -> "UniversalTransformerCache":
+        """Deep-clone all cached key/value tensors for branch-isolated transitions."""
+        copied = UniversalTransformerCache(max_cache_size=self.max_cache_size)
+        copied._key_cache = [
+            k.detach().clone() if k is not None else None for k in self._key_cache
+        ]
+        copied._value_cache = [
+            v.detach().clone() if v is not None else None for v in self._value_cache
+        ]
+        copied._seen_tokens = self._seen_tokens
+        return copied
+
+    def crop(self, max_length: int) -> None:
+        """Crop cached key/value tensors along sequence dimension (dim=2) to `max_length`."""
+        if max_length < 0:
+            max_length = self.get_seq_length() + max_length
+        for idx in range(len(self._key_cache)):
+            k = self._key_cache[idx]
+            v = self._value_cache[idx]
+            if k is not None and v is not None:
+                if max_length == 0:
+                    self._key_cache[idx] = None
+                    self._value_cache[idx] = None
+                elif k.shape[2] > max_length:
+                    self._key_cache[idx] = k[:, :, :max_length, :].contiguous()
+                    self._value_cache[idx] = v[:, :, :max_length, :].contiguous()
+        self._seen_tokens = min(self._seen_tokens, max(0, max_length))
 
     def update(
         self,

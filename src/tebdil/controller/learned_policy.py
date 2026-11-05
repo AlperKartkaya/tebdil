@@ -70,10 +70,10 @@ class LearnedControllerCheckpoint:
     alpha_beta_grid: List[List[float]] = field(
         default_factory=lambda: [[0.65, 0.65], [0.35, 0.50], [0.85, 0.85]]
     )
-    token_scopes: List[str] = field(default_factory=lambda: ["full"])
+    token_scopes: List[str] = field(default_factory=lambda: ["last_token"])
     allow_exit: bool = True
-    use_heuristic_gates: bool = True
-    utility_version: str = "v2_shaped"
+    use_heuristic_gates: bool = False
+    utility_version: str = "v2_unshaped"
     excursion_min_advantage: float = 0.0
     exit_min_advantage: float = 0.0
     max_excursions_per_trajectory: int = 1
@@ -143,7 +143,7 @@ class SelfDirectedController:
         self.allow_exit = allow_exit
         if use_heuristic_gates is None:
             self.use_heuristic_gates = (
-                bool(checkpoint.use_heuristic_gates) if checkpoint is not None else True
+                bool(checkpoint.use_heuristic_gates) if checkpoint is not None else False
             )
         else:
             self.use_heuristic_gates = bool(use_heuristic_gates)

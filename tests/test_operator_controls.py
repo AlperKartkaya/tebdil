@@ -45,7 +45,7 @@ def pair():
 def test_residual_identity_uses_effective_clipped_alpha(radius, nonlinear):
     adapter = PolynomialAdapter(nonlinear)
     a, b = pair()
-    cfg = ExcursionConfig(alpha=.65, beta=.65, max_relative_norm=radius)
+    cfg = ExcursionConfig(alpha=.65, beta=.65, max_relative_norm=radius, token_scope='full', update_space='post_norm')
     visit, alpha, clipped, _, _ = build_visit_state(a, b, cfg)
     fa, fb, fv = [adapter.transition(s).hidden for s in (a, b, visit)]
     va, vb, vv = fa - a.hidden, fb - b.hidden, fv - visit.hidden
@@ -151,7 +151,13 @@ def test_fixed_prefix_probe_accounts_for_all_reference_and_continuation_calls():
     a = adapter.transition(adapter.transition(adapter.initialize(torch.tensor([[1, 2, 3]]))))
     b = a.clone('B')
     b.hidden += .1
-    record = module.probe_pair(adapter, a, b, ExcursionConfig(alpha=.65, beta=.65), answer_token=4)
+    record = module.probe_pair(
+        adapter,
+        a,
+        b,
+        ExcursionConfig(alpha=.65, beta=.65, token_scope='full', update_space='post_norm'),
+        answer_token=4,
+    )
     assert all(record['checks'].values())
     assert record['construction_and_reference_recurrent_calls'] == 10
     assert record['total_recurrent_calls'] == 24

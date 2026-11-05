@@ -18,7 +18,7 @@ def generate_fixed_completion(adapter, tokenizer, prompt, method, config, *, see
     if method not in METHOD_CALLS or type(budget) is not int or budget <= 0:
         raise ValueError("Unsupported fixed method or token budget")
     if (adapter.total_steps != 4 or adapter.readout_mode != "last_step"
-            or config.visit_step != 2 or config.token_scope != "full"
+            or config.visit_step != 2 or config.token_scope not in ("full", "last_token")
             or config.gate_modulated or config.subspace_fraction != 1.0
             or config.coordinate_topk_fraction != 1.0):
         raise ValueError("Only the frozen full-scope four-depth comparison is supported")

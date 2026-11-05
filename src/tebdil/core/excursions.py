@@ -93,7 +93,8 @@ def build_visit_state(
 
     raw_delta = float(config.alpha) * d_vec
     raw_norm = float(torch.linalg.vector_norm(raw_delta).item())
-    norm_a = float(torch.linalg.vector_norm(h_a).item())
+    scoped_norm_a = float(torch.linalg.vector_norm(h_a * scope_mask).item())
+    norm_a = scoped_norm_a if scoped_norm_a > 1e-12 else float(torch.linalg.vector_norm(h_a).item())
 
     clipped = False
     clip_scale = 1.0
@@ -136,10 +137,18 @@ def execute_excursion_step(
     next_a_normal = adapter.transition(state_a)
     next_b = adapter.transition(state_b)
 
+    use_pre_norm = (
+        config.update_space == "pre_norm"
+        and next_a_normal.raw_hidden is not None
+        and next_b.raw_hidden is not None
+        and hasattr(adapter, "normalize_hidden")
+    )
+
     h_a_f = state_a.hidden.detach().float()
     h_b_f = state_b.hidden.detach().float()
-    f_a_f = next_a_normal.hidden.detach().float()
-    f_b_f = next_b.hidden.detach().float()
+    f_a_post = next_a_normal.hidden.detach().float()
+    f_a_f = next_a_normal.raw_hidden.detach().float() if use_pre_norm else f_a_post
+    f_b_f = next_b.raw_hidden.detach().float() if use_pre_norm else next_b.hidden.detach().float()
 
     v_a = f_a_f - h_a_f
     v_b = f_b_f - h_b_f
@@ -204,7 +213,11 @@ def execute_excursion_step(
     next_visit = adapter.transition(visit_state)
 
     h_visit_f = visit_state.hidden.detach().float()
-    f_visit_f = next_visit.hidden.detach().float()
+    f_visit_f = (
+        next_visit.raw_hidden.detach().float()
+        if (use_pre_norm and next_visit.raw_hidden is not None)
+        else next_visit.hidden.detach().float()
+    )
     v_visit = f_visit_f - h_visit_f
     norm_v_visit = float(torch.linalg.vector_norm(v_visit).item())
 
@@ -259,7 +272,15 @@ def execute_excursion_step(
         )
     else:
         combined_update = v_a + config.beta * gate_scale * delta_v
-    h_a_prime = (h_a_f + combined_update).to(dtype=state_a.hidden.dtype)
+
+    raw_a_prime = (h_a_f + combined_update).to(dtype=state_a.hidden.dtype)
+    if use_pre_norm:
+        normed_prime = adapter.normalize_hidden(raw_a_prime)
+        h_a_prime = torch.where(
+            scope_mask > 0.5, normed_prime, next_a_normal.hidden.detach().clone()
+        )
+    else:
+        h_a_prime = raw_a_prime
 
     is_finite = check_tensor_finite(h_a_prime)
     post_rms = compute_rms(h_a_prime) if is_finite else float("inf")
@@ -268,6 +289,11 @@ def execute_excursion_step(
     if (not is_finite) or (post_rms > config.rms_Instability_threshold):
         if config.fallback_if_unstable == "skip_intervention":
             h_a_prime = next_a_normal.hidden.detach().clone()
+            raw_a_prime = (
+                next_a_normal.raw_hidden.detach().clone()
+                if next_a_normal.raw_hidden is not None
+                else h_a_prime
+            )
             is_finite = check_tensor_finite(h_a_prime)
             post_rms = compute_rms(h_a_prime)
             skipped_unstable = True
@@ -280,6 +306,20 @@ def execute_excursion_step(
     else:
         next_gate_history = next_a_normal.gate_history
 
+    blended_kv = next_a_normal.step_kv
+    if (
+        not skipped_unstable
+        and next_a_normal.step_kv is not None
+        and next_visit.step_kv is not None
+    ):
+        blended_kv = tuple(
+            (
+                ((1.0 - config.beta) * ka.float() + config.beta * kv.float()).to(ka.dtype),
+                ((1.0 - config.beta) * va.float() + config.beta * vv.float()).to(va.dtype),
+            )
+            for (ka, va), (kv, vv) in zip(next_a_normal.step_kv, next_visit.step_kv)
+        )
+
     next_a = BranchState(
         branch_id=state_a.branch_id,
         recurrent_step=next_a_normal.recurrent_step,
@@ -287,10 +327,12 @@ def execute_excursion_step(
         context=next_a_normal.context,
         gate_history=next_gate_history,
         hidden_history=state_a.hidden_history + (h_a_prime,),
+        raw_hidden=raw_a_prime if use_pre_norm else None,
+        step_kv=blended_kv,
     )
 
     shift_vs_normal = float(
-        torch.linalg.vector_norm(h_a_prime.detach().float() - f_a_f).item()
+        torch.linalg.vector_norm(h_a_prime.detach().float() - f_a_post).item()
     )
 
     telemetry = ExcursionTelemetry(

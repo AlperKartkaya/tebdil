@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Optional, Tuple
 import torch
 from torch import Tensor
 
@@ -50,12 +50,14 @@ def build_scope_mask(
 
 def apply_perturbation(
     hidden: Tensor,
-    method: str = "normalized_gaussian",
+    method: str = "competitive_logit",
     relative_norm: float = 0.01,
     seed: int = 42,
-    token_scope: str = "full",
+    token_scope: str = "last_token",
     selected_positions: Tuple[int, ...] = (),
     rank: int = 4,
+    lm_head_weight: Optional[Tensor] = None,
+    branch_index: int = 1,
 ) -> tuple[Tensor, PerturbationReport]:
     """Return a newly allocated perturbed tensor and its PerturbationReport.
 
@@ -86,17 +88,52 @@ def apply_perturbation(
         )
 
     gen = torch.Generator(device="cpu").manual_seed(int(seed))
-    if method in ("gaussian", "normalized_gaussian"):
+    effective_method = (
+        "normalized_gaussian"
+        if (method == "competitive_logit" and lm_head_weight is None)
+        else method
+    )
+
+    if effective_method == "competitive_logit" and lm_head_weight is not None:
+        w_u = lm_head_weight.detach().to(device=base.device, dtype=torch.float32)
+        h_last = base_f32[:, -1, :]  # [B, d]
+        logits_last = torch.matmul(h_last, w_u.t())  # [B, V]
+        k_cand = min(int(w_u.shape[0]), max(8, int(branch_index) + 5))
+        top_vals, top_idx = torch.topk(logits_last, k=k_cand, dim=-1)
+        w_top1 = w_u[top_idx[:, 0]]  # [B, d]
+
+        if branch_index <= 1:
+            m_end = min(5, k_cand)
+            comp_vals = top_vals[:, 1:m_end]
+            comp_probs = torch.softmax(comp_vals, dim=-1).unsqueeze(-1)  # [B, m, 1]
+            comp_vecs = w_u[top_idx[:, 1:m_end]]  # [B, m, d]
+            w_alt = (comp_probs * comp_vecs).sum(dim=1)  # [B, d]
+        else:
+            j_main = min(int(branch_index), k_cand - 1)
+            j_next = min(j_main + 1, k_cand - 1)
+            w_alt = 0.75 * w_u[top_idx[:, j_main]] + 0.25 * w_u[top_idx[:, j_next]]
+
+        d_raw = w_alt - w_top1  # [B, d]
+        h_sq = h_last.square().sum(dim=-1, keepdim=True).clamp_min(1e-12)
+        radial = ((d_raw * h_last).sum(dim=-1, keepdim=True) / h_sq) * h_last
+        tangent = d_raw - radial
+        d_steered = 0.85 * tangent + 0.15 * d_raw  # [B, d]
+        noise = d_steered.unsqueeze(1).expand_as(base_f32) * scope_mask
+        noise_norm = float(torch.linalg.vector_norm(noise).item())
+        target_norm = relative_norm * reference_norm
+        if noise_norm > 1e-12:
+            noise = noise * (target_norm / noise_norm)
+    elif effective_method in ("gaussian", "normalized_gaussian"):
         noise = torch.randn(base.shape, generator=gen, dtype=torch.float32).to(base.device)
         noise = noise * scope_mask
-        if method == "normalized_gaussian":
+        if effective_method == "normalized_gaussian":
             noise_norm = float(torch.linalg.vector_norm(noise).item())
             target_norm = relative_norm * reference_norm
             if noise_norm > 1e-12:
                 noise = noise * (target_norm / noise_norm)
         else:
             noise = noise * relative_norm
-    elif method == "structured_lowrank":
+    elif effective_method == "structured_lowrank":
         b, s, d = base.shape
         r = max(1, min(rank, s, d))
         u = torch.randn((b, s, r), generator=gen, dtype=torch.float32).to(base.device)

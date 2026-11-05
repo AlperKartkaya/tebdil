@@ -20,6 +20,22 @@ def repeat_features(tokenizer, generated_prefix):
                 candidate_repeat_flag=phase == 'reasoning' and len(generated_prefix) >= 128 and matches >= 2)
 
 
+def detect_reasoning_stall(tokenizer, generated_prefix, min_setup_tokens: int = 256):
+    """Detect genuine multi-token reasoning loops while ignoring initial problem restatement."""
+    base = repeat_features(tokenizer, generated_prefix)
+    if base['phase'] != 'reasoning' or len(generated_prefix) < min_setup_tokens:
+        return {**base, 'prior_16gram_matches': 0, 'stall_detected': False}
+    tail = generated_prefix[-256:]
+    span = 16
+    matches_16 = (
+        sum(tail[i : i + span] == tail[-span:] for i in range(len(tail) - span))
+        if len(tail) >= span
+        else 0
+    )
+    stall = matches_16 >= 2 or (base['prior_exact_8gram_matches'] >= 4 and len(generated_prefix) >= min_setup_tokens)
+    return {**base, 'prior_16gram_matches': matches_16, 'stall_detected': stall}
+
+
 @contextmanager
 def passive_observer(adapter, tokenizer, on_entry):
     """Yield a native on_forward callback, recording real last-position tensors."""

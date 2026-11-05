@@ -33,6 +33,7 @@ from tebdil.core.policies import (
     AdaptiveExcursionPolicy,
     AdaptivePolicyConfig,
     PolicyDecision,
+    _fast_readout,
     compute_last_token_uncertainty,
 )
 from tebdil.core.state import (
@@ -131,14 +132,15 @@ def run_scheduled_trajectory(
     recurrent_steps: Optional[int] = None,
     fork_after_step: int = 1,
     branch_count: int = 2,
-    perturbation_method: str = "normalized_gaussian",
-    perturbation_relative_norm: float = 0.02,
+    perturbation_method: str = "competitive_logit",
+    perturbation_relative_norm: float = 0.08,
     excursion_config: Optional[ExcursionConfig] = None,
     policy_config: Optional[AdaptivePolicyConfig] = None,
     controller_checkpoint: Optional[LearnedControllerCheckpoint] = None,
     seed: int = 42,
     extra_steps_for_s1: int = 3,
     record_pca: bool = True,
+    use_cached_step: bool = False,
 ) -> TrajectoryScheduleResult:
     """Execute a complete recurrent trajectory under the specified intervention method.
 
@@ -190,7 +192,10 @@ def run_scheduled_trajectory(
     calls_before = adapter.recurrent_block_calls
     t0 = time.perf_counter()
 
-    root = adapter.initialize(input_ids)
+    if use_cached_step and hasattr(adapter, "initialize_cached_step"):
+        root = adapter.initialize_cached_step(input_ids)  # type: ignore[attr-defined]
+    else:
+        root = adapter.initialize(input_ids)
     step_snapshots: List[StepSnapshot] = []
     pert_reports: List[PerturbationReport] = []
     exc_telemetry: Optional[ExcursionTelemetry] = None
@@ -198,6 +203,7 @@ def run_scheduled_trajectory(
     ctrl_calls = 0
     ctrl_overhead_ms = 0.0
     exited_step: Optional[int] = None
+    committed_depth_states: List[BranchState] = []
 
     branch_vec_history: Dict[str, List[np.ndarray]] = {}
 
@@ -222,7 +228,7 @@ def run_scheduled_trajectory(
         for st in states:
             rms_map[st.branch_id] = compute_rms(st.hidden)
             frob_map[st.branch_id] = frobenius_norm(st.hidden)
-            logits = adapter.readout_logits(st)
+            logits = _fast_readout(adapter, st)
             ent, mar = compute_last_token_uncertainty(logits)
             ent_map[st.branch_id] = ent
             mar_map[st.branch_id] = mar
@@ -254,9 +260,12 @@ def run_scheduled_trajectory(
         state_a = root.clone(new_branch_id="A")
         for t in range(total_steps):
             state_a = adapter.transition(state_a)
+            committed_depth_states.append(state_a)
             step_snapshots.append(_snapshot(t + 1, [state_a]))
 
-        logits_a = adapter.readout_logits(state_a)
+        if use_cached_step and hasattr(adapter, "commit_cached_step"):
+            adapter.commit_cached_step(committed_depth_states)  # type: ignore[attr-defined]
+        logits_a = _fast_readout(adapter, state_a) if use_cached_step else adapter.readout_logits(state_a)
         wall_ms = (time.perf_counter() - t0) * 1000.0
         pca_coords, pca_evr = _compute_pca_projection(branch_vec_history) if record_pca else ({}, [])
         return TrajectoryScheduleResult(
@@ -282,6 +291,7 @@ def run_scheduled_trajectory(
     actual_fork = max(0, min(fork_after_step, total_steps - 1))
     for t in range(actual_fork):
         shared_state = adapter.transition(shared_state)
+        committed_depth_states.append(shared_state)
 
     branches, reports = fork_branches(
         base_state=shared_state,
@@ -291,6 +301,7 @@ def run_scheduled_trajectory(
         seed=seed,
         token_scope=excursion_config.token_scope,
         selected_positions=excursion_config.selected_positions,
+        lm_head_weight=getattr(adapter, "lm_head_weight", None),
     )
     pert_reports = [asdict(r) for r in reports]
     if actual_fork > 0:
@@ -460,6 +471,7 @@ def run_scheduled_trajectory(
 
             if not intervened:
                 branches = [adapter.transition(b) for b in branches]
+                committed_depth_states.append(branches[0])
                 snap_now = _snapshot(t + 1, branches, intervened=False, dec=pol_decision)
                 step_snapshots.append(snap_now)
                 prev_margin_a = snap_now.branch_margin.get("A", prev_margin_a)
@@ -522,6 +534,7 @@ def run_scheduled_trajectory(
                 else:
                     new_branches.append(adapter.transition(d_state))
             branches = new_branches
+            committed_depth_states.append(branches[0])
             snap_now = _snapshot(
                 t + 1, branches, intervened=True, telem=exc_telemetry, dec=pol_decision
             )
@@ -532,12 +545,19 @@ def run_scheduled_trajectory(
             prev_margin_a = post_mar_a
         else:
             branches = [adapter.transition(b) for b in branches]
+            committed_depth_states.append(branches[0])
             snap_now = _snapshot(t + 1, branches)
             step_snapshots.append(snap_now)
             prev_margin_a = snap_now.branch_margin.get("A", prev_margin_a)
 
+    if use_cached_step and hasattr(adapter, "commit_cached_step"):
+        adapter.commit_cached_step(committed_depth_states)  # type: ignore[attr-defined]
+
     branch_states = {b.branch_id: b for b in branches}
-    branch_logits = {b.branch_id: adapter.readout_logits(b) for b in branches}
+    branch_logits = {
+        b.branch_id: (_fast_readout(adapter, b) if use_cached_step else adapter.readout_logits(b))
+        for b in branches
+    }
 
     # For P0, select the branch with highest top1-top2 margin (label-free confidence selection)
     if method == "P0":
@@ -576,3 +596,102 @@ def run_scheduled_trajectory(
         pca_coords=pca_coords,
         pca_explained_variance=pca_evr,
     )
+
+
+@torch.no_grad()
+def generate_tebdil_cached(
+    adapter: RecurrentAdapter,
+    tokenizer: Any,
+    prompt_ids: Tensor,
+    method: str = "E2",
+    max_new_tokens: int = 512,
+    recurrent_steps: Optional[int] = None,
+    fork_after_step: int = 1,
+    branch_count: int = 2,
+    perturbation_method: str = "competitive_logit",
+    perturbation_relative_norm: float = 0.12,
+    excursion_config: Optional[ExcursionConfig] = None,
+    policy_config: Optional[AdaptivePolicyConfig] = None,
+    controller_checkpoint: Optional[LearnedControllerCheckpoint] = None,
+    seed: int = 42,
+) -> Dict[str, Any]:
+    """KV-cached multi-token generation with persistent latent excursion windows."""
+    if excursion_config is None:
+        excursion_config = ExcursionConfig()
+    if policy_config is None:
+        policy_config = AdaptivePolicyConfig()
+    if prompt_ids.dim() == 1:
+        prompt_ids = prompt_ids.unsqueeze(0)
+    device = getattr(adapter, "device", prompt_ids.device)
+    prompt_ids = prompt_ids.to(device=device)
+
+    t0 = time.perf_counter()
+    calls_before = adapter.recurrent_block_calls
+    use_kv = hasattr(adapter, "prefill_kv_cache") and hasattr(adapter, "initialize_cached_step")
+    if use_kv:
+        adapter.prefill_kv_cache(prompt_ids[:, :-1])  # type: ignore[attr-defined]
+        cur_input = prompt_ids[:, -1:]
+    else:
+        cur_input = prompt_ids
+
+    generated_tokens: List[int] = []
+    excursion_token_indices: List[int] = []
+    window_remaining = 0
+    eos_id = getattr(tokenizer, "eos_token_id", None)
+    stop_reason = "max_output_tokens"
+
+    for k in range(max_new_tokens):
+        if window_remaining > 0 and method not in (
+            "S0", "S1", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1"
+        ):
+            step_method = "E1"
+            window_remaining -= 1
+            was_window_continuation = True
+        else:
+            step_method = method
+            was_window_continuation = False
+
+        res = run_scheduled_trajectory(
+            adapter=adapter,
+            input_ids=cur_input,
+            method=step_method,
+            recurrent_steps=recurrent_steps,
+            fork_after_step=fork_after_step,
+            branch_count=branch_count,
+            perturbation_method=perturbation_method,
+            perturbation_relative_norm=perturbation_relative_norm,
+            excursion_config=excursion_config,
+            policy_config=policy_config,
+            controller_checkpoint=controller_checkpoint,
+            seed=seed + 131 * k,
+            record_pca=False,
+            use_cached_step=use_kv,
+        )
+        did_intervene = any(s.intervention_applied for s in res.step_snapshots)
+        if did_intervene:
+            excursion_token_indices.append(k)
+            if not was_window_continuation and excursion_config.excursion_window_tokens > 1:
+                window_remaining = excursion_config.excursion_window_tokens - 1
+
+        tok_id = int(res.primary_logits[:, -1, :].argmax(dim=-1).item())
+        generated_tokens.append(tok_id)
+        if eos_id is not None and tok_id == eos_id:
+            stop_reason = "eos_token"
+            break
+
+        next_tok_t = torch.tensor([[tok_id]], dtype=torch.long, device=device)
+        cur_input = next_tok_t if use_kv else torch.cat([cur_input, next_tok_t], dim=1)
+
+    wall_s = time.perf_counter() - t0
+    decoded = tokenizer.decode(generated_tokens, skip_special_tokens=False) if tokenizer is not None else ""
+    return {
+        "method": method,
+        "generated_token_ids": generated_tokens,
+        "decoded_text": decoded,
+        "stop_reason": stop_reason,
+        "completed": stop_reason == "eos_token",
+        "excursion_token_indices": excursion_token_indices,
+        "excursion_count": len(excursion_token_indices),
+        "recurrent_block_calls": adapter.recurrent_block_calls - calls_before,
+        "wall_seconds": round(wall_s, 4),
+    }
