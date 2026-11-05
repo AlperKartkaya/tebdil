@@ -115,18 +115,66 @@ def compare_legacy_vs_v2_on_stall_prefixes(adapter: OuroRecurrentAdapter, tokeni
             if k >= len(gen_ids):
                 continue
             prefix = torch.tensor([prompt_ids + gen_ids[:k]], dtype=torch.long, device=adapter.device)
-            adapter.prefill_kv_cache(prefix[:, :-1])
-            s0_init = adapter.initialize_cached_step(prefix[:, -1:])
-            root = adapter.transition(s0_init)
 
-            # Baseline S0
-            s_a = adapter.transition(root)
-            s_a3 = adapter.transition(s_a)
-            s_a4 = adapter.transition(s_a3)
-            logits_s0 = adapter.readout_logits(s_a4, last_token_only=True)[0, -1].float()
+            # 1) Legacy full-prefix post-norm isotropic Gaussian
+            t_leg0 = time.monotonic()
+            adapter.cache_mode = "disabled"
+            full_init = adapter.initialize(prefix)
+            full_root = adapter.transition(full_init)
+            s_a_full = adapter.transition(full_root)
+            s_a3_full = adapter.transition(s_a_full)
+            s_a4_full = adapter.transition(s_a3_full)
+            logits_s0 = adapter.readout_logits(s_a4_full, last_token_only=True)[0, -1].float()
             top2_s0 = logits_s0.topk(2)
             s0_tok = int(top2_s0.indices[0].item())
             s0_margin = float((top2_s0.values[0] - top2_s0.values[1]).item())
+
+            leg_branches, _ = fork_branches(
+                full_root,
+                count=2,
+                perturbation_method="normalized_gaussian",
+                relative_norm=0.25,
+                seed=20261105 + 131 * k,
+                token_scope="full",
+            )
+            la, lb = [adapter.transition(s) for s in leg_branches]
+            le1, _, l_tel = execute_excursion_step(adapter, la, lb, legacy_cfg)
+            lm1, _, _ = execute_update_mixing_step(adapter, la, lb, legacy_cfg)
+            l_final_e1 = adapter.transition(le1)
+            l_final_m1 = adapter.transition(lm1)
+            l_final_b = adapter.transition(adapter.transition(lb))
+            leg_sec = round(time.monotonic() - t_leg0, 4)
+
+            l_logits_e1 = adapter.readout_logits(l_final_e1, last_token_only=True)[0, -1].float()
+            l_logits_m1 = adapter.readout_logits(l_final_m1, last_token_only=True)[0, -1].float()
+            l_logits_b = adapter.readout_logits(l_final_b, last_token_only=True)[0, -1].float()
+
+            # 2) v2 Branched-KV pre-norm competitive-logit
+            adapter.cache_mode = "branched_kv"
+            adapter.prefill_kv_cache(prefix[:, :-1])
+            t_v2_0 = time.monotonic()
+            s0_init = adapter.initialize_cached_step(prefix[:, -1:])
+            root = adapter.transition(s0_init)
+            v2_branches, _ = fork_branches(
+                root,
+                count=2,
+                perturbation_method="competitive_logit",
+                relative_norm=0.25,
+                seed=20261105 + 131 * k,
+                token_scope="last_token",
+                lm_head_weight=adapter.lm_head_weight,
+            )
+            va, vb = [adapter.transition(s) for s in v2_branches]
+            ve1, _, v_tel = execute_excursion_step(adapter, va, vb, v2_cfg)
+            vm1, _, _ = execute_update_mixing_step(adapter, va, vb, v2_cfg)
+            v_final_e1 = adapter.transition(ve1)
+            v_final_m1 = adapter.transition(vm1)
+            v_final_b = adapter.transition(adapter.transition(vb))
+            v2_step_sec = round(time.monotonic() - t_v2_0, 4)
+
+            v_logits_e1 = adapter.readout_logits(v_final_e1, last_token_only=True)[0, -1].float()
+            v_logits_m1 = adapter.readout_logits(v_final_m1, last_token_only=True)[0, -1].float()
+            v_logits_b = adapter.readout_logits(v_final_b, last_token_only=True)[0, -1].float()
 
             comparison = {
                 "problem_id": row["problem_id"],
@@ -135,46 +183,35 @@ def compare_legacy_vs_v2_on_stall_prefixes(adapter: OuroRecurrentAdapter, tokeni
                 "s0_token_id": s0_tok,
                 "s0_token_text": tokenizer.decode([s0_tok], skip_special_tokens=False),
                 "s0_top2_margin": round(s0_margin, 4),
+                "legacy_step_sec": leg_sec,
+                "v2_cached_step_sec": v2_step_sec,
+                "legacy_postnorm_full": {
+                    "e1_token_id": int(l_logits_e1.argmax().item()),
+                    "e1_token_text": tokenizer.decode([int(l_logits_e1.argmax().item())], skip_special_tokens=False),
+                    "e1_changed_vs_s0": int(l_logits_e1.argmax().item()) != s0_tok,
+                    "m1_token_id": int(l_logits_m1.argmax().item()),
+                    "m1_changed_vs_s0": int(l_logits_m1.argmax().item()) != s0_tok,
+                    "b_token_id": int(l_logits_b.argmax().item()),
+                    "b_changed_vs_s0": int(l_logits_b.argmax().item()) != s0_tok,
+                    "logit_l2_e1_vs_s0": round(float((l_logits_e1 - logits_s0).norm().item()), 4),
+                    "logit_l2_e1_vs_m1": round(float((l_logits_e1 - l_logits_m1).norm().item()), 4),
+                    "curvature_rel": round(float(l_tel.curvature_relative_to_update_a), 4),
+                    "effective_alpha": round(float(l_tel.effective_alpha), 4),
+                },
+                "v2_prenorm_comp_logit": {
+                    "e1_token_id": int(v_logits_e1.argmax().item()),
+                    "e1_token_text": tokenizer.decode([int(v_logits_e1.argmax().item())], skip_special_tokens=False),
+                    "e1_changed_vs_s0": int(v_logits_e1.argmax().item()) != s0_tok,
+                    "m1_token_id": int(v_logits_m1.argmax().item()),
+                    "m1_changed_vs_s0": int(v_logits_m1.argmax().item()) != s0_tok,
+                    "b_token_id": int(v_logits_b.argmax().item()),
+                    "b_changed_vs_s0": int(v_logits_b.argmax().item()) != s0_tok,
+                    "logit_l2_e1_vs_s0": round(float((v_logits_e1 - logits_s0).norm().item()), 4),
+                    "logit_l2_e1_vs_m1": round(float((v_logits_e1 - v_logits_m1).norm().item()), 4),
+                    "curvature_rel": round(float(v_tel.curvature_relative_to_update_a), 4),
+                    "effective_alpha": round(float(v_tel.effective_alpha), 4),
+                },
             }
-
-            for label, cfg, rel_norm in [("legacy_postnorm_full", legacy_cfg, 0.25), ("v2_prenorm_comp_logit", v2_cfg, 0.25)]:
-                branches, _ = fork_branches(
-                    root,
-                    count=2,
-                    method=cfg.donor_strategy,
-                    relative_norm=rel_norm,
-                    seed=20261105 + 131 * k,
-                    token_scope=cfg.token_scope,
-                    lm_head_weight=adapter.lm_head_weight,
-                )
-                a, b = [adapter.transition(s) for s in branches]
-                e1, _, telemetry = execute_excursion_step(adapter, a, b, cfg)
-                m1, _, _ = execute_update_mixing_step(adapter, a, b, cfg)
-                final_e1 = adapter.transition(e1)
-                final_m1 = adapter.transition(m1)
-                final_b = adapter.transition(adapter.transition(b))
-
-                logits_e1 = adapter.readout_logits(final_e1, last_token_only=True)[0, -1].float()
-                logits_m1 = adapter.readout_logits(final_m1, last_token_only=True)[0, -1].float()
-                logits_b = adapter.readout_logits(final_b, last_token_only=True)[0, -1].float()
-
-                e1_tok = int(logits_e1.argmax().item())
-                m1_tok = int(logits_m1.argmax().item())
-                b_tok = int(logits_b.argmax().item())
-
-                comparison[label] = {
-                    "e1_token_id": e1_tok,
-                    "e1_token_text": tokenizer.decode([e1_tok], skip_special_tokens=False),
-                    "e1_changed_vs_s0": e1_tok != s0_tok,
-                    "m1_token_id": m1_tok,
-                    "m1_changed_vs_s0": m1_tok != s0_tok,
-                    "b_token_id": b_tok,
-                    "b_changed_vs_s0": b_tok != s0_tok,
-                    "logit_l2_e1_vs_s0": round(float((logits_e1 - logits_s0).norm().item()), 4),
-                    "logit_l2_e1_vs_m1": round(float((logits_e1 - logits_m1).norm().item()), 4),
-                    "curvature_rel": round(float(telemetry.curvature_relative_to_update_a), 4),
-                    "effective_alpha": round(float(telemetry.effective_alpha), 4),
-                }
             results.append(comparison)
     return results
 
