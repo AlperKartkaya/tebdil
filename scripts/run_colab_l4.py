@@ -22,6 +22,7 @@ from tebdil.evaluation.reasoning import (
     split_prompt_started_reasoning,
 )
 from tebdil.models.ouro_adapter import OuroRecurrentAdapter, PINNED_OURO_THINKING_REV
+from tebdil.tasks.literature_reasoning import evaluate_literature_reasoning
 from tebdil.tasks.reasoning import evaluate_reasoning_task
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -187,12 +188,95 @@ def run_completion_reasoning_suite(
     return records
 
 
+def run_literature_reasoning_suite(
+    adapter: OuroRecurrentAdapter,
+    tokenizer,
+    methods: list[str],
+    exc_cfg: ExcursionConfig,
+    pol_cfg: AdaptivePolicyConfig,
+    partition: str = "development",
+    max_tasks: int = 12,
+    task_ids: list[str] | None = None,
+    max_new_tokens: int = 640,
+    seed: int = 42,
+) -> list[dict]:
+    lit_data = json.loads((ROOT / "configs/literature_reasoning_v1_tasks.json").read_text(encoding="utf-8"))
+    all_tasks = lit_data["partitions"][partition]
+    if task_ids:
+        id_set = set(task_ids)
+        tasks = [t for t in all_tasks if t["problem_id"] in id_set]
+    else:
+        tasks = all_tasks[:max_tasks]
+
+    records = []
+    lit_exc_cfg = replace(exc_cfg, excursion_window_tokens=1)
+    for task in tasks:
+        prompt_ids = encode_reasoning_prompt(tokenizer, task["prompt"]).to(adapter.device)
+        for m in methods:
+            print(
+                f"  [Literature Suite] {task['problem_id']} ({task['family']}) | method={m} ...",
+                flush=True,
+            )
+            gen = generate_tebdil_cached(
+                adapter=adapter,
+                tokenizer=tokenizer,
+                prompt_ids=prompt_ids,
+                method=m,
+                max_new_tokens=max_new_tokens,
+                recurrent_steps=4,
+                fork_after_step=1,
+                branch_count=2,
+                perturbation_method="competitive_logit",
+                perturbation_relative_norm=0.25,
+                excursion_config=lit_exc_cfg,
+                policy_config=pol_cfg,
+                seed=seed,
+            )
+            split_info = split_prompt_started_reasoning(
+                gen["decoded_text"], tokenizer.eos_token, completed=gen["completed"]
+            )
+            row = {
+                "problem_id": task["problem_id"],
+                "family": task["family"],
+                "template_id": task["template_id"],
+                "source_benchmark": task.get("source_benchmark", ""),
+                "reasoning_pathology": task.get("reasoning_pathology", ""),
+                "difficulty": task["difficulty"],
+                "gold_answer": task["gold_answer"],
+                "trap_answers": task.get("trap_answers", []),
+                "generated_tokens": len(gen["generated_token_ids"]),
+                **gen,
+                **split_info,
+            }
+            eval_res = evaluate_literature_reasoning(row, task["gold_answer"])
+            eval_res["hit_trap_answer"] = (
+                eval_res["extracted_answer"] in set(task.get("trap_answers", []))
+                if eval_res["extracted_answer"] is not None
+                else False
+            )
+            row["evaluation"] = eval_res
+            records.append(row)
+            print(
+                f"    -> tokens={len(gen['generated_token_ids'])} | status={eval_res['status']} | "
+                f"ans={eval_res['extracted_answer']} (gold={task['gold_answer']}, trap={eval_res['hit_trap_answer']}) | "
+                f"exc={gen['excursion_count']} | calls={gen['recurrent_block_calls']} | "
+                f"time={gen['wall_seconds']}s",
+                flush=True,
+            )
+    return records
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "reports/colab_l4_tebdil_run.json")
-    parser.add_argument("--suite", choices=("all", "stall", "completion", "reasoning_v1"), default="all")
+    parser.add_argument(
+        "--suite",
+        choices=("all", "stall", "completion", "reasoning_v1", "literature"),
+        default="all",
+    )
     parser.add_argument("--partition", choices=("development", "reserved_test"), default="development")
     parser.add_argument("--max-tasks", type=int, default=2)
+    parser.add_argument("--task-ids", nargs="*", default=None)
     parser.add_argument("--max-new-tokens", type=int, default=512)
     parser.add_argument("--continuation-tokens", type=int, default=32)
     parser.add_argument("--methods", nargs="+", default=["S0", "M1", "E1", "E2"])
@@ -239,6 +323,7 @@ def main() -> int:
     stall_records = []
     completion_records = []
     reasoning_v1_records = []
+    literature_records = []
 
     if args.suite in ("all", "stall"):
         stall_records = run_stall_recovery_suite(
@@ -259,6 +344,20 @@ def main() -> int:
             exc_cfg=exc_cfg,
             pol_cfg=pol_cfg,
             max_tasks=args.max_tasks,
+            max_new_tokens=args.max_new_tokens,
+            seed=args.seed,
+        )
+
+    if args.suite in ("all", "literature"):
+        literature_records = run_literature_reasoning_suite(
+            adapter=adapter,
+            tokenizer=tokenizer,
+            methods=args.methods,
+            exc_cfg=exc_cfg,
+            pol_cfg=pol_cfg,
+            partition=args.partition,
+            max_tasks=args.max_tasks,
+            task_ids=args.task_ids,
             max_new_tokens=args.max_new_tokens,
             seed=args.seed,
         )
@@ -318,6 +417,7 @@ def main() -> int:
         "stall_recovery_records": stall_records,
         "completion_reasoning_records": completion_records,
         "reasoning_v1_records": reasoning_v1_records,
+        "literature_reasoning_records": literature_records,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
