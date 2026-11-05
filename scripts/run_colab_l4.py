@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -123,6 +123,7 @@ def run_completion_reasoning_suite(
     tasks = comp_data["partitions"]["development"][:max_tasks]
     records = []
 
+    comp_exc_cfg = replace(exc_cfg, excursion_window_tokens=1)
     for task in tasks:
         prompt_ids = encode_reasoning_prompt(tokenizer, task["prompt"]).to(adapter.device)
         for m in methods:
@@ -138,7 +139,7 @@ def run_completion_reasoning_suite(
                 branch_count=2,
                 perturbation_method="competitive_logit",
                 perturbation_relative_norm=0.25,
-                excursion_config=exc_cfg,
+                excursion_config=comp_exc_cfg,
                 policy_config=pol_cfg,
                 seed=seed,
             )
@@ -205,14 +206,14 @@ def main() -> int:
         token_scope="last_token",
         donor_strategy="competitive_logit",
         update_space="pre_norm",
-        excursion_window_tokens=6,
+        excursion_window_tokens=4,
     )
     pol_cfg = AdaptivePolicyConfig(
         min_relative_divergence=0.002,
         max_relative_divergence=0.85,
-        min_entropy_trigger=0.45,
-        max_margin_trigger=3.50,
-        stagnation_ratio_threshold=0.55,
+        min_entropy_trigger=0.95,
+        max_margin_trigger=1.20,
+        stagnation_ratio_threshold=0.45,
         donor_selection="confidence_gain",
     )
 

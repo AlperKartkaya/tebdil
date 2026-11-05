@@ -188,14 +188,25 @@ class AdaptiveExcursionPolicy:
 
         chosen_idx, rel_div, d_ent, d_margin = chosen
 
-        uncertain_a = (margin_a <= self.config.max_margin_trigger) and (
-            entropy_a >= self.config.min_entropy_trigger
+        donor_improves = (d_margin >= margin_a) or (d_ent < entropy_a)
+        uncertain_a = (
+            (margin_a <= self.config.max_margin_trigger)
+            and (entropy_a >= self.config.min_entropy_trigger)
+            and (donor_improves if mode == "confidence_gain" else True)
         )
         stagnated_a = (stag_a <= self.config.stagnation_ratio_threshold) and (
             margin_a <= self.config.max_margin_trigger * 1.35
         ) and (d_margin > margin_a)
 
         if uncertain_a or stagnated_a:
+            if mode == "confidence_gain":
+                gain_ratio = min(
+                    1.0,
+                    max(0.40, (d_margin - margin_a + 0.5) / max(0.5, self.config.max_margin_trigger)),
+                )
+                eff_beta = round(float(base_beta * gain_ratio), 4)
+            else:
+                eff_beta = base_beta
             return PolicyDecision(
                 action="visit",
                 donor_index=chosen_idx,
@@ -207,7 +218,7 @@ class AdaptiveExcursionPolicy:
                 relative_divergence=rel_div,
                 stagnation_ratio=stag_a,
                 adaptive_alpha=base_alpha,
-                adaptive_beta=base_beta,
+                adaptive_beta=eff_beta,
             )
 
         return PolicyDecision(
