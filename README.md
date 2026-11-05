@@ -2,7 +2,8 @@
 
 > **Research computation is on hold by user decision (2026-11-02).** No new model
 > runs, mini-model experiments, benchmarks or controller training until explicit
-> resumption. Only the already-running frozen budget follow-up may finish.
+> resumption. The frozen budget follow-up was also forcibly stopped at user request;
+> no execution exception remains. Its partial records are preserved, not scored as a completed experiment.
 > [End-to-end computation walkthrough (Türkçe)](docs/computation_walkthrough.md).
 
 **Visit another latent region. Compute there. Bring the update back.**

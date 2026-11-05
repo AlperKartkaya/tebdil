@@ -1,9 +1,10 @@
 # TEBDİL: girdiden sonuca hesaplama haritası
 
 **Durum: yeni model hesabı ve deneyler kullanıcı kararıyla durduruldu.**
-Tek istisna, bu karar verildiğinde zaten çalışan `2309ea0` protokollü koşunun
-önceden belirlenen sınırda bitmesi. Sonrasında yeniden çalıştırma, daha fazla
-token, yeni prompt, mini-model deneyi veya controller eğitimi yok.
+Başlangıçta bitmesine izin verilen `2309ea0` koşusu da sonraki açık kullanıcı
+talimatıyla SIGKILL kullanılarak kesildi (çıkış 137). Hiçbir yürütme istisnası kalmadı.
+Yeniden çalıştırma, devam ettirme, daha fazla token, yeni prompt, mini-model deneyi
+veya controller eğitimi yok. Kısmi kayıtlar tamamlanmış bir deney değildir.
 Bu belge mevcut kod ve kayıtların açıklamasıdır; yeni bir deney planı değildir.
 
 ## Önce üç ayrım
@@ -144,6 +145,29 @@ Kaynak: [branching](../src/tebdil/core/branching.py),
 [visit/return](../src/tebdil/core/excursions.py),
 [kontroller](../src/tebdil/core/controls.py),
 [sabit-prefix runner](../scripts/probe_reasoning_cot.py).
+
+### Somut bir kayıt: planlama, k=1023
+
+Bu örnek yeni inference değil, mevcut [ham probe raporundan](../reports/reasoning_cot_probe_v1/report.json):
+
+| Girdi/hesap | Gerçek kayıt |
+|---|---|
+| Prefix | 281 prompt + 1023 output = 1304 token |
+| Müdahale scope'u | Full prefix; hidden boyutu `[1,1304,2048]` |
+| Nominal alpha / beta | 0.65 / 0.65 |
+| Clipping sonrası effective alpha | **0.2077687150**; nominal 0.65 uygulanmış değil |
+| S0 sonraki token | ID 3875, `" Then"` |
+| E1 sonraki token | ID 3875, `" Then"` |
+| E1−S0 vocabulary logit L2 | 17.687645; doğru cevap veya olasılık ölçüsü değil |
+| Son normalize state hash'i, S0 | `737b76a2787f…` |
+| Son normalize state hash'i, E1 | `9a1c3bf111f0…` |
+| Bütün paylaşılan karşılaştırmanın işi | 16 call × 1304 = 20,864 recurrent token position |
+
+Yani state ve logit gerçekten değişmiş, fakat greedy seçimin kazananı değişmemiş.
+Bir sonraki token için input aynı kaldığından bu tek müdahaleden devam eden farklı
+bir metinsel düşünce iddia edemiyoruz. Full hash'ler ham rapordadır; kısaltmalar
+latent koordinat veya semantic yakınlık göstermez. Bu bir seçilmiş açıklama
+örneğidir; toplam sonuç yine bütün on iki noktayı içerir.
 
 ## 6. Hangi karar gerçekten self-directed?
 

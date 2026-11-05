@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "record_type": "operator_interruption_record",
+  "protocol": "reasoning_budget_v1",
+  "status": "interrupted_by_user",
+  "recorded_after_stop_utc": "2026-11-02T19:43:55.639817+00:00",
+  "freeze_commit": "2309ea00369869506f3103026db5a1bc55d0b59e",
+  "signal": "SIGKILL",
+  "exit_code": 137,
+  "process_pid": 58098,
+  "process_exited": true,
+  "raw_journal_sha256": "a603e5625d19dbc14da801ebd597c22c71c5f21e9a774db3f4a281de73a929e4",
+  "journal_events": 968,
+  "terminal_finish_event": false,
+  "final_report_present": false,
+  "observed_new_greedy_proposals": 962,
+  "per_case": [
+    {
+      "problem_id": "reasoning_v1_development_cnf_0_0",
+      "observed_new_greedy_proposals": 512,
+      "native_generate_returned": true
+    },
+    {
+      "problem_id": "reasoning_v1_development_key_planning_0_0",
+      "observed_new_greedy_proposals": 450,
+      "native_generate_returned": false
+    }
+  ],
+  "recorded_new_recurrent_calls_lower_bound": 3856,
+  "total_actual_calls_known": false,
+  "limitations": [
+    "Operator-authored after interruption; not a successful terminal event from the runner",
+    "Second native generate never returned; journal proposals are not a finalized returned completion",
+    "Unrecorded in-flight computation may have occurred; recorded calls are a lower bound, not the total",
+    "No post-run checkpoint verification, completed pair report, retry, extra inference or efficacy conclusion"
+  ]
+}

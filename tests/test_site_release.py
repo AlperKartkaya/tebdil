@@ -1193,3 +1193,54 @@ def test_reasoning_viewer_does_not_conflate_tokens_with_verified_recovery():
     assert '#historicalReplay .stage-grid' in script
     assert 'No results substituted' in script
     assert 'no eligible completed final answer' in script
+
+def test_computation_hold_is_explicit_and_ci_excludes_model_executing_suites():
+    policy=(ROOT/'AGENTS.md').read_text()
+    workflow=(ROOT/'.github/workflows/pages.yml').read_text()
+    walkthrough=(ROOT/'docs/computation_walkthrough.md').read_text()
+    assert 'Only an explicit user decision to resume computation lifts this hold' in policy
+    assert 'Do not load model checkpoints' in policy
+    assert 'mini/toy' in policy and 'Do not run the full pytest suite' in policy
+    assert 'uv run pytest -q tests/test_site_release.py -m "not real_model"' in workflow
+    assert 'uv run pytest -q -m "not real_model"' not in workflow
+    assert 'native_generate' in walkthrough and 'KV cache' in walkthrough
+    assert 'researchHoldNotice' in INDEX.read_text()
+    assert 'No execution exception remains' in policy
+
+
+def test_interrupted_budget_journal_is_preserved_without_a_fabricated_completion():
+    import struct
+    folder=ROOT/'reports/reasoning_budget_interrupted_v1'
+    meta=json.loads((folder/'interruption.json').read_text())
+    data=(folder/'journal.jsonl').read_bytes()
+    events=[json.loads(s) for s in data.splitlines()]
+    assert hashlib.sha256(data).hexdigest()==meta['raw_journal_sha256']
+    assert meta['status']=='interrupted_by_user' and meta['signal']=='SIGKILL' and meta['exit_code']==137
+    assert not meta['final_report_present'] and not meta['terminal_finish_event'] and not meta['total_actual_calls_known']
+    assert len(events)==meta['journal_events']==968 and events[-1]['event']=='token'
+    assert not any(e['event'] in ('finish','failure') for e in events)
+    assert all(hashlib.sha256((ROOT/p).read_bytes()).hexdigest()==h for p,h in events[0]['source_sha256'].items())
+    tokens=[e for e in events if e['event']=='token']
+    assert len(tokens)==meta['observed_new_greedy_proposals']==962
+    assert meta['recorded_new_recurrent_calls_lower_bound']==sum(e['recurrent_block_calls'] for e in tokens)+sum(e['recurrent_calls'] for e in events if e['event']=='parity')==3856
+    for index,summary in enumerate(meta['per_case']):
+        id=summary['problem_id']
+        original=json.loads((ROOT/'reports/passive_reasoning_v1'/(id+'.json')).read_text())
+        old=original['record']
+        rows=[e for e in tokens if e['problem_id']==id]
+        assert len(rows)==summary['observed_new_greedy_proposals']==(512 if index==0 else 450)
+        prefix=old['prompt_token_ids']+old['generated_token_ids']
+        for k,e in enumerate(rows):
+            assert e['token_index']==2048+k and e['prefix_length']==len(prefix)
+            # Same typed int64 hash, reconstructed from recorded IDs without loading a model.
+            typed=f'(1, {len(prefix)}):torch.int64:'.encode()+struct.pack('<'+'q'*len(prefix),*prefix)
+            assert e['prefix_token_ids_sha256']==hashlib.sha256(typed).hexdigest()
+            assert e['calls_before']==4*k and e['recurrent_block_calls']==4
+            prefix.append(e['token_id'])
+        finishes=[e['record'] for e in events if e['event']=='case_finish' and e['record']['problem_id']==id]
+        assert bool(finishes)==summary['native_generate_returned']==(index==0)
+        if finishes:
+            assert finishes[0]['generated_token_ids']==prefix[len(old['prompt_token_ids']):]
+            assert finishes[0]['status']=='budget_exhausted' and not finishes[0]['completed']
+    for p in folder.iterdir():
+        assert p.read_bytes()==(SITE/'static/evidence/reasoning_budget_interrupted_v1'/p.name).read_bytes()

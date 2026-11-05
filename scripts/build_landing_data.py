@@ -174,6 +174,14 @@ def build(root: Path = ROOT) -> None:
         manifest["evidence"].append({"label": "reasoning CoT probe v1", "source": summary.relative_to(root).as_posix(),
                                      "url": "static/evidence/reasoning_cot_probe_v1/report.json",
                                      "sha256": digest(summary.read_bytes()), "historical": False})
+    interrupted = root / "reports/reasoning_budget_interrupted_v1"
+    for path in sorted(interrupted.glob("*.json")) + sorted(interrupted.glob("*.jsonl")):
+        write_file(f"static/evidence/reasoning_budget_interrupted_v1/{path.name}", path.read_bytes(), path.relative_to(root).as_posix())
+    summary = interrupted / "interruption.json"
+    if summary.exists():
+        manifest["evidence"].append({"label": "reasoning budget interrupted v1", "source": summary.relative_to(root).as_posix(),
+                                     "url": "static/evidence/reasoning_budget_interrupted_v1/interruption.json",
+                                     "sha256": digest(summary.read_bytes()), "historical": False})
     bundle = "window.TEBDIL_DATA = " + json.dumps(manifest, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + ";\n"
     (site / "static/tebdil_data.js").write_text(bundle, encoding="utf-8")
     check(root)

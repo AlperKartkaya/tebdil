@@ -285,3 +285,27 @@ The committed result has zero E1 token divergences and therefore zero conditiona
 native continuation windows; no missing CoT suffix is synthesized. The tokenizer
 text audit is real-model-marked but loads no model weights; hosted CI excludes it.
 No full-answer rescue/accuracy or compute-matched efficacy is measured.
+
+
+### Bounded ordinary-baseline budget follow-up
+
+**Do not execute during the user-imposed computation hold.** Commands below are
+historical reproduction instructions, not permission to start a new run. The same
+hold applies to model-executing commands elsewhere in this document, including
+unmarked mini-model tests. Only reviewed artifact/static checks remain enabled in CI.
+
+```bash
+uv run pytest -q tests/test_reasoning_budget.py
+uv run python scripts/extend_reasoning_baselines.py --output-dir /tmp/reasoning-budget-new
+```
+
+The [frozen protocol](reasoning_budget_protocol.md) retains both original unfinished
+reasoning cases and appends at most 512 actual native tokens each, without changing
+the prompt or inserting a reasoning/final-answer cue. Exact terminal token/state
+parity is required before resuming. Original calls are reused, replay calls and new
+generation separately charged. This is not a TEBDİL intervention or a prompt study.
+Existing output directories are refused so partial evidence survives interruption.
+
+The actual follow-up was forcibly interrupted by user request. Its preserved
+[journal/stop record](../reports/reasoning_budget_verification.md) is not a completed
+pair report and must not be automatically resumed. No execution exception remains.

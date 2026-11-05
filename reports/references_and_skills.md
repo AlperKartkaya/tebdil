@@ -216,3 +216,20 @@ selection checks. Scientific-visualization guidance keeps raw CoT/token IDs and
 state hashes, not invented latent trajectories or after-intervention explanations.
 The former XERJ node was not reachable in this session; direct source inspection
 compensated. No claim that its older partial index covers this new code is made.
+
+
+## Baseline budget follow-up
+
+XERJ Hub discovery had no coverage for Ouro or the chosen Transformers generation
+contract. Rather than borrow an unrelated pipeline, locally reindexed the existing
+pinned Apache-2.0 Ouro reference as `budgetouro`: 10 files, 3802 records, both Python
+sources, no junk; inspected its map and `max_new_tokens` README passage. The upstream
+512-token example does not validate a budget for our tasks. Direct inspection of
+native generation and the existing cache-free adapter informed exact-prefix resume,
+terminal state parity and explicit reused/new cost separation. No code copied or
+new dependency installed; only the session-owned node was stopped after retrieval.
+Statistical guidance keeps the adaptive two-case follow-up distinct from new samples
+or causal recovery. After explicit user termination, the pending completed-pair
+viewer was removed rather than populated from partial data. The original visual
+design remains unchanged; a small hold notice links the actual interruption record.
+CI now runs only reviewed artifact/static release tests, not mini-model forwards.
