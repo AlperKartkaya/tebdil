@@ -182,7 +182,7 @@ def _verify_all_tasks(partitions: Dict[str, List[Dict[str, Any]]]) -> None:
 
 def build_literature_reasoning_dataset() -> Dict[str, Any]:
     """Construct the verified literature reasoning benchmark suite."""
-    suffix = "End your response after </think> with: Answer: <integer>"
+    suffix = "Be concise. Output only the integer result.\nAnswer: "
     development = [
         {
             "problem_id": "lit_dev_crt_000",

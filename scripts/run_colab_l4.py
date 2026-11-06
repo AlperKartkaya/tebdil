@@ -199,6 +199,7 @@ def run_literature_reasoning_suite(
     task_ids: list[str] | None = None,
     max_new_tokens: int = 640,
     seed: int = 42,
+    checkpoint_path: Path | None = None,
 ) -> list[dict]:
     lit_data = json.loads((ROOT / "configs/literature_reasoning_v1_tasks.json").read_text(encoding="utf-8"))
     all_tasks = lit_data["partitions"][partition]
@@ -256,6 +257,12 @@ def run_literature_reasoning_suite(
             )
             row["evaluation"] = eval_res
             records.append(row)
+            if checkpoint_path is not None:
+                checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+                checkpoint_path.write_text(
+                    json.dumps({"partial_literature_records": records}, indent=2, ensure_ascii=False) + "\n",
+                    encoding="utf-8",
+                )
             print(
                 f"    -> tokens={len(gen['generated_token_ids'])} | status={eval_res['status']} | "
                 f"ans={eval_res['extracted_answer']} (gold={task['gold_answer']}, trap={eval_res['hit_trap_answer']}) | "
@@ -360,6 +367,7 @@ def main() -> int:
             task_ids=args.task_ids,
             max_new_tokens=args.max_new_tokens,
             seed=args.seed,
+            checkpoint_path=args.output,
         )
 
     if args.suite == "reasoning_v1":

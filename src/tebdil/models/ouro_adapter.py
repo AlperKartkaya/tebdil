@@ -305,6 +305,9 @@ class OuroRecurrentAdapter:
                 if k_prev is None or past_len == 0:
                     self._active_kv_cache.key_cache[slot_idx] = k_slice.detach().clone()
                     self._active_kv_cache.value_cache[slot_idx] = v_slice.detach().clone()
+                elif k_prev.shape[2] == past_len + k_slice.shape[2]:
+                    k_prev[:, :, past_len:, :].copy_(k_slice)
+                    v_prev[:, :, past_len:, :].copy_(v_slice)
                 else:
                     self._active_kv_cache.key_cache[slot_idx] = torch.cat(
                         [k_prev[:, :, :past_len, :], k_slice], dim=2

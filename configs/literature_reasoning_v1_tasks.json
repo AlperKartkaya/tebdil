@@ -20,7 +20,7 @@
         "difficulty": "medium",
         "source_benchmark": "Modified Cognitive Reflection Test (Frederick 2005 / Modified-CRT)",
         "reasoning_pathology": "pattern_matching_vs_rate_decomposition",
-        "prompt": "In a precision factory, 6 identical machines working simultaneously take 6 minutes to manufacture 6 gears. At the exact same individual production rate, how many minutes does it take 18 identical machines working simultaneously to manufacture 54 gears? End your response after </think> with: Answer: <integer>",
+        "prompt": "In a precision factory, 6 identical machines working simultaneously take 6 minutes to manufacture 6 gears. At the exact same individual production rate, how many minutes does it take 18 identical machines working simultaneously to manufacture 54 gears? Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "18",
         "trap_answers": [
           "6",
@@ -36,7 +36,7 @@
         "difficulty": "medium",
         "source_benchmark": "Modified Cognitive Reflection Test (Exponential Tripling Counter-Trap)",
         "reasoning_pathology": "memorized_lilypad_heuristic_override",
-        "prompt": "An algal bloom in a test basin triples in surface area every day. If the bloom completely covers the entire basin on day 30, on which day did the bloom cover exactly one-ninth (1/9) of the basin? End your response after </think> with: Answer: <integer>",
+        "prompt": "An algal bloom in a test basin triples in surface area every day. If the bloom completely covers the entire basin on day 30, on which day did the bloom cover exactly one-ninth (1/9) of the basin? Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "28",
         "trap_answers": [
           "29",
@@ -52,7 +52,7 @@
         "difficulty": "hard",
         "source_benchmark": "Smullyan Knights & Knaves / LLM Logic Reasoning Benchmark",
         "reasoning_pathology": "assumption_contradiction_backtracking",
-        "prompt": "On an island, every inhabitant is either a Knight (who always tells the truth, digit 1) or a Knave (who always lies, digit 0). You meet three inhabitants: Alice (A), Bob (B), and Carol (C).\n- Alice says: 'At least one of Bob or Carol is a Knave.'\n- Bob says: 'Alice is a Knave.'\n- Carol says: 'Bob is a Knave.'\nDetermine the truth values of A, B, and C, and express your answer as the 3-digit integer ABC (for example, 101 means A=1, B=0, C=1). End your response after </think> with: Answer: <integer>",
+        "prompt": "On an island, every inhabitant is either a Knight (who always tells the truth, digit 1) or a Knave (who always lies, digit 0). You meet three inhabitants: Alice (A), Bob (B), and Carol (C).\n- Alice says: 'At least one of Bob or Carol is a Knave.'\n- Bob says: 'Alice is a Knave.'\n- Carol says: 'Bob is a Knave.'\nDetermine the truth values of A, B, and C, and express your answer as the 3-digit integer ABC (for example, 101 means A=1, B=0, C=1). Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "101",
         "trap_answers": [
           "110",
@@ -68,7 +68,7 @@
         "difficulty": "hard",
         "source_benchmark": "Smullyan Knights & Knaves / LLM Logic Reasoning Benchmark",
         "reasoning_pathology": "biconditional_collapse_and_parity",
-        "prompt": "On an island, every inhabitant is either a Knight (always tells the truth, digit 1) or a Knave (always lies, digit 0). You meet three inhabitants: Alice (A), Bob (B), and Carol (C).\n- Alice says: 'Bob and I are of the same type.'\n- Bob says: 'Exactly one of Alice or Carol is a Knave.'\n- Carol says: 'Alice and Bob are both Knaves.'\nDetermine the truth values of A, B, and C, and express your answer as the 3-digit integer ABC. End your response after </think> with: Answer: <integer>",
+        "prompt": "On an island, every inhabitant is either a Knight (always tells the truth, digit 1) or a Knave (always lies, digit 0). You meet three inhabitants: Alice (A), Bob (B), and Carol (C).\n- Alice says: 'Bob and I are of the same type.'\n- Bob says: 'Exactly one of Alice or Carol is a Knave.'\n- Carol says: 'Alice and Bob are both Knaves.'\nDetermine the truth values of A, B, and C, and express your answer as the 3-digit integer ABC. Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "110",
         "trap_answers": [
           "101",
@@ -84,7 +84,7 @@
         "difficulty": "medium",
         "source_benchmark": "GSM8K / GSM-Symbolic Multi-Step Arithmetic Reasoning",
         "reasoning_pathology": "retroactive_inventory_subtraction",
-        "prompt": "A workshop produces 40 wooden chairs. It sells the first 15 chairs at $30 each. Of the remaining chairs, 5 are damaged and cannot be sold, and the rest are sold at a $6 discount off the original $30 price. If the workshop spent $450 on materials for all 40 chairs, what is the workshop's net profit in dollars? End your response after </think> with: Answer: <integer>",
+        "prompt": "A workshop produces 40 wooden chairs. It sells the first 15 chairs at $30 each. Of the remaining chairs, 5 are damaged and cannot be sold, and the rest are sold at a $6 discount off the original $30 price. If the workshop spent $450 on materials for all 40 chairs, what is the workshop's net profit in dollars? Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "480",
         "trap_answers": [
           "600",
@@ -100,7 +100,7 @@
         "difficulty": "medium",
         "source_benchmark": "GSM8K / Multi-Step Rate Accumulation",
         "reasoning_pathology": "multi_day_net_flow_and_fractional_depletion",
-        "prompt": "A warehouse starts Monday morning with 120 crates. From Monday through Thursday (4 days), it receives 35 new crates each morning and ships out 20 crates each evening. On Friday, it receives no new crates and ships out one-third of all crates currently in the warehouse. How many crates remain in the warehouse at the end of Friday? End your response after </think> with: Answer: <integer>",
+        "prompt": "A warehouse starts Monday morning with 120 crates. From Monday through Thursday (4 days), it receives 35 new crates each morning and ships out 20 crates each evening. On Friday, it receives no new crates and ships out one-third of all crates currently in the warehouse. How many crates remain in the warehouse at the end of Friday? Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "120",
         "trap_answers": [
           "60",
@@ -116,7 +116,7 @@
         "difficulty": "hard",
         "source_benchmark": "MATH / AIME Number Theory (Chinese Remainder Theorem)",
         "reasoning_pathology": "modular_congruence_search_loop",
-        "prompt": "Find the smallest positive integer n greater than 10 such that n leaves a remainder of 2 when divided by 3, a remainder of 3 when divided by 5, and a remainder of 2 when divided by 7. End your response after </think> with: Answer: <integer>",
+        "prompt": "Find the smallest positive integer n greater than 10 such that n leaves a remainder of 2 when divided by 3, a remainder of 3 when divided by 5, and a remainder of 2 when divided by 7. Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "23",
         "trap_answers": [
           "38",
@@ -132,7 +132,7 @@
         "difficulty": "hard",
         "source_benchmark": "MATH / AIME Modular Diophantine Equations",
         "reasoning_pathology": "single_digit_boundary_constraint",
-        "prompt": "What is the smallest positive two-digit integer n such that 4n + 3 is divisible by 11 and 3n + 1 is divisible by 7? End your response after </think> with: Answer: <integer>",
+        "prompt": "What is the smallest positive two-digit integer n such that 4n + 3 is divisible by 11 and 3n + 1 is divisible by 7? Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "79",
         "trap_answers": [
           "2",
@@ -148,7 +148,7 @@
         "difficulty": "hard",
         "source_benchmark": "ZebraLogic / Linear Constraint Satisfaction Benchmark",
         "reasoning_pathology": "spatial_adjacency_and_endpoint_elimination",
-        "prompt": "Five boxes (labeled 1, 2, 3, 4, 5) are arranged in a row from left (position 1) to right (position 5).\n- Box 4 is at one of the two ends (position 1 or position 5), and Box 2 is immediately adjacent to Box 4.\n- Box 1 is somewhere to the left of Box 3.\n- Box 5 is directly between Box 2 and Box 1 (so Box 2, Box 5, and Box 1 occupy three consecutive positions).\n- Box 3 is at position 5.\nCompute the 5-digit integer formed by the box labels from left to right (positions 1 to 5). End your response after </think> with: Answer: <integer>",
+        "prompt": "Five boxes (labeled 1, 2, 3, 4, 5) are arranged in a row from left (position 1) to right (position 5).\n- Box 4 is at one of the two ends (position 1 or position 5), and Box 2 is immediately adjacent to Box 4.\n- Box 1 is somewhere to the left of Box 3.\n- Box 5 is directly between Box 2 and Box 1 (so Box 2, Box 5, and Box 1 occupy three consecutive positions).\n- Box 3 is at position 5.\nCompute the 5-digit integer formed by the box labels from left to right (positions 1 to 5). Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "42513",
         "trap_answers": [
           "42153",
@@ -164,7 +164,7 @@
         "difficulty": "hard",
         "source_benchmark": "ZebraLogic / Floor Assignment Constraint Satisfaction",
         "reasoning_pathology": "two_branch_case_split_elimination",
-        "prompt": "Four researchers (numbered 1, 2, 3, 4) occupy four different floors (floors 1, 2, 3, 4 from bottom to top) of an institute.\n- Researcher 2 is on a higher floor than Researcher 1, with exactly one floor between them.\n- Researcher 3 is on a higher floor than Researcher 2.\n- Researcher 4 is on a floor immediately adjacent to Researcher 1.\nDetermine the 4-digit integer formed by the researcher numbers from floor 1 to floor 4. End your response after </think> with: Answer: <integer>",
+        "prompt": "Four researchers (numbered 1, 2, 3, 4) occupy four different floors (floors 1, 2, 3, 4 from bottom to top) of an institute.\n- Researcher 2 is on a higher floor than Researcher 1, with exactly one floor between them.\n- Researcher 3 is on a higher floor than Researcher 2.\n- Researcher 4 is on a floor immediately adjacent to Researcher 1.\nDetermine the 4-digit integer formed by the researcher numbers from floor 1 to floor 4. Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "1423",
         "trap_answers": [
           "4132",
@@ -180,7 +180,7 @@
         "difficulty": "medium",
         "source_benchmark": "CLRS / Graph Reasoning Benchmark (Dijkstra Greedy Trap)",
         "reasoning_pathology": "greedy_first_hop_tunnel_vision",
-        "prompt": "Consider a directed network with 6 nodes (0, 1, 2, 3, 4, 5) and weighted directed edges: 0->1 (cost 2), 0->2 (cost 5), 1->3 (cost 14), 1->4 (cost 12), 2->3 (cost 3), 2->4 (cost 4), 3->5 (cost 6), 4->5 (cost 3). Find the minimum total path cost from node 0 to node 5. End your response after </think> with: Answer: <integer>",
+        "prompt": "Consider a directed network with 6 nodes (0, 1, 2, 3, 4, 5) and weighted directed edges: 0->1 (cost 2), 0->2 (cost 5), 1->3 (cost 14), 1->4 (cost 12), 2->3 (cost 3), 2->4 (cost 4), 3->5 (cost 6), 4->5 (cost 3). Find the minimum total path cost from node 0 to node 5. Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "12",
         "trap_answers": [
           "14",
@@ -196,7 +196,7 @@
         "difficulty": "hard",
         "source_benchmark": "CLRS / Multi-Hop Relay Shortest-Path Benchmark",
         "reasoning_pathology": "missing_cross_edge_relaxation",
-        "prompt": "Consider a directed network with 6 nodes (0, 1, 2, 3, 4, 5) and weighted directed edges: 0->1 (cost 3), 0->2 (cost 6), 1->2 (cost 2), 1->3 (cost 11), 2->3 (cost 3), 2->4 (cost 5), 3->5 (cost 4), 4->5 (cost 3). Find the minimum total path cost from node 0 to node 5. End your response after </think> with: Answer: <integer>",
+        "prompt": "Consider a directed network with 6 nodes (0, 1, 2, 3, 4, 5) and weighted directed edges: 0->1 (cost 3), 0->2 (cost 6), 1->2 (cost 2), 1->3 (cost 11), 2->3 (cost 3), 2->4 (cost 5), 3->5 (cost 4), 4->5 (cost 3). Find the minimum total path cost from node 0 to node 5. Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "12",
         "trap_answers": [
           "13",
@@ -214,7 +214,7 @@
         "difficulty": "medium",
         "source_benchmark": "Modified Cognitive Reflection Test",
         "reasoning_pathology": "impulsive_subtraction_trap",
-        "prompt": "A winter jacket and a wool hat cost $150 in total. The jacket costs $120 more than the hat. How many dollars does the wool hat cost? End your response after </think> with: Answer: <integer>",
+        "prompt": "A winter jacket and a wool hat cost $150 in total. The jacket costs $120 more than the hat. How many dollars does the wool hat cost? Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "15",
         "trap_answers": [
           "30",
@@ -230,7 +230,7 @@
         "difficulty": "hard",
         "source_benchmark": "Smullyan Knights & Knaves",
         "reasoning_pathology": "contradiction_backtracking",
-        "prompt": "On an island of Knights (always tell the truth, digit 1) and Knaves (always lie, digit 0), you meet Alice (A), Bob (B), and Carol (C).\n- Alice says: 'Bob is a Knave.'\n- Bob says: 'Carol is a Knave.'\n- Carol says: 'Alice and Bob are not both Knights.'\nExpress the truth values of A, B, and C as the 3-digit integer ABC. End your response after </think> with: Answer: <integer>",
+        "prompt": "On an island of Knights (always tell the truth, digit 1) and Knaves (always lie, digit 0), you meet Alice (A), Bob (B), and Carol (C).\n- Alice says: 'Bob is a Knave.'\n- Bob says: 'Carol is a Knave.'\n- Carol says: 'Alice and Bob are not both Knights.'\nExpress the truth values of A, B, and C as the 3-digit integer ABC. Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "101",
         "trap_answers": [
           "010",
@@ -246,7 +246,7 @@
         "difficulty": "medium",
         "source_benchmark": "GSM8K Multi-Step Word Problems",
         "reasoning_pathology": "multi_stage_unit_conversion",
-        "prompt": "A bakery bakes 24 trays of muffins, with 12 muffins on each tray. After cooling, 18 muffins are set aside for staff, and the remaining muffins are packed into boxes of 9 muffins each. If every full box is sold for $5, how many dollars does the bakery collect from selling all the boxes? End your response after </think> with: Answer: <integer>",
+        "prompt": "A bakery bakes 24 trays of muffins, with 12 muffins on each tray. After cooling, 18 muffins are set aside for staff, and the remaining muffins are packed into boxes of 9 muffins each. If every full box is sold for $5, how many dollars does the bakery collect from selling all the boxes? Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "150",
         "trap_answers": [
           "160",
@@ -262,7 +262,7 @@
         "difficulty": "hard",
         "source_benchmark": "MATH / AIME Number Theory",
         "reasoning_pathology": "common_negative_remainder_recognition",
-        "prompt": "Find the smallest positive integer n greater than 10 such that n leaves a remainder of 3 when divided by 4, a remainder of 4 when divided by 5, and a remainder of 5 when divided by 6. End your response after </think> with: Answer: <integer>",
+        "prompt": "Find the smallest positive integer n greater than 10 such that n leaves a remainder of 3 when divided by 4, a remainder of 4 when divided by 5, and a remainder of 5 when divided by 6. Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "59",
         "trap_answers": [
           "119",
@@ -278,7 +278,7 @@
         "difficulty": "hard",
         "source_benchmark": "ZebraLogic Constraint Satisfaction",
         "reasoning_pathology": "relative_offset_constraint_propagation",
-        "prompt": "Four speakers (numbered 1, 2, 3, 4) are scheduled in four consecutive slots (slots 1, 2, 3, 4 from first to last).\n- Speaker 3 speaks exactly two slots after Speaker 1.\n- Speaker 4 speaks in a slot immediately adjacent to Speaker 3.\n- Speaker 2 speaks in an earlier slot than Speaker 1.\nDetermine the 4-digit integer formed by the speaker numbers from slot 1 to slot 4. End your response after </think> with: Answer: <integer>",
+        "prompt": "Four speakers (numbered 1, 2, 3, 4) are scheduled in four consecutive slots (slots 1, 2, 3, 4 from first to last).\n- Speaker 3 speaks exactly two slots after Speaker 1.\n- Speaker 4 speaks in a slot immediately adjacent to Speaker 3.\n- Speaker 2 speaks in an earlier slot than Speaker 1.\nDetermine the 4-digit integer formed by the speaker numbers from slot 1 to slot 4. Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "2143",
         "trap_answers": [
           "1432",
@@ -294,7 +294,7 @@
         "difficulty": "hard",
         "source_benchmark": "CLRS / Shortest-Path Benchmark",
         "reasoning_pathology": "multi_hop_bridge_relaxation",
-        "prompt": "Consider a directed network with 6 nodes (0, 1, 2, 3, 4, 5) and weighted directed edges: 0->1 (cost 2), 0->2 (cost 6), 1->3 (cost 13), 1->2 (cost 3), 2->3 (cost 4), 2->4 (cost 5), 3->5 (cost 5), 4->5 (cost 3). Find the minimum total path cost from node 0 to node 5. End your response after </think> with: Answer: <integer>",
+        "prompt": "Consider a directed network with 6 nodes (0, 1, 2, 3, 4, 5) and weighted directed edges: 0->1 (cost 2), 0->2 (cost 6), 1->3 (cost 13), 1->2 (cost 3), 2->3 (cost 4), 2->4 (cost 5), 3->5 (cost 5), 4->5 (cost 3). Find the minimum total path cost from node 0 to node 5. Be concise. Output only the integer result.\nAnswer: ",
         "gold_answer": "13",
         "trap_answers": [
           "14",
