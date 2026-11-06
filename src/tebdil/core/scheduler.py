@@ -699,6 +699,8 @@ def generate_tebdil_cached(
     generated_tokens: List[int] = []
     excursion_token_indices: List[int] = []
     window_remaining = 0
+    cooldown_remaining = 16 if max_new_tokens > 64 else 0
+    post_excursion_cooldown = 18 if max_new_tokens > 64 else 2
     eos_id = getattr(tokenizer, "eos_token_id", None)
     think_close_id: Optional[int] = None
     if tokenizer is not None and hasattr(tokenizer, "convert_tokens_to_ids"):
@@ -720,6 +722,12 @@ def generate_tebdil_cached(
             step_method = "E1"
             window_remaining -= 1
             was_window_continuation = True
+            if window_remaining == 0:
+                cooldown_remaining = post_excursion_cooldown
+        elif cooldown_remaining > 0 and method not in unconditional_methods:
+            step_method = "S0"
+            cooldown_remaining -= 1
+            was_window_continuation = False
         else:
             step_method = method
             was_window_continuation = False
@@ -747,8 +755,11 @@ def generate_tebdil_cached(
         )
         if did_intervene:
             excursion_token_indices.append(k)
-            if not was_window_continuation and excursion_config.excursion_window_tokens > 1:
-                window_remaining = excursion_config.excursion_window_tokens - 1
+            if not was_window_continuation:
+                if excursion_config.excursion_window_tokens > 1:
+                    window_remaining = excursion_config.excursion_window_tokens - 1
+                else:
+                    cooldown_remaining = post_excursion_cooldown
 
         tok_id = int(res.primary_logits[:, -1, :].argmax(dim=-1).item())
         generated_tokens.append(tok_id)

@@ -210,7 +210,13 @@ def run_literature_reasoning_suite(
         tasks = all_tasks[:max_tasks]
 
     records = []
-    lit_exc_cfg = replace(exc_cfg, excursion_window_tokens=1)
+    lit_exc_cfg = replace(exc_cfg, excursion_window_tokens=1, beta=0.65)
+    lit_pol_cfg = replace(
+        pol_cfg,
+        min_entropy_trigger=1.20,
+        max_margin_trigger=0.80,
+        stagnation_ratio_threshold=0.35,
+    )
     for task in tasks:
         prompt_ids = encode_reasoning_prompt(tokenizer, task["prompt"]).to(adapter.device)
         for m in methods:
@@ -228,9 +234,9 @@ def run_literature_reasoning_suite(
                 fork_after_step=1,
                 branch_count=2,
                 perturbation_method="competitive_logit",
-                perturbation_relative_norm=0.25,
+                perturbation_relative_norm=0.14,
                 excursion_config=lit_exc_cfg,
-                policy_config=pol_cfg,
+                policy_config=lit_pol_cfg,
                 seed=seed,
             )
             split_info = split_prompt_started_reasoning(

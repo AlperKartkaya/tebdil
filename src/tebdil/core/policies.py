@@ -188,15 +188,18 @@ class AdaptiveExcursionPolicy:
 
         chosen_idx, rel_div, d_ent, d_margin = chosen
 
-        donor_improves = (d_margin >= margin_a) or (d_ent < entropy_a)
+        donor_improves = (d_margin >= margin_a + 0.10) and (d_ent <= entropy_a)
         uncertain_a = (
             (margin_a <= self.config.max_margin_trigger)
             and (entropy_a >= self.config.min_entropy_trigger)
             and (donor_improves if mode == "confidence_gain" else True)
         )
-        stagnated_a = (stag_a <= self.config.stagnation_ratio_threshold) and (
-            margin_a <= self.config.max_margin_trigger * 1.35
-        ) and (d_margin > margin_a)
+        stagnated_a = (
+            (stag_a <= self.config.stagnation_ratio_threshold)
+            and (entropy_a >= self.config.min_entropy_trigger * 0.85)
+            and (margin_a <= self.config.max_margin_trigger)
+            and (donor_improves if mode == "confidence_gain" else (d_margin > margin_a))
+        )
 
         if uncertain_a or stagnated_a:
             if mode == "confidence_gain":
