@@ -7,9 +7,12 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 import json
 import multiprocessing as mp
+import os
 from pathlib import Path
 import time
 from typing import Any, Dict, List
+
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 import torch
 
