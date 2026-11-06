@@ -49,15 +49,14 @@ def _worker_loop(
         dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
 
         t_load0 = time.perf_counter()
-        model = OuroForCausalLM.from_pretrained(
-            model_id,
+        adapter = OuroRecurrentAdapter.from_pretrained(
+            repo_id=model_id,
             revision=revision,
             dtype=dtype,
+            device=device,
+            readout_mode="last_step",
             attn_implementation=attn_implementation,
-        ).to(device)
-        model.eval()
-
-        adapter = OuroRecurrentAdapter(model=model, readout_mode="last_step")
+        )
         tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
 
         mem_gb = (
