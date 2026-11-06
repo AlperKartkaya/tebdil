@@ -82,55 +82,67 @@ def _worker_loop(
                 f"[Worker {worker_id}] START {task['problem_id']} ({task['family']}) | method={method} ...",
                 flush=True,
             )
-            prompt_ids = encode_reasoning_prompt(tokenizer, task["prompt"]).to(device)
-            gen = generate_tebdil_cached(
-                adapter=adapter,
-                tokenizer=tokenizer,
-                prompt_ids=prompt_ids,
-                method=method,
-                max_new_tokens=max_new_tokens,
-                recurrent_steps=4,
-                fork_after_step=1,
-                branch_count=2,
-                perturbation_method="competitive_logit",
-                perturbation_relative_norm=0.14,
-                excursion_config=exc_cfg,
-                policy_config=pol_cfg,
-                seed=seed,
-            )
-            split_info = split_prompt_started_reasoning(
-                gen["decoded_text"], tokenizer.eos_token, completed=gen["completed"]
-            )
-            row = {
-                "problem_id": task["problem_id"],
-                "family": task["family"],
-                "template_id": task["template_id"],
-                "source_benchmark": task.get("source_benchmark", ""),
-                "reasoning_pathology": task.get("reasoning_pathology", ""),
-                "difficulty": task["difficulty"],
-                "gold_answer": task["gold_answer"],
-                "trap_answers": task.get("trap_answers", []),
-                "generated_tokens": len(gen["generated_token_ids"]),
-                **gen,
-                **split_info,
-            }
-            eval_res = evaluate_deceptive_reasoning(row, task["gold_answer"])
-            row["evaluation"] = eval_res
-            row["worker_id"] = worker_id
-            wall = time.perf_counter() - t0
-            print(
-                f"[Worker {worker_id}] FINISH {task['problem_id']} | method={method} -> "
-                f"tokens={len(gen['generated_token_ids'])} | status={eval_res['status']} | "
-                f"ans={eval_res['extracted_answer']} (gold={task['gold_answer']}, trap={eval_res['hit_trap_answer']}) | "
-                f"exc={gen['excursion_count']} | calls={gen['recurrent_block_calls']} | time={wall:.1f}s",
-                flush=True,
-            )
-            result_queue.put(row)
+            try:
+                prompt_ids = encode_reasoning_prompt(tokenizer, task["prompt"]).to(device)
+                gen = generate_tebdil_cached(
+                    adapter=adapter,
+                    tokenizer=tokenizer,
+                    prompt_ids=prompt_ids,
+                    method=method,
+                    max_new_tokens=max_new_tokens,
+                    recurrent_steps=4,
+                    fork_after_step=1,
+                    branch_count=2,
+                    perturbation_method="competitive_logit",
+                    perturbation_relative_norm=0.14,
+                    excursion_config=exc_cfg,
+                    policy_config=pol_cfg,
+                    seed=seed,
+                )
+                split_info = split_prompt_started_reasoning(
+                    gen["decoded_text"], tokenizer.eos_token, completed=gen["completed"]
+                )
+                row = {
+                    "problem_id": task["problem_id"],
+                    "family": task["family"],
+                    "template_id": task["template_id"],
+                    "source_benchmark": task.get("source_benchmark", ""),
+                    "reasoning_pathology": task.get("reasoning_pathology", ""),
+                    "difficulty": task["difficulty"],
+                    "gold_answer": task["gold_answer"],
+                    "trap_answers": task.get("trap_answers", []),
+                    "generated_tokens": len(gen["generated_token_ids"]),
+                    **gen,
+                    **split_info,
+                }
+                eval_res = evaluate_deceptive_reasoning(row, task["gold_answer"])
+                row["evaluation"] = eval_res
+                row["worker_id"] = worker_id
+                wall = time.perf_counter() - t0
+                print(
+                    f"[Worker {worker_id}] FINISH {task['problem_id']} | method={method} -> "
+                    f"tokens={len(gen['generated_token_ids'])} | status={eval_res['status']} | "
+                    f"ans={eval_res['extracted_answer']} (gold={task['gold_answer']}, trap={eval_res['hit_trap_answer']}) | "
+                    f"exc={gen['excursion_count']} | calls={gen['recurrent_block_calls']} | time={wall:.1f}s",
+                    flush=True,
+                )
+                result_queue.put(row)
+            except Exception as exc:
+                import traceback
+                traceback.print_exc()
+                result_queue.put({
+                    "error": str(exc),
+                    "worker_id": worker_id,
+                    "problem_id": task["problem_id"],
+                    "method": method,
+                })
+            finally:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
     except Exception as exc:
         import traceback
-
         traceback.print_exc()
-        result_queue.put({"error": str(exc), "worker_id": worker_id})
+        result_queue.put({"error": f"Fatal worker init failure: {exc}", "worker_id": worker_id})
 
 
 def main() -> int:
@@ -252,12 +264,14 @@ def main() -> int:
         workers.append(p)
 
     records: List[Dict[str, Any]] = []
+    errors: List[Dict[str, Any]] = []
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
     for _ in range(total_jobs):
         item = result_queue.get()
         if "error" in item:
             print(f"[TEBDIL Parallel Deceptive Runner] ERROR from worker {item.get('worker_id')}: {item['error']}", flush=True)
+            errors.append(item)
             continue
         records.append(item)
         checkpoint_data = {
@@ -265,8 +279,10 @@ def main() -> int:
             "workers": args.workers,
             "max_new_tokens": args.max_new_tokens,
             "jobs_completed": len(records),
+            "jobs_errors": len(errors),
             "jobs_total": total_jobs,
             "partial_deceptive_records": records,
+            "errors": errors,
         }
         args.output.write_text(
             json.dumps(checkpoint_data, indent=2, ensure_ascii=False) + "\n",
@@ -288,6 +304,7 @@ def main() -> int:
         "excursion_config": asdict(exc_cfg),
         "policy_config": asdict(pol_cfg),
         "deceptive_traps_records": records,
+        "errors": errors,
     }
     args.output.write_text(
         json.dumps(final_report, indent=2, ensure_ascii=False) + "\n",
