@@ -1,4 +1,6 @@
-# Empirical Findings and Breakthroughs of Latent Excursion (E2)
+# Historical E2 Findings and Case Studies
+> **Evidence correction (2026-11-08):** Read the [reproducible E2 audit](e2_evidence_audit.md) before using the historical claims below. The expanded report stores **25/38 E2 vs 26/38 S0**, with **four rescues and five regressions**; **32/76 records lack raw token IDs**. Its 6.5% token reduction corresponds to only 0.031% fewer recurrent calls, not an established runtime/FLOP gain. Revision provenance is unresolved. Mechanistic explanations below are hypotheses, not measured causal findings. Historical case-study prose is retained for traceability and does not supersede the audit.
+
 **Project TEBDİL: Counterfactual Latent Dynamics on Looped Language Models (`ByteDance/Ouro-1.4B-Thinking`)**
 *Date: November 2026*  
 *Hardware Target: Google Colab Pro NVIDIA L4 (24GB VRAM) / A100 Tensor Core GPUs*
