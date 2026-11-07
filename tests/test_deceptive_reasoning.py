@@ -13,7 +13,7 @@ from tebdil.tasks.deceptive_reasoning import (
 def test_deceptive_reasoning_dataset_construction():
     data = build_deceptive_reasoning_dataset()
     assert data["suite"] == "deceptive_traps_v1"
-    assert len(data["tasks"]) == 16
+    assert len(data["tasks"]) == 38
     assert len(data["families"]) == 4
 
     families = {t["family"] for t in data["tasks"]}
@@ -48,6 +48,15 @@ def test_deceptive_reasoning_gold_and_traps():
     # 5. Monty Hall 4-door
     assert task_map["trap_monty_hall_4doors"]["gold_answer"] == "75"
     assert "50" in task_map["trap_monty_hall_4doors"]["trap_answers"]
+
+    # 6. Newly added XERJ / ReasoningTrap / GSM-NoOp / MATH-500 / BBEH tasks
+    assert task_map["trap_potted_tree_soil"]["gold_answer"] == "10"
+    assert task_map["trap_aime_alice_bob_nim_take_all"]["gold_answer"] == "0"
+    assert task_map["trap_gsm_noop_andre_raise"]["gold_answer"] == "4272"
+    assert task_map["trap_bbeh_retroactive_inventory"]["gold_answer"] == "35"
+    assert task_map["trap_mtbench_executive_parking_zebra"]["gold_answer"] == "32514"
+    assert task_map["trap_math500_amicable_284"]["gold_answer"] == "284"
+    assert task_map["trap_math500_monic_factors_10"]["gold_answer"] == "10"
 
 
 def test_evaluate_deceptive_reasoning_statuses():
@@ -85,4 +94,4 @@ def test_write_deceptive_tasks_config(tmp_path: Path):
     data = write_deceptive_tasks_config(cfg_file)
     assert cfg_file.exists()
     loaded = json.loads(cfg_file.read_text(encoding="utf-8"))
-    assert len(loaded["tasks"]) == len(data["tasks"]) == 16
+    assert len(loaded["tasks"]) == len(data["tasks"]) == 38

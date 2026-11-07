@@ -168,14 +168,14 @@ def main() -> int:
     parser.add_argument(
         "--workers",
         type=int,
-        default=4,
-        help="Number of concurrent worker processes on the GPU (default: 4).",
+        default=3,
+        help="Number of concurrent worker processes on the GPU (default: 3 for 22GB L4 at 3000 tokens).",
     )
     parser.add_argument(
         "--max-new-tokens",
         type=int,
-        default=1500,
-        help="Maximum generated tokens budget (default: 1500).",
+        default=3000,
+        help="Maximum generated tokens budget (default: 3000).",
     )
     parser.add_argument(
         "--seed",
@@ -186,8 +186,19 @@ def main() -> int:
     parser.add_argument(
         "--output",
         type=Path,
-        default=ROOT / "reports/colab_l4_deceptive_traps_32jobs.json",
+        default=ROOT / "reports/colab_l4_deceptive_traps_3000_76jobs.json",
         help="Output report JSON file.",
+    )
+    parser.add_argument(
+        "--resume-from",
+        type=Path,
+        default=ROOT / "reports/colab_l4_deceptive_traps_3000_32jobs.json",
+        help="Optional prior report JSON file to reuse already-completed (problem_id, method) records.",
+    )
+    parser.add_argument(
+        "--no-resume",
+        action="store_true",
+        help="Do not reuse records from --resume-from; run all selected jobs from scratch.",
     )
     parser.add_argument(
         "--attn",
@@ -206,12 +217,44 @@ def main() -> int:
     else:
         selected_tasks = all_tasks
 
-    jobs = [(t, m) for t in selected_tasks for m in args.methods]
-    total_jobs = len(jobs)
+    records: List[Dict[str, Any]] = []
+    completed_keys = set()
+    if not args.no_resume and args.resume_from and args.resume_from.exists():
+        try:
+            prev_data = json.loads(args.resume_from.read_text(encoding="utf-8"))
+            prev_records = (
+                prev_data.get("deceptive_traps_records")
+                or prev_data.get("partial_deceptive_records")
+                or []
+            )
+            selected_ids = {t["problem_id"] for t in selected_tasks}
+            for r in prev_records:
+                pid = r.get("problem_id")
+                m = r.get("method")
+                if pid in selected_ids and m in args.methods and (pid, m) not in completed_keys:
+                    r["gold_answer"] = task_lookup[pid]["gold_answer"]
+                    r["trap_answers"] = task_lookup[pid].get("trap_answers", [])
+                    r["evaluation"] = evaluate_deceptive_reasoning(r, r["gold_answer"])
+                    records.append(r)
+                    completed_keys.add((pid, m))
+            print(
+                f"[TEBDIL Parallel Deceptive Runner] Resumed {len(records)} completed records from {args.resume_from.name}",
+                flush=True,
+            )
+        except Exception as exc:
+            print(f"[TEBDIL Parallel Deceptive Runner] Warning: failed to load --resume-from: {exc}", flush=True)
+
+    jobs = [
+        (t, m)
+        for t in selected_tasks
+        for m in args.methods
+        if (t["problem_id"], m) not in completed_keys
+    ]
+    total_jobs = len(jobs) + len(records)
     print(
-        f"[TEBDIL Parallel Deceptive Runner] {total_jobs} total jobs "
-        f"({len(selected_tasks)} tasks x {len(args.methods)} methods) across {args.workers} workers | "
-        f"max_new_tokens={args.max_new_tokens}",
+        f"[TEBDIL Parallel Deceptive Runner] {len(jobs)} remaining jobs to execute "
+        f"({len(records)} resumed, {total_jobs} total across {len(selected_tasks)} tasks x {len(args.methods)} methods) "
+        f"using {args.workers} workers | max_new_tokens={args.max_new_tokens}",
         flush=True,
     )
 
@@ -263,11 +306,10 @@ def main() -> int:
         p.start()
         workers.append(p)
 
-    records: List[Dict[str, Any]] = []
     errors: List[Dict[str, Any]] = []
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
-    for _ in range(total_jobs):
+    for _ in range(len(jobs)):
         item = result_queue.get()
         if "error" in item:
             print(f"[TEBDIL Parallel Deceptive Runner] ERROR from worker {item.get('worker_id')}: {item['error']}", flush=True)

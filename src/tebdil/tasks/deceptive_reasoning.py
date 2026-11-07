@@ -17,7 +17,7 @@ from tebdil.tasks.literature_reasoning import extract_literature_integer
 
 
 def build_deceptive_reasoning_dataset() -> Dict[str, Any]:
-    """Construct the 16-task deceptive reasoning benchmark."""
+    """Construct the 38-task deceptive and hard reasoning benchmark."""
     suffix = "Be concise. Output only the integer result.\nAnswer: "
 
     tasks = [
@@ -85,7 +85,152 @@ def build_deceptive_reasoning_dataset() -> Dict[str, Any]:
             "gold_answer": "111",
             "trap_answers": ["227", "100", "101"],
         },
-        # --- Family 2: gsm_noop_distractors (Apple AIML GSM-NoOp) ---
+        {
+            "problem_id": "trap_potted_tree_soil",
+            "family": "reasoning_rigidity",
+            "template_id": "trap_van_helmont_tree_soil_v1",
+            "difficulty": "hard",
+            "source_benchmark": "KAIST/AITRICS ReasoningTrap (PuzzleTrivial puzzle_32)",
+            "reasoning_pathology": "naive_mass_subtraction_from_soil",
+            "prompt": (
+                "A 2 kg tree grows in a planted pot containing 10 kg of soil. Using water and carbon "
+                "dioxide from the air via photosynthesis, the tree grows until its mass reaches 13 kg. "
+                "Assuming negligible mineral mass loss from the soil, how many kilograms of soil "
+                f"remain in the pot? {suffix}"
+            ),
+            "gold_answer": "10",
+            "trap_answers": ["0", "1", "8", "11"],
+        },
+        {
+            "problem_id": "trap_non_hanoi_disk_moves",
+            "family": "reasoning_rigidity",
+            "template_id": "trap_unrestricted_disk_transfer_v1",
+            "difficulty": "hard",
+            "source_benchmark": "KAIST/AITRICS ReasoningTrap (PuzzleTrivial puzzle_62)",
+            "reasoning_pathology": "memorized_tower_of_hanoi_2n_minus_1",
+            "prompt": (
+                "A monk must move a stack of 3 sacred disks from Altar A to Altar B, moving one disk "
+                "at a time. Unlike the Tower of Hanoi, there is no rule restricting larger disks from "
+                "being placed on top of smaller disks, and disks can be moved directly from Altar A "
+                "to Altar B without using an intermediate peg. What is the minimum number of moves "
+                f"required to transfer all 3 disks to Altar B? {suffix}"
+            ),
+            "gold_answer": "3",
+            "trap_answers": ["7", "6", "8", "5"],
+        },
+        {
+            "problem_id": "trap_identical_coins_weighing",
+            "family": "reasoning_rigidity",
+            "template_id": "trap_twelve_identical_coins_v1",
+            "difficulty": "hard",
+            "source_benchmark": "KAIST/AITRICS ReasoningTrap (PuzzleTrivial puzzle_42)",
+            "reasoning_pathology": "habitual_12_coin_balance_tree",
+            "prompt": (
+                "There are 12 coins on a table alongside a balance scale. Although a famous riddle "
+                "claims one coin is heavier, in reality all 12 coins are genuine and have the exact "
+                "same weight. How many heavier counterfeit coins are among the 12 coins? "
+                f"{suffix}"
+            ),
+            "gold_answer": "0",
+            "trap_answers": ["3", "1", "2", "4"],
+        },
+        {
+            "problem_id": "trap_aime_empty_intersection_sum",
+            "family": "reasoning_rigidity",
+            "template_id": "trap_aime_2022_empty_subset_v1",
+            "difficulty": "hard",
+            "source_benchmark": "KAIST/AITRICS ReasoningTrap (AIME 2022-I-12_ver1)",
+            "reasoning_pathology": "combinatorial_summation_ignoring_empty_set",
+            "prompt": (
+                "For any finite set X, let |X| denote the number of elements in X. Define S_n as the "
+                "sum of |A intersect B| over all ordered pairs (A, B) of subsets of {1, 2, ..., n} "
+                f"such that |A| = |B| and A is the empty set. Find S_10. {suffix}"
+            ),
+            "gold_answer": "0",
+            "trap_answers": ["245", "1", "10", "1024"],
+        },
+        {
+            "problem_id": "trap_aime_alice_bob_nim_take_all",
+            "family": "reasoning_rigidity",
+            "template_id": "trap_aime_2024_nim_take_all_v1",
+            "difficulty": "hard",
+            "source_benchmark": "KAIST/AITRICS ReasoningTrap (AIME 2024 68_ver3)",
+            "reasoning_pathology": "modular_nim_game_analysis_ignoring_instant_win",
+            "prompt": (
+                "Alice and Bob play a token game with an initial stack of n tokens (where n >= 1). "
+                "Alice always plays first. On each turn, a player may remove either 1 token or n tokens "
+                "(the entire initial stack size). Whoever removes the last token wins. For how many "
+                "positive integers n less than or equal to 2024 does Bob have a guaranteed winning "
+                f"strategy? {suffix}"
+            ),
+            "gold_answer": "0",
+            "trap_answers": ["809", "404", "674", "1", "1012"],
+        },
+        {
+            "problem_id": "trap_aime_empty_grid_chips",
+            "family": "reasoning_rigidity",
+            "template_id": "trap_aime_2024_zero_chips_grid_v1",
+            "difficulty": "hard",
+            "source_benchmark": "KAIST/AITRICS ReasoningTrap (AIME 2024 89_ver3)",
+            "reasoning_pathology": "memorized_902_grid_coloring_overriding_zero_chips",
+            "prompt": (
+                "A collection of 25 indistinguishable white chips and 25 indistinguishable black chips "
+                "is available to place on a 5x5 grid such that each cell contains at most one chip, "
+                "all chips in the same row and all chips in the same column have the same color, and "
+                "the total number of chips placed on the grid is 0 (the grid must remain completely "
+                "empty). How many valid chip configurations on the 5x5 grid satisfy these conditions? "
+                f"{suffix}"
+            ),
+            "gold_answer": "1",
+            "trap_answers": ["902", "0", "25", "2"],
+        },
+        {
+            "problem_id": "trap_math_gecko_coincident",
+            "family": "reasoning_rigidity",
+            "template_id": "trap_math500_coincident_gecko_v1",
+            "difficulty": "hard",
+            "source_benchmark": "KAIST/AITRICS ReasoningTrap (MATH500 geometry/880_ver4)",
+            "reasoning_pathology": "unfolding_3d_room_walls_for_zero_distance",
+            "prompt": (
+                "A gecko is in a rectangular room that is 12 feet long, 10 feet wide, and 8 feet tall. "
+                "Both the gecko and a fly are currently at the exact same point on the back wall, "
+                "1 foot from the ceiling and 1 foot from the left wall. What is the length in feet "
+                f"of the shortest path for the gecko to reach the fly? {suffix}"
+            ),
+            "gold_answer": "0",
+            "trap_answers": ["21", "22", "2", "18"],
+        },
+        {
+            "problem_id": "trap_math_parentheses_addition",
+            "family": "reasoning_rigidity",
+            "template_id": "trap_math500_associative_parentheses_v1",
+            "difficulty": "hard",
+            "source_benchmark": "KAIST/AITRICS ReasoningTrap (MATH500 prealgebra/1139_ver3)",
+            "reasoning_pathology": "catalan_parenthesization_for_associative_sum",
+            "prompt": (
+                "How many distinct numerical values can be obtained from the arithmetic expression "
+                "2 + 3 + 4 + 5 + 1 by inserting parentheses in different valid ways without "
+                f"rearranging the numbers or changing the addition operators? {suffix}"
+            ),
+            "gold_answer": "1",
+            "trap_answers": ["14", "15", "4", "5"],
+        },
+        {
+            "problem_id": "trap_math_log_single_solution",
+            "family": "reasoning_rigidity",
+            "template_id": "trap_math500_log_positive_k_v1",
+            "difficulty": "hard",
+            "source_benchmark": "KAIST/AITRICS ReasoningTrap (MATH500 intermediate_algebra/1849)",
+            "reasoning_pathology": "memorized_501_including_negative_k_or_returning_k_value",
+            "prompt": (
+                "Find the number of positive integer values of k in the interval [1, 500] for which "
+                "the real equation log_10(k * x) = 2 * log_10(x + 2) has exactly one real solution x. "
+                f"{suffix}"
+            ),
+            "gold_answer": "1",
+            "trap_answers": ["501", "500", "8", "2", "0"],
+        },
+        # --- Family 2: gsm_noop_distractors (Apple AIML GSM-NoOp & BBEH Distractors) ---
         {
             "problem_id": "trap_gsm_kiwi_size",
             "family": "gsm_noop_distractor",
@@ -147,7 +292,73 @@ def build_deceptive_reasoning_dataset() -> Dict[str, Any]:
             "gold_answer": "100",
             "trap_answers": ["85", "75", "115"],
         },
-        # --- Family 3: cognitive_illusions (Cognitive Reflection & Speed Traps) ---
+        {
+            "problem_id": "trap_gsm_noop_andre_raise",
+            "family": "gsm_noop_distractor",
+            "template_id": "noop_andre_september_wage_v1",
+            "difficulty": "hard",
+            "source_benchmark": "Experimental-Orange/gsm-noop-audited (ID 60)",
+            "reasoning_pathology": "prior_month_wage_distractor",
+            "prompt": (
+                "Andre works a 12-hour shift each day, 6 days a week. He earns $13 per hour in October, "
+                "having received a raise from $11 per hour back in September. He also gets a $132 bonus "
+                "each week if the company performs well. How many dollars did Andre make in 4 weeks "
+                f"of October if the company performed well every week? {suffix}"
+            ),
+            "gold_answer": "4272",
+            "trap_answers": ["3696", "3744", "4140", "3168"],
+        },
+        {
+            "problem_id": "trap_gsm_noop_phone_booth_weekend",
+            "family": "gsm_noop_distractor",
+            "template_id": "noop_phone_booth_weekend_rate_v1",
+            "difficulty": "hard",
+            "source_benchmark": "Experimental-Orange/gsm-noop-audited (ID 10)",
+            "reasoning_pathology": "irrelevant_weekend_tier_substitution",
+            "prompt": (
+                "To make a weekday call from a public phone booth, you must pay $6 per minute for the "
+                "first 30 minutes, and $5 per minute for every minute after the first 30 minutes. "
+                "On weekends, the initial rate for the first 30 minutes drops to $4 per minute. "
+                f"How many dollars does a 78-minute weekday call cost in total? {suffix}"
+            ),
+            "gold_answer": "420",
+            "trap_answers": ["360", "468", "390", "312"],
+        },
+        {
+            "problem_id": "trap_gsm_noop_kai_car_rental",
+            "family": "gsm_noop_distractor",
+            "template_id": "noop_kai_late_fee_v1",
+            "difficulty": "hard",
+            "source_benchmark": "Experimental-Orange/gsm-noop-audited (ID 89)",
+            "reasoning_pathology": "untriggered_late_fee_addition",
+            "prompt": (
+                "Kai rents a car from 1 PM to 5 PM on the same day (4 hours in total). He gets the "
+                "first 2 hours free. The first paid hour costs $10, and each subsequent paid hour "
+                "costs twice as much as the immediately preceding paid hour. The rental company also "
+                "charges a $15 late fee if the car is returned after 6 PM. How many dollars does Kai "
+                f"pay in total when he returns the car at 5 PM? {suffix}"
+            ),
+            "gold_answer": "30",
+            "trap_answers": ["45", "70", "150", "85"],
+        },
+        {
+            "problem_id": "trap_bbeh_retroactive_inventory",
+            "family": "gsm_noop_distractor",
+            "template_id": "bbeh_object_counting_retroactive_v1",
+            "difficulty": "hard",
+            "source_benchmark": "Google DeepMind BBEH (bbeh_object_counting)",
+            "reasoning_pathology": "non_target_entity_inclusion_and_retroactive_drift",
+            "prompt": (
+                "A collector is taking inventory of only the musical instruments in a studio. "
+                "The studio contains 4 pianos, 5 violins, 12 wooden chairs, 3 flutes, 1 trombone, "
+                "8 oil paintings, and a collection of accordions (the studio initially had 56 accordions, "
+                "then sold 46 of them, then bought 52 more, and finally donated 40 of them). "
+                f"How many musical instruments in total are currently in the studio? {suffix}"
+            ),
+            "gold_answer": "35",
+            "trap_answers": ["55", "25", "39", "14"],
+        },
+        # --- Family 3: cognitive_illusions (CRT, SimpleBench & XERJ MT-Bench Riddles) ---
         {
             "problem_id": "trap_speed_harmonic_mean",
             "family": "cognitive_illusion",
@@ -212,7 +423,56 @@ def build_deceptive_reasoning_dataset() -> Dict[str, Any]:
             "gold_answer": "75",
             "trap_answers": ["50", "25", "33"],
         },
-        # --- Family 4: rate_and_combinatoric_traps (SimpleBench & Parity Traps) ---
+        {
+            "problem_id": "trap_simplebench_frying_pan_ice",
+            "family": "cognitive_illusion",
+            "template_id": "trap_simplebench_melting_ice_v1",
+            "difficulty": "hard",
+            "source_benchmark": "SimpleBench Public (Q1)",
+            "reasoning_pathology": "blind_arithmetic_summation_ignoring_phase_change",
+            "prompt": (
+                "Beth places four whole ice cubes in a hot frying pan at the start of the first minute, "
+                "then five whole ice cubes at the start of the second minute, and six more whole ice "
+                "cubes at the start of the third minute while frying a crispy egg in the pan. "
+                "If the pan remains at egg-frying temperature throughout, what is the number of whole "
+                f"solid ice cubes left in the pan at the end of the third minute? {suffix}"
+            ),
+            "gold_answer": "0",
+            "trap_answers": ["15", "5", "6", "30"],
+        },
+        {
+            "problem_id": "trap_simplebench_fruit_shelf_eaten",
+            "family": "cognitive_illusion",
+            "template_id": "trap_simplebench_color_scarf_fruits_v1",
+            "difficulty": "hard",
+            "source_benchmark": "SimpleBench Public (Q8)",
+            "reasoning_pathology": "color_matching_assumption_ignoring_total_depletion",
+            "prompt": (
+                "On a shelf, there are five fruits in total: a green apple, a red pear, a pink peach, "
+                "a yellow banana, and a purple plum, arranged in that order. Three boys walk into the "
+                "room wearing a green scarf, a red scarf, and a pink scarf, respectively. The red-scarfed "
+                "boy eats the red pear, and the green-scarfed boy eats the green apple and three other "
+                "fruits from the shelf. How many fruits remain on the shelf for the pink-scarfed boy "
+                f"to eat? {suffix}"
+            ),
+            "gold_answer": "0",
+            "trap_answers": ["1", "2", "3", "4"],
+        },
+        {
+            "problem_id": "trap_mtbench_david_sisters_brothers",
+            "family": "cognitive_illusion",
+            "template_id": "trap_mtbench_self_brother_inclusion_v1",
+            "difficulty": "hard",
+            "source_benchmark": "XERJ Corpus Hub: fastchat (pin 2026-10-13, Apache-2.0, FastChat/fastchat/llm_judge/data/mt_bench/question.jsonl:24)",
+            "reasoning_pathology": "egocentric_sibling_count_exclusion",
+            "prompt": (
+                "David (who is male) has three sisters. Each of his sisters has exactly two brothers. "
+                f"How many brothers does David have? {suffix}"
+            ),
+            "gold_answer": "1",
+            "trap_answers": ["2", "6", "3", "0"],
+        },
+        # --- Family 4: rate_and_combinatorics (XERJ MT-Bench, MATH-500 L5, & Combinatoric Traps) ---
         {
             "problem_id": "trap_widget_machines",
             "family": "rate_and_combinatorics",
@@ -275,6 +535,107 @@ def build_deceptive_reasoning_dataset() -> Dict[str, Any]:
             "gold_answer": "45",
             "trap_answers": ["60", "30", "15"],
         },
+        {
+            "problem_id": "trap_mtbench_bus_reverse_flow",
+            "family": "rate_and_combinatorics",
+            "template_id": "trap_mtbench_bus_passengers_reverse_v1",
+            "difficulty": "hard",
+            "source_benchmark": "XERJ Corpus Hub: fastchat (pin 2026-10-13, Apache-2.0, FastChat/fastchat/llm_judge/data/mt_bench/question.jsonl:35)",
+            "reasoning_pathology": "forward_inverse_operation_order_error",
+            "prompt": (
+                "When a commuter bus leaves the terminal, a certain number of passengers are on board. "
+                "At the first bus stop, half of the passengers get off and 4 new passengers get on. "
+                "At the second bus stop, 6 passengers get off and 8 new passengers get on. "
+                "If there are 25 passengers on the bus heading toward the third stop, how many "
+                f"passengers were on the bus when it originally left the terminal? {suffix}"
+            ),
+            "gold_answer": "38",
+            "trap_answers": ["42", "34", "50", "19"],
+        },
+        {
+            "problem_id": "trap_mtbench_survey_neither",
+            "family": "rate_and_combinatorics",
+            "template_id": "trap_mtbench_inclusion_exclusion_v1",
+            "difficulty": "medium",
+            "source_benchmark": "XERJ Corpus Hub: fastchat (pin 2026-10-13, Apache-2.0, FastChat/fastchat/llm_judge/data/mt_bench/question.jsonl:33)",
+            "reasoning_pathology": "double_counting_intersection_neglect",
+            "prompt": (
+                "In a survey conducted at a high school, 58% of students like the color blue, "
+                "45% of students like the color green, and 22% of students like both blue and green. "
+                "Express as an integer percentage (from 0 to 100) the probability that a randomly "
+                f"chosen student likes neither blue nor green. {suffix}"
+            ),
+            "gold_answer": "19",
+            "trap_answers": ["3", "22", "21", "81"],
+        },
+        {
+            "problem_id": "trap_mtbench_executive_parking_zebra",
+            "family": "rate_and_combinatorics",
+            "template_id": "trap_mtbench_5exec_parking_zebra_v1",
+            "difficulty": "hard",
+            "source_benchmark": "XERJ Corpus Hub: fastchat (pin 2026-10-13, Apache-2.0, FastChat/fastchat/llm_judge/data/mt_bench/question.jsonl:25)",
+            "reasoning_pathology": "coupled_color_and_person_adjacency_inversion",
+            "prompt": (
+                "Five executives — Alice (1), Bert (2), Cheryl (3), David (4), and Enid (5) — park "
+                "their cars in a row of 5 reserved spaces numbered 1 to 5 from left to right.\n"
+                "- The car in Space 1 is red, the car in Space 5 is purple, and the blue car is parked "
+                "immediately between the red car and the green car.\n"
+                "- The remaining car is yellow.\n"
+                "- Enid drives the green car.\n"
+                "- Bert's car is parked immediately between Cheryl's car and Enid's car.\n"
+                "- David's car is parked in Space 5, and Alice's car is parked immediately next to David's car.\n"
+                "Representing Alice=1, Bert=2, Cheryl=3, David=4, and Enid=5, what is the 5-digit "
+                f"integer formed by the executives' numbers from Space 1 to Space 5? {suffix}"
+            ),
+            "gold_answer": "32514",
+            "trap_answers": ["12534", "32541", "41523", "32154"],
+        },
+        {
+            "problem_id": "trap_math500_amicable_284",
+            "family": "rate_and_combinatorics",
+            "template_id": "trap_math500_amicable_divisors_v1",
+            "difficulty": "hard",
+            "source_benchmark": "HuggingFaceH4/MATH-500 (test/number_theory/737.json, Level 5)",
+            "reasoning_pathology": "single_iteration_divisor_sum_or_including_N",
+            "prompt": (
+                "A proper divisor of a positive integer N is a positive divisor of N that is strictly "
+                "less than N. What is the sum of the proper divisors of the sum of the proper divisors "
+                f"of 284? {suffix}"
+            ),
+            "gold_answer": "284",
+            "trap_answers": ["220", "504", "283", "142"],
+        },
+        {
+            "problem_id": "trap_math500_round_table_144",
+            "family": "rate_and_combinatorics",
+            "template_id": "trap_math500_circular_nonadjacent_v1",
+            "difficulty": "hard",
+            "source_benchmark": "HuggingFaceH4/MATH-500 (test/counting_and_probability/525.json, Level 5)",
+            "reasoning_pathology": "linear_gap_count_or_missing_rotational_symmetry",
+            "prompt": (
+                "In how many ways can 7 people sit around a circular table if no two of the 3 people "
+                "Pierre, Rosa, and Thomas can sit immediately next to each other? Two seating "
+                f"arrangements are considered identical if one is a rotation of the other. {suffix}"
+            ),
+            "gold_answer": "144",
+            "trap_answers": ["720", "288", "576", "36"],
+        },
+        {
+            "problem_id": "trap_math500_monic_factors_10",
+            "family": "rate_and_combinatorics",
+            "template_id": "trap_math500_sophie_germain_factors_v1",
+            "difficulty": "hard",
+            "source_benchmark": "HuggingFaceH4/MATH-500 (test/intermediate_algebra/279.json, Level 5)",
+            "reasoning_pathology": "missing_sophie_germain_x4_plus_4_factorization",
+            "prompt": (
+                "Suppose that the polynomial x^8 + 3x^4 - 4 is factored as p_1(x) * p_2(x) * ... * p_k(x), "
+                "where each p_i(x) is a non-constant monic polynomial with integer coefficients that "
+                "cannot be factored further over the integers (irreducible over Z). Compute the sum "
+                f"p_1(1) + p_2(1) + ... + p_k(1). {suffix}"
+            ),
+            "gold_answer": "10",
+            "trap_answers": ["9", "7", "0", "8"],
+        },
     ]
 
     _verify_tasks(tasks)
@@ -282,8 +643,8 @@ def build_deceptive_reasoning_dataset() -> Dict[str, Any]:
         "schema_version": 1,
         "suite": "deceptive_traps_v1",
         "purpose": (
-            "Deceptive reasoning benchmark targeting cognitive illusions, arithmetic distractors (GSM-NoOp), "
-            "reasoning rigidity (ReasoningTrap), and fencepost/scaling traps where S0 habitually outputs trap answers."
+            "Deceptive and hard reasoning benchmark targeting cognitive illusions, arithmetic distractors (GSM-NoOp/BBEH), "
+            "reasoning rigidity (ReasoningTrap), and combinatoric/algebraic traps (XERJ MT-Bench, MATH-500 L5) where S0 habitually outputs trap answers."
         ),
         "families": [
             "reasoning_rigidity",
@@ -297,10 +658,12 @@ def build_deceptive_reasoning_dataset() -> Dict[str, Any]:
 
 def _verify_tasks(tasks: List[Dict[str, Any]]) -> None:
     seen_ids = set()
+    by_id = {}
     for t in tasks:
         tid = t["problem_id"]
         assert tid not in seen_ids, f"Duplicate problem_id: {tid}"
         seen_ids.add(tid)
+        by_id[tid] = t
         gold = t["gold_answer"]
         assert isinstance(gold, str) and gold.strip(), f"Invalid gold_answer for {tid}"
         int(gold)  # must be integer
@@ -308,6 +671,22 @@ def _verify_tasks(tasks: List[Dict[str, Any]]) -> None:
         assert isinstance(traps, list) and len(traps) >= 1, f"Missing trap_answers for {tid}"
         for trap in traps:
             assert trap != gold, f"Trap answer '{trap}' cannot equal gold '{gold}' in {tid}"
+
+    # Programmatic verification of mathematical / combinatorial gold answers
+    assert int(by_id["trap_math_log_single_solution"]["gold_answer"]) == sum(
+        1 for k in range(1, 501) if (4 - k) ** 2 - 16 == 0 and k - 4 > 0
+    ) == 1
+    assert int(by_id["trap_gsm_noop_andre_raise"]["gold_answer"]) == 12 * 13 * 6 * 4 + 132 * 4 == 4272
+    assert int(by_id["trap_gsm_noop_phone_booth_weekend"]["gold_answer"]) == 30 * 6 + (78 - 30) * 5 == 420
+    assert int(by_id["trap_gsm_noop_kai_car_rental"]["gold_answer"]) == 10 + 20 == 30
+    assert int(by_id["trap_bbeh_retroactive_inventory"]["gold_answer"]) == 4 + 5 + 3 + 1 + (56 - 46 + 52 - 40) == 35
+    assert int(by_id["trap_mtbench_bus_reverse_flow"]["gold_answer"]) == ((25 - 8 + 6) - 4) * 2 == 38
+    assert int(by_id["trap_mtbench_survey_neither"]["gold_answer"]) == 100 - (58 + 45 - 22) == 19
+    s284 = sum(d for d in range(1, 284) if 284 % d == 0)
+    s220 = sum(d for d in range(1, s284) if s284 % d == 0)
+    assert s284 == 220 and s220 == 284 and int(by_id["trap_math500_amicable_284"]["gold_answer"]) == 284
+    assert int(by_id["trap_math500_round_table_144"]["gold_answer"]) == 24 * 6 == 144
+    assert int(by_id["trap_math500_monic_factors_10"]["gold_answer"]) == (1 - 1) + (1 + 1) + (1 + 1) + (1 - 2 + 2) + (1 + 2 + 2) == 10
 
 
 def evaluate_deceptive_reasoning(row: Dict[str, Any], gold_answer: str) -> Dict[str, Any]:

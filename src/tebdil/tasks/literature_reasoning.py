@@ -53,7 +53,11 @@ def extract_literature_integer(final_text: str | None, *, completed: bool) -> st
     lines = [ln.strip() for ln in cleaned.splitlines() if ln.strip()]
     if lines:
         last_line = lines[-1]
-        m_last = re.search(r"(?:is|=|:)\s*\$?\s*([+-]?[0-9]+)\s*\.?$", last_line, re.IGNORECASE)
+        m_last = re.search(
+            r"(?:is|costs|equals|=|:)\s*\$?\s*([+-]?[0-9]+)\s*(?:dollars|cents|km/h|minutes|seconds|hours|days|gallons|kg|feet)?\s*\.?$",
+            last_line,
+            re.IGNORECASE,
+        )
         if m_last:
             return m_last.group(1)
         m_only = re.fullmatch(r"\$?\s*([+-]?[0-9]+)\s*\.?", last_line)

@@ -34,6 +34,7 @@ def test_extract_literature_integer_formats():
     assert extract_literature_integer("**Answer:** 42513", completed=True) == "42513"
     assert extract_literature_integer(r"Thus the answer is \boxed{79}.", completed=True) == "79"
     assert extract_literature_integer("x = 23.", completed=True) == "23"
+    assert extract_literature_integer("The ball costs $5.", completed=True) == "5"
     assert extract_literature_integer("Answer: 18", completed=False) is None
 
 
