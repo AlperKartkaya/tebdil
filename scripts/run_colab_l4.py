@@ -225,7 +225,7 @@ def run_completion_reasoning_suite(
                 m_eq = re.fullmatch(r"\s*[a-zA-Z]\s*=\s*([+-]?[0-9]+)\s*\.?\s*", row["final_text"])
                 if m_eq:
                     ans_val = m_eq.group(1)
-                    is_ok = ans_val == str(task["gold_answer"])
+                    is_ok = int(ans_val) == int(task["gold_answer"])
                     eval_res = {
                         "answer_extraction": "prompt_started_reasoning_equation_v1",
                         "extracted_answer": ans_val,
@@ -344,7 +344,7 @@ def main() -> int:
     )
     parser.add_argument("--partition", choices=("development", "reserved_test"), default="development")
     parser.add_argument("--max-tasks", type=int, default=2)
-    parser.add_argument("--task-ids", nargs="*", default=None)
+    parser.add_argument("--task-ids", nargs="+", default=None, help="Explicit selection for the literature suite only")
     parser.add_argument("--max-new-tokens", type=int, default=512)
     parser.add_argument("--continuation-tokens", type=int, default=32)
     parser.add_argument("--methods", nargs="+", choices=("S0", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1", "E2"), default=["S0", "M1", "E1", "E2"])
@@ -354,6 +354,10 @@ def main() -> int:
     parser.add_argument("--model", default="ByteDance/Ouro-1.4B-Thinking")
     parser.add_argument("--revision", help="Pinned model commit; required for non-default models")
     args = parser.parse_args()
+    if args.task_ids is not None and args.suite != "literature":
+        parser.error("--task-ids is supported only by --suite literature")
+    if args.partition != "development" and args.suite not in ("literature", "reasoning_v1"):
+        parser.error("--partition reserved_test requires --suite literature or reasoning_v1")
     if args.max_tasks < 1 or args.max_new_tokens < 1 or args.continuation_tokens < 1:
         parser.error("Task and token budgets must be positive")
     if len(args.methods) != len(set(args.methods)):

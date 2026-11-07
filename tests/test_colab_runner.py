@@ -9,8 +9,8 @@ runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
 
 @pytest.mark.parametrize('extra', [['--model', 'ByteDance/Ouro-2.6B-Thinking'], ['--revision', 'main']])
-def test_requires_immutable_model_revision(monkeypatch, extra):
-    monkeypatch.setattr(sys, 'argv', ['runner'] + extra)
+def test_requires_immutable_model_revision(monkeypatch, tmp_path, extra):
+    monkeypatch.setattr(sys, 'argv', ['runner', '--output', str(tmp_path / 'summary.json')] + extra)
     with pytest.raises(SystemExit) as error:
         runner.main()
     assert error.value.code == 2
@@ -90,8 +90,8 @@ def test_checkpoint_identity_change_does_not_reuse(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize('extra', [['--max-tasks', '0'], ['--max-new-tokens', '-1'], ['--methods', 'S0', 'S0']])
-def test_invalid_run_contract_rejected_before_model_loading(monkeypatch, extra):
-    monkeypatch.setattr(sys, 'argv', ['runner'] + extra)
+def test_invalid_run_contract_rejected_before_model_loading(monkeypatch, tmp_path, extra):
+    monkeypatch.setattr(sys, 'argv', ['runner', '--output', str(tmp_path / 'summary.json')] + extra)
     with pytest.raises(SystemExit) as error:
         runner.main()
     assert error.value.code == 2
@@ -130,3 +130,37 @@ def test_interrupted_temporary_directory_is_not_a_checkpoint(monkeypatch, tmp_pa
     monkeypatch.setattr(runner, 'generate_tebdil_cached', lambda **kwargs: {'generated_token_ids': [1]})
     assert not runner.checkpointed_generator(tmp_path, {})(method='S0')['checkpoint_reused']
     assert pending.exists()  # Unowned crash evidence is preserved.
+
+
+@pytest.mark.parametrize('extra', [
+    ['--suite', 'completion', '--partition', 'reserved_test'],
+    ['--suite', 'stall', '--partition', 'reserved_test'],
+    ['--suite', 'all', '--partition', 'reserved_test'],
+    ['--suite', 'completion', '--task-ids', 'completion_dev_000'],
+    ['--suite', 'reasoning_v1', '--task-ids', 'some-task'],
+    ['--suite', 'all', '--task-ids', 'some-task'],
+    ['--suite', 'literature', '--task-ids'],
+])
+def test_ignored_selection_flags_are_rejected(monkeypatch, tmp_path, extra):
+    monkeypatch.setattr(sys, 'argv', ['runner', '--output', str(tmp_path / 'summary.json')] + extra)
+    monkeypatch.setattr(runner.AutoTokenizer, 'from_pretrained', lambda *a, **k: pytest.fail('model loading must not start'))
+    with pytest.raises(SystemExit) as error:
+        runner.main()
+    assert error.value.code == 2
+
+
+@pytest.mark.parametrize('answer', ['+029', '029', '29'])
+def test_equation_fallback_compares_integer_values(monkeypatch, answer):
+    import torch
+    from types import SimpleNamespace
+    monkeypatch.setattr(runner, 'encode_reasoning_prompt', lambda *a: torch.tensor([[1]]))
+    def generate(**kwargs):
+        return {'decoded_text': f'calculation</think>x = {answer}<eos>',
+                'completed': True, 'generated_token_ids': [2],
+                'excursion_count': 0, 'recurrent_block_calls': 4, 'wall_seconds': 0}
+    rows = runner.run_completion_reasoning_suite(
+        SimpleNamespace(device='cpu'), SimpleNamespace(eos_token='<eos>'),
+        ['S0'], runner.ExcursionConfig(), runner.AdaptivePolicyConfig(),
+        max_tasks=1, generator=generate,
+    )
+    assert rows[0]['evaluation']['status'] == 'correct'
