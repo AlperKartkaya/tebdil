@@ -32,3 +32,5 @@ artifacts/
 !artifacts/evidence/real_tensor_bundle.pt
 *.pth
 .DS_Store
+
+!site/static/evidence/real_tensor_bundle.pt

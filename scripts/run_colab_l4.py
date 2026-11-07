@@ -6,6 +6,7 @@ import argparse
 from dataclasses import asdict, replace
 from datetime import datetime, timezone
 import json
+from itertools import zip_longest
 from pathlib import Path
 import re
 import time
@@ -88,10 +89,10 @@ def run_stall_recovery_suite(
         m1_toks = method_outputs["M1"]["generated_token_ids"] if "M1" in method_outputs else []
         for m, gen in method_outputs.items():
             toks = gen["generated_token_ids"]
-            diff_vs_s0 = sum(1 for a, b in zip(toks, s0_toks) if a != b) if s0_toks else 0
-            diff_vs_m1 = sum(1 for a, b in zip(toks, m1_toks) if a != b) if m1_toks else 0
+            diff_vs_s0 = sum(1 for a, b in zip_longest(toks, s0_toks) if a != b) if s0_toks else 0
+            diff_vs_m1 = sum(1 for a, b in zip_longest(toks, m1_toks) if a != b) if m1_toks else 0
             first_diff_s0 = next(
-                (i for i, (a, b) in enumerate(zip(toks, s0_toks)) if a != b), None
+                (i for i, (a, b) in enumerate(zip_longest(toks, s0_toks)) if a != b), None
             )
             gen["changed_tokens_vs_s0"] = diff_vs_s0
             gen["changed_tokens_vs_m1"] = diff_vs_m1
@@ -295,7 +296,14 @@ def main() -> int:
     parser.add_argument("--methods", nargs="+", default=["S0", "M1", "E1", "E2"])
     parser.add_argument("--attn", choices=("sdpa", "eager"), default="sdpa" if torch.cuda.is_available() else "eager")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--model", default="ByteDance/Ouro-1.4B-Thinking")
+    parser.add_argument("--revision", help="Pinned model commit; required for non-default models")
     args = parser.parse_args()
+    if args.model != "ByteDance/Ouro-1.4B-Thinking" and not args.revision:
+        parser.error("--revision is required for a non-default model")
+    revision = args.revision or PINNED_OURO_THINKING_REV
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
+        parser.error("--revision must be a full immutable commit SHA")
 
     device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     dtype = torch.bfloat16 if device in ("cuda", "mps") else torch.float32
@@ -303,10 +311,12 @@ def main() -> int:
 
     print(f"[TEBDIL] Device={device} ({gpu_name}) | dtype={dtype} | attn={args.attn}", flush=True)
     tokenizer = AutoTokenizer.from_pretrained(
-        "ByteDance/Ouro-1.4B-Thinking",
-        revision=PINNED_OURO_THINKING_REV,
+        args.model,
+        revision=revision,
     )
     adapter = OuroRecurrentAdapter.from_pretrained(
+        repo_id=args.model,
+        revision=revision,
         dtype=dtype,
         device=device,
         attn_implementation=args.attn,
@@ -419,6 +429,9 @@ def main() -> int:
                 )
 
     summary = {
+        "model_id": args.model,
+        "model_revision": revision,
+        "seed": args.seed,
         "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
         "device": device,
         "gpu_name": gpu_name,

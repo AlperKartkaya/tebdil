@@ -22,7 +22,7 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked
-      # Research computation is on user hold; unmarked tests can run mini-models.
+      # Local tests are allowed; GPU checkpoint tests remain excluded.
       - run: uv run pytest -q tests/test_site_release.py -m "not real_model"
       - run: uv run python scripts/freeze_reasoning_tasks.py --check
       - run: uv run python scripts/build_landing_data.py --check
