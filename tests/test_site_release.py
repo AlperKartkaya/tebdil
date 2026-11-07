@@ -1194,15 +1194,15 @@ def test_reasoning_viewer_does_not_conflate_tokens_with_verified_recovery():
     assert 'No results substituted' in script
     assert 'no eligible completed final answer' in script
 
-def test_computation_hold_is_explicit_and_ci_excludes_model_executing_suites():
+def test_resumed_computation_policy_and_ci_exclude_real_checkpoints():
     policy=(ROOT/'AGENTS.md').read_text()
     workflow=(ROOT/'.github/workflows/pages.yml').read_text()
     walkthrough=(ROOT/'docs/computation_walkthrough.md').read_text()
     assert 'Computation hold lifted by explicit user instruction' in policy
     assert 'UniversalTransformerCache' in policy
     assert 'scripts/run_colab_l4.py' in policy
-    assert 'uv run pytest -q tests/test_site_release.py -m "not real_model"' in workflow
-    assert 'uv run pytest -q -m "not real_model"' not in workflow
+    assert 'uv run pytest -q -m "not real_model"' in workflow
+    assert 'uv run pytest -q -m "real_model"' not in workflow
     assert 'native_generate' in walkthrough and 'KV cache' in walkthrough
     assert 'researchHoldNotice' in INDEX.read_text()
 

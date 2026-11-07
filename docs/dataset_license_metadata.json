@@ -1,0 +1,62 @@
+{
+  "checked_on": "2026-11-07",
+  "scope": "Publisher dataset-card declarations, not legal clearance of underlying works",
+  "sources": [
+    {
+      "repository": "apple/GSM-Symbolic",
+      "revision": "93b5b3758d9d9841ffe81d6cd2ae2b030685b078",
+      "license": "cc-by-nc-nd-4.0",
+      "source": "https://huggingface.co/datasets/apple/GSM-Symbolic"
+    },
+    {
+      "repository": "Experimental-Orange/gsm-noop-audited",
+      "revision": "0a5d7be71d6630e36cfedada6a69bea59bdd6290",
+      "license": "other",
+      "source": "https://huggingface.co/datasets/Experimental-Orange/gsm-noop-audited"
+    },
+    {
+      "repository": "WildEval/ZebraLogic",
+      "revision": "0a473f5a0054835754ed156d5a79c6ce27178bb1",
+      "license": null,
+      "source": "https://huggingface.co/datasets/WildEval/ZebraLogic"
+    },
+    {
+      "repository": "yale-nlp/FOLIO",
+      "revision": "4c1f14bf39ca6a6de242bd8f75ef313b4b436818",
+      "license": "mit",
+      "source": "https://huggingface.co/datasets/yale-nlp/FOLIO"
+    },
+    {
+      "repository": "TAUR-Lab/MuSR",
+      "revision": "7c365b439a222150f317764d4f16ae6c96d7d94a",
+      "license": "cc-by-4.0",
+      "source": "https://huggingface.co/datasets/TAUR-Lab/MuSR"
+    },
+    {
+      "repository": "allenai/ai2_arc",
+      "revision": "210d026faf9955653af8916fad021475a3f00453",
+      "license": [
+        "cc-by-sa-4.0"
+      ],
+      "source": "https://huggingface.co/datasets/allenai/ai2_arc"
+    },
+    {
+      "repository": "TIGER-Lab/MMLU-Pro",
+      "revision": "b189ec765aa7ed75c8acfea42df31fdae71f97be",
+      "license": "mit",
+      "source": "https://huggingface.co/datasets/TIGER-Lab/MMLU-Pro"
+    },
+    {
+      "repository": "TIGER-Lab/TheoremQA",
+      "revision": "a340b1782960a712843aae3ed25f1e013cc008a5",
+      "license": "mit",
+      "source": "https://huggingface.co/datasets/TIGER-Lab/TheoremQA"
+    },
+    {
+      "repository": "HuggingFaceH4/MATH-500",
+      "revision": "6e4ed1a2a79af7d8630a6b768ec859cb5af4d3be",
+      "license": null,
+      "source": "https://huggingface.co/datasets/HuggingFaceH4/MATH-500"
+    }
+  ]
+}

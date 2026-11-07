@@ -1,0 +1,57 @@
+{
+  "model": "ByteDance/Ouro-1.4B-Thinking",
+  "revision": "3aaa2224253a92ca45cf2e3d427c360e1ef9c93d",
+  "device": "NVIDIA L4",
+  "dtype": "bfloat16",
+  "attention": "sdpa",
+  "torch": "2.14.1+cu130",
+  "absolute_logit_tolerance": 0.25,
+  "rows": [
+    {
+      "prefix_length": 1,
+      "max_abs_difference": 0.0,
+      "top1_match": true,
+      "finite": true,
+      "cache_lengths_match": true
+    },
+    {
+      "prefix_length": 2,
+      "max_abs_difference": 0.2734375,
+      "top1_match": true,
+      "finite": true,
+      "cache_lengths_match": true
+    },
+    {
+      "prefix_length": 3,
+      "max_abs_difference": 0.125,
+      "top1_match": true,
+      "finite": true,
+      "cache_lengths_match": true
+    },
+    {
+      "prefix_length": 5,
+      "max_abs_difference": 0.296875,
+      "top1_match": true,
+      "finite": true,
+      "cache_lengths_match": true
+    },
+    {
+      "prefix_length": 6,
+      "max_abs_difference": 0.26953125,
+      "top1_match": true,
+      "finite": true,
+      "cache_lengths_match": true
+    },
+    {
+      "prefix_length": 7,
+      "max_abs_difference": 0.1640625,
+      "top1_match": true,
+      "finite": true,
+      "cache_lengths_match": true
+    }
+  ],
+  "passed": false,
+  "peak_memory_bytes": 2885279232,
+  "scope": "six synthetic-prefix S0 steps; not accuracy or intervention parity",
+  "script_sha256": "2e20cd9038b04794f85ea545202b83319dd65cad681c01744e6085bed93ee4e3"
+}

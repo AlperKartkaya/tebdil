@@ -720,18 +720,28 @@ def generate_tebdil_cached(
     seed: int = 42,
 ) -> Dict[str, Any]:
     """KV-cached multi-token generation with persistent latent excursion windows."""
+    if method not in {"S0", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1", "E2"}:
+        raise ValueError(f"Unsupported cached-generation method: {method}")
     if excursion_config is None:
         excursion_config = ExcursionConfig()
     if policy_config is None:
         policy_config = AdaptivePolicyConfig()
     if prompt_ids.dim() == 1:
         prompt_ids = prompt_ids.unsqueeze(0)
+    if prompt_ids.dim() != 2 or prompt_ids.shape[0] != 1 or prompt_ids.shape[1] == 0:
+        raise ValueError("Cached generation requires one nonempty prompt")
+    if max_new_tokens < 1:
+        raise ValueError("max_new_tokens must be positive")
     device = getattr(adapter, "device", prompt_ids.device)
     prompt_ids = prompt_ids.to(device=device)
 
     t0 = time.perf_counter()
     calls_before = adapter.recurrent_block_calls
     use_kv = hasattr(adapter, "prefill_kv_cache") and hasattr(adapter, "initialize_cached_step")
+    if use_kv and (method == "S1" or (recurrent_steps is not None and recurrent_steps != adapter.total_steps)):
+        raise ValueError("Cached generation requires the native recurrent depth at every token")
+    if use_kv and getattr(adapter, "readout_mode", "last_step") != "last_step":
+        raise ValueError("Cached generation currently requires last_step readout")
     if use_kv:
         adapter.prefill_kv_cache(prompt_ids[:, :-1])  # type: ignore[attr-defined]
         cur_input = prompt_ids[:, -1:]
@@ -776,9 +786,12 @@ def generate_tebdil_cached(
             use_cached_step=use_kv,
             record_snapshots=False,
         )
+        telemetry = res.excursion_telemetry
         did_intervene = (
-            res.excursion_telemetry is not None
-            or any(s.intervention_applied for s in res.step_snapshots)
+            telemetry is not None
+            and not telemetry.skipped_unstable
+            and telemetry.effective_alpha != 0.0
+            and telemetry.beta != 0.0
         )
         if did_intervene:
             excursion_token_indices.append(k)

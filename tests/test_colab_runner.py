@@ -50,7 +50,7 @@ def test_generation_checkpoint_reuses_and_rejects_corruption(monkeypatch, tmp_pa
     assert cached(method='S0')['checkpoint_reused'] is False
     assert cached(method='S0')['checkpoint_reused'] is True
     assert len(calls) == 1
-    path = next(tmp_path.glob('*.json'))
+    path = next(tmp_path.rglob('generation.json'))
     record = json.loads(path.read_text())
     record['generation']['generated_token_ids'] = [2]
     path.write_text(json.dumps(record))
@@ -66,3 +66,67 @@ def test_checkpoint_failure_is_not_reused(monkeypatch, tmp_path):
     with pytest.raises(RuntimeError):
         cached(method='S0')
     assert not list(tmp_path.iterdir())
+
+
+def test_checkpoint_publication_failure_leaves_no_reusable_record(monkeypatch, tmp_path):
+    monkeypatch.setattr(runner, 'generate_tebdil_cached', lambda **kwargs: {'generated_token_ids': [1]})
+    def fail(*args):
+        raise OSError('simulated interrupted publish')
+    monkeypatch.setattr(runner.os, 'rename', fail)
+    with pytest.raises(OSError):
+        runner.checkpointed_generator(tmp_path, {})(method='S0')
+    assert not list(tmp_path.iterdir())
+
+
+def test_checkpoint_identity_change_does_not_reuse(monkeypatch, tmp_path):
+    calls = []
+    def generate(**kwargs):
+        calls.append(1)
+        return {'generated_token_ids': [1]}
+    monkeypatch.setattr(runner, 'generate_tebdil_cached', generate)
+    for identity in [{'revision': 'a'}, {'revision': 'b'}]:
+        assert not runner.checkpointed_generator(tmp_path, identity)(method='S0')['checkpoint_reused']
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize('extra', [['--max-tasks', '0'], ['--max-new-tokens', '-1'], ['--methods', 'S0', 'S0']])
+def test_invalid_run_contract_rejected_before_model_loading(monkeypatch, extra):
+    monkeypatch.setattr(sys, 'argv', ['runner'] + extra)
+    with pytest.raises(SystemExit) as error:
+        runner.main()
+    assert error.value.code == 2
+
+
+def test_unknown_task_id_is_not_an_empty_success(monkeypatch, tmp_path):
+    import json
+    folder = tmp_path / 'configs'
+    folder.mkdir()
+    (folder / 'literature_reasoning_v1_tasks.json').write_text(json.dumps({'partitions': {'development': []}}))
+    monkeypatch.setattr(runner, 'ROOT', tmp_path)
+    with pytest.raises(ValueError, match='Unknown task IDs'):
+        runner.run_literature_reasoning_suite(None, None, [], None, None, task_ids=['typo'])
+
+
+def test_checkpoint_survives_a_fresh_process(tmp_path):
+    import subprocess
+    source = str(Path(runner.__file__).resolve())
+    code = f'''import runpy
+from pathlib import Path
+namespace = runpy.run_path({source!r})
+factory = namespace['checkpointed_generator']
+factory.__globals__['generate_tebdil_cached'] = lambda **kwargs: {{'generated_token_ids': [1]}}
+print(factory(Path({str(tmp_path)!r}), {{'revision': 'same'}})(method='S0')['checkpoint_reused'])
+'''
+    first = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, check=True)
+    second = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, check=True)
+    assert first.stdout.strip() == 'False'
+    assert second.stdout.strip() == 'True'
+
+
+def test_interrupted_temporary_directory_is_not_a_checkpoint(monkeypatch, tmp_path):
+    pending = tmp_path / '.pending-crashed'
+    pending.mkdir()
+    (pending / 'generation.json').write_text('{')
+    monkeypatch.setattr(runner, 'generate_tebdil_cached', lambda **kwargs: {'generated_token_ids': [1]})
+    assert not runner.checkpointed_generator(tmp_path, {})(method='S0')['checkpoint_reused']
+    assert pending.exists()  # Unowned crash evidence is preserved.

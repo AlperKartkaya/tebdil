@@ -9,6 +9,8 @@ import json
 import hashlib
 import os
 import tempfile
+import shutil
+import importlib.metadata
 from itertools import zip_longest
 from pathlib import Path
 import re
@@ -50,7 +52,8 @@ def checkpointed_generator(directory: Path, identity: dict):
         encoded = json.dumps(contract, sort_keys=True, allow_nan=False).encode()
         contract = json.loads(encoded)
         key = hashlib.sha256(encoded).hexdigest()
-        path = directory / (key + ".json")
+        destination = directory / key
+        path = destination / "generation.json"
         if path.exists():
             record = json.loads(path.read_text())
             if record["contract"] != contract:
@@ -62,15 +65,17 @@ def checkpointed_generator(directory: Path, identity: dict):
         result = generate_tebdil_cached(**kwargs)
         payload = json.dumps(result, sort_keys=True, allow_nan=False).encode()
         record = {"contract": contract, "generation": result, "sha256": hashlib.sha256(payload).hexdigest()}
-        fd, temporary = tempfile.mkstemp(dir=directory, prefix=".pending-")
+        temporary = Path(tempfile.mkdtemp(dir=directory, prefix=".pending-"))
         try:
-            with os.fdopen(fd, "w") as stream:
+            with (temporary / "generation.json").open("w") as stream:
                 json.dump(record, stream, allow_nan=False)
                 stream.flush()
                 os.fsync(stream.fileno())
-            os.link(temporary, path)
+            # Directory publication avoids hard links unsupported by mounted Drive.
+            os.rename(temporary, destination)
         finally:
-            os.unlink(temporary)
+            if temporary.exists():
+                shutil.rmtree(temporary)
         return {**result, "checkpoint_reused": False}
 
     return generate
@@ -137,11 +142,13 @@ def run_stall_recovery_suite(
         m1_toks = method_outputs["M1"]["generated_token_ids"] if "M1" in method_outputs else []
         for m, gen in method_outputs.items():
             toks = gen["generated_token_ids"]
-            diff_vs_s0 = sum(1 for a, b in zip_longest(toks, s0_toks) if a != b) if s0_toks else 0
-            diff_vs_m1 = sum(1 for a, b in zip_longest(toks, m1_toks) if a != b) if m1_toks else 0
+            diff_vs_s0 = sum(1 for a, b in zip_longest(toks, s0_toks) if a != b) if "S0" in method_outputs else None
+            diff_vs_m1 = sum(1 for a, b in zip_longest(toks, m1_toks) if a != b) if "M1" in method_outputs else None
             first_diff_s0 = next(
                 (i for i, (a, b) in enumerate(zip_longest(toks, s0_toks)) if a != b), None
             )
+            if "S0" not in method_outputs:
+                first_diff_s0 = None
             gen["changed_tokens_vs_s0"] = diff_vs_s0
             gen["changed_tokens_vs_m1"] = diff_vs_m1
             gen["first_diff_token_offset_vs_s0"] = first_diff_s0
@@ -249,13 +256,15 @@ def run_literature_reasoning_suite(
     task_ids: list[str] | None = None,
     max_new_tokens: int = 640,
     seed: int = 42,
-    checkpoint_path: Path | None = None,
     generator=generate_tebdil_cached,
 ) -> list[dict]:
     lit_data = json.loads((ROOT / "configs/literature_reasoning_v1_tasks.json").read_text(encoding="utf-8"))
     all_tasks = lit_data["partitions"][partition]
     if task_ids:
         id_set = set(task_ids)
+        unknown = id_set - {t["problem_id"] for t in all_tasks}
+        if unknown:
+            raise ValueError(f"Unknown task IDs in {partition}: {sorted(unknown)}")
         tasks = [t for t in all_tasks if t["problem_id"] in id_set]
     else:
         tasks = all_tasks[:max_tasks]
@@ -314,12 +323,6 @@ def run_literature_reasoning_suite(
             )
             row["evaluation"] = eval_res
             records.append(row)
-            if checkpoint_path is not None:
-                checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-                checkpoint_path.write_text(
-                    json.dumps({"partial_literature_records": records}, indent=2, ensure_ascii=False) + "\n",
-                    encoding="utf-8",
-                )
             print(
                 f"    -> tokens={len(gen['generated_token_ids'])} | status={eval_res['status']} | "
                 f"ans={eval_res['extracted_answer']} (gold={task['gold_answer']}, trap={eval_res['hit_trap_answer']}) | "
@@ -344,12 +347,17 @@ def main() -> int:
     parser.add_argument("--task-ids", nargs="*", default=None)
     parser.add_argument("--max-new-tokens", type=int, default=512)
     parser.add_argument("--continuation-tokens", type=int, default=32)
-    parser.add_argument("--methods", nargs="+", default=["S0", "M1", "E1", "E2"])
+    parser.add_argument("--methods", nargs="+", choices=("S0", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1", "E2"), default=["S0", "M1", "E1", "E2"])
     parser.add_argument("--attn", choices=("sdpa", "eager"), default="sdpa" if torch.cuda.is_available() else "eager")
+    parser.add_argument("--dtype", choices=("float32", "bfloat16"), default="float32")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--model", default="ByteDance/Ouro-1.4B-Thinking")
     parser.add_argument("--revision", help="Pinned model commit; required for non-default models")
     args = parser.parse_args()
+    if args.max_tasks < 1 or args.max_new_tokens < 1 or args.continuation_tokens < 1:
+        parser.error("Task and token budgets must be positive")
+    if len(args.methods) != len(set(args.methods)):
+        parser.error("Duplicate methods would create duplicate observations")
     if args.output.exists():
         parser.error("Output already exists; choose a new summary path and reuse --checkpoint-dir")
     if args.model != "ByteDance/Ouro-1.4B-Thinking" and not args.revision:
@@ -358,17 +366,19 @@ def main() -> int:
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         parser.error("--revision must be a full immutable commit SHA")
 
-    sources = sorted((ROOT / "src/tebdil").rglob("*.py")) + [Path(__file__)]
+    sources = sorted((ROOT / "src/tebdil").rglob("*.py")) + sorted((ROOT / "vendor").rglob("*.py")) + [Path(__file__)]
     identity = {
         "model": args.model, "revision": revision,
-        "torch": torch.__version__, "attention": args.attn,
+        "torch": torch.__version__, "attention": args.attn, "dtype_requested": args.dtype,
+        "transformers": importlib.metadata.version("transformers"),
+        "cuda": torch.version.cuda,
         "hardware": torch.cuda.get_device_name(0) if torch.cuda.is_available() else str(torch.backends.mps.is_available()),
         "sources": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources},
     }
     generator = checkpointed_generator(args.checkpoint_dir or args.output.with_suffix(".checkpoints"), identity)
 
     device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
-    dtype = torch.bfloat16 if device in ("cuda", "mps") else torch.float32
+    dtype = getattr(torch, args.dtype) if device in ("cuda", "mps") else torch.float32
     gpu_name = torch.cuda.get_device_name(0) if device == "cuda" else device
 
     print(f"[TEBDIL] Device={device} ({gpu_name}) | dtype={dtype} | attn={args.attn}", flush=True)
@@ -493,6 +503,7 @@ def main() -> int:
                 )
 
     summary = {
+        "execution_identity": identity,
         "model_id": args.model,
         "model_revision": revision,
         "seed": args.seed,
@@ -511,7 +522,9 @@ def main() -> int:
         "literature_reasoning_records": literature_records,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    with args.output.open("x", encoding="utf-8") as stream:
+        json.dump(summary, stream, indent=2, ensure_ascii=False, allow_nan=False)
+        stream.write("\n")
     print(f"[TEBDIL] Saved results to {args.output}", flush=True)
     return 0
 
