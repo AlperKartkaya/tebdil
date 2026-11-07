@@ -390,6 +390,8 @@ def run_scheduled_trajectory(
     else:
         eligible_steps = (excursion_config.visit_step,)
 
+    selected_histories = {b.branch_id: list(committed_depth_states) for b in branches} if method == "P0" else {}
+
     # Advance branches through remaining steps (actual_fork .. total_steps - 1)
     for t in range(actual_fork, total_steps):
         is_visit_step = (t in eligible_steps) and (
@@ -606,13 +608,13 @@ def run_scheduled_trajectory(
             active_to_step = branches if need_donors_after else branches[:1]
             branches = [adapter.transition(b) for b in active_to_step]
             committed_depth_states.append(branches[0])
+            if method == "P0":
+                for branch in branches:
+                    selected_histories[branch.branch_id].append(branch)
             if record_snapshots:
                 snap_now = _snapshot(t + 1, branches)
                 step_snapshots.append(snap_now)
                 prev_margin_a = snap_now.branch_margin.get("A", prev_margin_a)
-
-    if use_cached_step and hasattr(adapter, "commit_cached_step"):
-        adapter.commit_cached_step(committed_depth_states)  # type: ignore[attr-defined]
 
     branch_states = {b.branch_id: b for b in branches}
     readout_branches = branches if (record_snapshots or method == "P0") else branches[:1]
@@ -632,6 +634,10 @@ def run_scheduled_trajectory(
     else:
         primary_state = branches[0]
         primary_logits = branch_logits[branches[0].branch_id]
+
+    if use_cached_step and hasattr(adapter, "commit_cached_step"):
+        chosen_history = selected_histories[primary_state.branch_id] if method == "P0" else committed_depth_states
+        adapter.commit_cached_step(chosen_history)  # type: ignore[attr-defined]
 
     wall_ms = (time.perf_counter() - t0) * 1000.0
     pca_coords, pca_evr = _compute_pca_projection(branch_vec_history) if record_pca else ({}, [])
@@ -658,6 +664,42 @@ def run_scheduled_trajectory(
         pca_coords=pca_coords,
         pca_explained_variance=pca_evr,
     )
+
+
+@dataclass
+class ExcursionWindowState:
+    """Token-level policy state; fixed methods deliberately bypass this gate."""
+
+    window_remaining: int = 0
+    cooldown_remaining: int = 0
+    post_excursion_cooldown: int = 2
+    thinking_closed: bool = False
+
+    def select(self, method: str, unconditional: bool) -> tuple[str, bool]:
+        if unconditional:
+            return method, False
+        if self.thinking_closed:
+            return "S0", False
+        if self.window_remaining > 0:
+            self.window_remaining -= 1
+            if self.window_remaining == 0:
+                self.cooldown_remaining = self.post_excursion_cooldown
+            return "E1", True
+        if self.cooldown_remaining > 0:
+            self.cooldown_remaining -= 1
+            return "S0", False
+        return method, False
+
+    def intervene(self, continuation: bool, window_tokens: int) -> None:
+        if not continuation:
+            if window_tokens > 1:
+                self.window_remaining = window_tokens - 1
+            else:
+                self.cooldown_remaining = self.post_excursion_cooldown
+
+    def close_thinking(self) -> None:
+        self.thinking_closed = True
+        self.window_remaining = 0
 
 
 @torch.no_grad()
@@ -698,9 +740,10 @@ def generate_tebdil_cached(
 
     generated_tokens: List[int] = []
     excursion_token_indices: List[int] = []
-    window_remaining = 0
-    cooldown_remaining = 16 if max_new_tokens > 64 else 0
-    post_excursion_cooldown = 18 if max_new_tokens > 64 else 2
+    window_state = ExcursionWindowState(
+        cooldown_remaining=16 if max_new_tokens > 64 else 0,
+        post_excursion_cooldown=18 if max_new_tokens > 64 else 2,
+    )
     eos_id = getattr(tokenizer, "eos_token_id", None)
     think_close_id: Optional[int] = None
     if tokenizer is not None and hasattr(tokenizer, "convert_tokens_to_ids"):
@@ -710,27 +753,11 @@ def generate_tebdil_cached(
                 think_close_id = cid
         except Exception:
             think_close_id = None
-    thinking_closed = False
     stop_reason = "max_output_tokens"
     unconditional_methods = ("S0", "S1", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1")
 
     for k in range(max_new_tokens):
-        if thinking_closed and method not in unconditional_methods:
-            step_method = "S0"
-            was_window_continuation = False
-        elif window_remaining > 0 and method not in unconditional_methods:
-            step_method = "E1"
-            window_remaining -= 1
-            was_window_continuation = True
-            if window_remaining == 0:
-                cooldown_remaining = post_excursion_cooldown
-        elif cooldown_remaining > 0 and method not in unconditional_methods:
-            step_method = "S0"
-            cooldown_remaining -= 1
-            was_window_continuation = False
-        else:
-            step_method = method
-            was_window_continuation = False
+        step_method, was_window_continuation = window_state.select(method, method in unconditional_methods)
 
         res = run_scheduled_trajectory(
             adapter=adapter,
@@ -755,17 +782,12 @@ def generate_tebdil_cached(
         )
         if did_intervene:
             excursion_token_indices.append(k)
-            if not was_window_continuation:
-                if excursion_config.excursion_window_tokens > 1:
-                    window_remaining = excursion_config.excursion_window_tokens - 1
-                else:
-                    cooldown_remaining = post_excursion_cooldown
+            window_state.intervene(was_window_continuation, excursion_config.excursion_window_tokens)
 
         tok_id = int(res.primary_logits[:, -1, :].argmax(dim=-1).item())
         generated_tokens.append(tok_id)
         if think_close_id is not None and tok_id == think_close_id:
-            thinking_closed = True
-            window_remaining = 0
+            window_state.close_thinking()
         if eos_id is not None and tok_id == eos_id:
             stop_reason = "eos_token"
             break

@@ -34,6 +34,35 @@ def test_stall_comparison_counts_unmatched_suffix(monkeypatch, tmp_path):
         tokens = [1] if kwargs['method'] == 'S0' else [1, 2]
         return {'generated_token_ids': tokens, 'excursion_count': 0, 'recurrent_block_calls': 1, 'wall_seconds': 0, 'decoded_text': ''}
     monkeypatch.setattr(runner, 'generate_tebdil_cached', generate)
-    rows = runner.run_stall_recovery_suite(SimpleNamespace(device='cpu'), SimpleNamespace(decode=lambda *a, **k: ''), ['S0', 'E1'], None, None)
+    rows = runner.run_stall_recovery_suite(SimpleNamespace(device='cpu'), SimpleNamespace(decode=lambda *a, **k: ''), ['S0', 'E1'], None, None, generator=generate)
     assert rows[0]['methods']['E1']['changed_tokens_vs_s0'] == 1
     assert rows[0]['methods']['E1']['first_diff_token_offset_vs_s0'] == 1
+
+
+def test_generation_checkpoint_reuses_and_rejects_corruption(monkeypatch, tmp_path):
+    import json
+    calls = []
+    def generate(**kwargs):
+        calls.append(kwargs)
+        return {'generated_token_ids': [1], 'completed': True}
+    monkeypatch.setattr(runner, 'generate_tebdil_cached', generate)
+    cached = runner.checkpointed_generator(tmp_path, {'model': 'fixture'})
+    assert cached(method='S0')['checkpoint_reused'] is False
+    assert cached(method='S0')['checkpoint_reused'] is True
+    assert len(calls) == 1
+    path = next(tmp_path.glob('*.json'))
+    record = json.loads(path.read_text())
+    record['generation']['generated_token_ids'] = [2]
+    path.write_text(json.dumps(record))
+    with pytest.raises(ValueError, match='checksum'):
+        cached(method='S0')
+
+
+def test_checkpoint_failure_is_not_reused(monkeypatch, tmp_path):
+    def fail(**kwargs):
+        raise RuntimeError('runtime lost')
+    monkeypatch.setattr(runner, 'generate_tebdil_cached', fail)
+    cached = runner.checkpointed_generator(tmp_path, {})
+    with pytest.raises(RuntimeError):
+        cached(method='S0')
+    assert not list(tmp_path.iterdir())

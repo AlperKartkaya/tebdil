@@ -6,6 +6,9 @@ import argparse
 from dataclasses import asdict, replace
 from datetime import datetime, timezone
 import json
+import hashlib
+import os
+import tempfile
 from itertools import zip_longest
 from pathlib import Path
 import re
@@ -29,6 +32,50 @@ from tebdil.tasks.reasoning import evaluate_reasoning_task
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def checkpointed_generator(directory: Path, identity: dict):
+    """Reuse only complete generations with identical code, inputs and configuration."""
+    directory.mkdir(parents=True, exist_ok=True)
+
+    def generate(**kwargs):
+        parameters = {}
+        for name, value in kwargs.items():
+            if name in ("adapter", "tokenizer"):
+                continue
+            if name == "prompt_ids":
+                value = value.detach().cpu().tolist()
+            elif name in ("excursion_config", "policy_config"):
+                value = asdict(value)
+            parameters[name] = value
+        contract = {"identity": identity, "parameters": parameters}
+        encoded = json.dumps(contract, sort_keys=True, allow_nan=False).encode()
+        contract = json.loads(encoded)
+        key = hashlib.sha256(encoded).hexdigest()
+        path = directory / (key + ".json")
+        if path.exists():
+            record = json.loads(path.read_text())
+            if record["contract"] != contract:
+                raise ValueError("Checkpoint contract mismatch")
+            payload = json.dumps(record["generation"], sort_keys=True, allow_nan=False).encode()
+            if hashlib.sha256(payload).hexdigest() != record["sha256"]:
+                raise ValueError("Checkpoint checksum mismatch")
+            return {**record["generation"], "checkpoint_reused": True}
+        result = generate_tebdil_cached(**kwargs)
+        payload = json.dumps(result, sort_keys=True, allow_nan=False).encode()
+        record = {"contract": contract, "generation": result, "sha256": hashlib.sha256(payload).hexdigest()}
+        fd, temporary = tempfile.mkstemp(dir=directory, prefix=".pending-")
+        try:
+            with os.fdopen(fd, "w") as stream:
+                json.dump(record, stream, allow_nan=False)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.link(temporary, path)
+        finally:
+            os.unlink(temporary)
+        return {**result, "checkpoint_reused": False}
+
+    return generate
+
+
 def run_stall_recovery_suite(
     adapter: OuroRecurrentAdapter,
     tokenizer,
@@ -37,6 +84,7 @@ def run_stall_recovery_suite(
     pol_cfg: AdaptivePolicyConfig,
     continuation_tokens: int = 32,
     seed: int = 42,
+    generator=generate_tebdil_cached,
 ) -> list[dict]:
     passive_dir = ROOT / "reports/passive_reasoning_v1"
     report = json.loads((passive_dir / "report.json").read_text(encoding="utf-8"))
@@ -63,7 +111,7 @@ def run_stall_recovery_suite(
 
         method_outputs: dict[str, dict] = {}
         for m in methods:
-            gen = generate_tebdil_cached(
+            gen = generator(
                 adapter=adapter,
                 tokenizer=tokenizer,
                 prompt_ids=prefix_ids,
@@ -121,6 +169,7 @@ def run_completion_reasoning_suite(
     max_tasks: int = 3,
     max_new_tokens: int = 512,
     seed: int = 42,
+    generator=generate_tebdil_cached,
 ) -> list[dict]:
     comp_data = json.loads((ROOT / "configs/completion_v1_tasks.json").read_text(encoding="utf-8"))
     tasks = comp_data["partitions"]["development"][:max_tasks]
@@ -131,7 +180,7 @@ def run_completion_reasoning_suite(
         prompt_ids = encode_reasoning_prompt(tokenizer, task["prompt"]).to(adapter.device)
         for m in methods:
             print(f"  [Completion Suite] {task['problem_id']} ({task['template_id']}) | method={m} ...", flush=True)
-            gen = generate_tebdil_cached(
+            gen = generator(
                 adapter=adapter,
                 tokenizer=tokenizer,
                 prompt_ids=prompt_ids,
@@ -201,6 +250,7 @@ def run_literature_reasoning_suite(
     max_new_tokens: int = 640,
     seed: int = 42,
     checkpoint_path: Path | None = None,
+    generator=generate_tebdil_cached,
 ) -> list[dict]:
     lit_data = json.loads((ROOT / "configs/literature_reasoning_v1_tasks.json").read_text(encoding="utf-8"))
     all_tasks = lit_data["partitions"][partition]
@@ -225,7 +275,7 @@ def run_literature_reasoning_suite(
                 f"  [Literature Suite] {task['problem_id']} ({task['family']}) | method={m} ...",
                 flush=True,
             )
-            gen = generate_tebdil_cached(
+            gen = generator(
                 adapter=adapter,
                 tokenizer=tokenizer,
                 prompt_ids=prompt_ids,
@@ -282,6 +332,7 @@ def run_literature_reasoning_suite(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--checkpoint-dir", type=Path, help="Persistent generation cache; use mounted storage to survive VM loss")
     parser.add_argument("--output", type=Path, default=ROOT / "reports/colab_l4_tebdil_run.json")
     parser.add_argument(
         "--suite",
@@ -299,11 +350,22 @@ def main() -> int:
     parser.add_argument("--model", default="ByteDance/Ouro-1.4B-Thinking")
     parser.add_argument("--revision", help="Pinned model commit; required for non-default models")
     args = parser.parse_args()
+    if args.output.exists():
+        parser.error("Output already exists; choose a new summary path and reuse --checkpoint-dir")
     if args.model != "ByteDance/Ouro-1.4B-Thinking" and not args.revision:
         parser.error("--revision is required for a non-default model")
     revision = args.revision or PINNED_OURO_THINKING_REV
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         parser.error("--revision must be a full immutable commit SHA")
+
+    sources = sorted((ROOT / "src/tebdil").rglob("*.py")) + [Path(__file__)]
+    identity = {
+        "model": args.model, "revision": revision,
+        "torch": torch.__version__, "attention": args.attn,
+        "hardware": torch.cuda.get_device_name(0) if torch.cuda.is_available() else str(torch.backends.mps.is_available()),
+        "sources": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources},
+    }
+    generator = checkpointed_generator(args.checkpoint_dir or args.output.with_suffix(".checkpoints"), identity)
 
     device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     dtype = torch.bfloat16 if device in ("cuda", "mps") else torch.float32
@@ -350,6 +412,7 @@ def main() -> int:
 
     if args.suite in ("all", "stall"):
         stall_records = run_stall_recovery_suite(
+            generator=generator,
             adapter=adapter,
             tokenizer=tokenizer,
             methods=args.methods,
@@ -361,6 +424,7 @@ def main() -> int:
 
     if args.suite in ("all", "completion"):
         completion_records = run_completion_reasoning_suite(
+            generator=generator,
             adapter=adapter,
             tokenizer=tokenizer,
             methods=args.methods,
@@ -373,6 +437,7 @@ def main() -> int:
 
     if args.suite in ("all", "literature"):
         literature_records = run_literature_reasoning_suite(
+            generator=generator,
             adapter=adapter,
             tokenizer=tokenizer,
             methods=args.methods,
@@ -383,7 +448,6 @@ def main() -> int:
             task_ids=args.task_ids,
             max_new_tokens=args.max_new_tokens,
             seed=args.seed,
-            checkpoint_path=args.output,
         )
 
     if args.suite == "reasoning_v1":
@@ -393,7 +457,7 @@ def main() -> int:
             prompt_ids = encode_reasoning_prompt(tokenizer, task["prompt"]).to(adapter.device)
             for method in args.methods:
                 print(f"  Running {task['problem_id']} | method={method} ...", flush=True)
-                gen = generate_tebdil_cached(
+                gen = generator(
                     adapter=adapter,
                     tokenizer=tokenizer,
                     prompt_ids=prompt_ids,

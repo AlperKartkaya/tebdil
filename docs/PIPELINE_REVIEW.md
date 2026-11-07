@@ -16,11 +16,11 @@ Current execution entry point: `scripts/run_colab_l4.py`. Historical protocol-na
 
 ## Method issues requiring further work
 
-1. The cached scheduler commits receiver depth states before P0 selects a potentially different output branch. Selected-donor output/cache consistency needs a dedicated real-cache regression test before P0 is used as a persistent comparison. This review did not repair that path.
-2. Cached generation has implicit thinking/window/cooldown states and length-dependent hard-coded cooldowns. These need a frozen policy contract and transition tests before refactoring; changing them would change the experiment, not merely clean code.
+1. The cached scheduler commits receiver depth states before P0 selects a potentially different output branch. Selected-donor output/cache consistency needs a dedicated real-cache regression test before P0 is used as a persistent comparison. The follow-up now commits the selected branch history; a forced-donor regression fails before the fix and passes afterward.
+2. Cached generation has implicit thinking/window/cooldown states and length-dependent hard-coded cooldowns. The follow-up extracts these into `ExcursionWindowState`, preserving existing cooldown values and fixed-method bypass semantics, with transition tests.
 3. Stall checkpoints are hand-selected development prefixes. Results are diagnostic, not unbiased estimates of intervention utility. Freeze trigger selection without labels before reserved testing.
 4. Locally adapted literature examples are not official benchmark scores. Some source licenses remain unresolved. The dataset registry exposes this rather than guessing permissions.
-5. Current output saving is not a transactional, per-task resume system across all suites. Runtime loss can destroy unpersisted results. The bridge cannot fix runner checkpoint semantics by itself.
+5. The runner now checkpoints each completed generation atomically across suites. Keys bind code hashes, hardware, model revision, prompt IDs and generation settings. Corrupt records fail closed; failed generations are never cached. Use mounted persistent storage for `--checkpoint-dir` and a fresh summary path on resume. Prior generation costs remain attached to reused records, marked `checkpoint_reused`; they are not new execution costs.
 
 ## Multi-model evaluation
 
@@ -31,3 +31,7 @@ Freeze identical task IDs, prompts, stopping/parser rules and paired seeds. Repo
 ## Validation boundary
 
 The baseline suite passed 340 tests with four real-model tests excluded. Public tunnel startup, Google runtime recovery, 2.6B parity and GPU outcomes were not tested in this review. No Colab connection was supplied. Site styling and historical scores remain unchanged.
+
+## Follow-up execution evidence
+
+Authenticated connection to the replacement bridge succeeded. An isolated Colab checkout passed six targeted tests. A real Ouro-1.4B L4 smoke generated two tokens each for S0, P0 and E2; all stopped on budget, E2 made no excursion. Peak allocated CUDA memory was 2,889,218,048 bytes. See `reports/pipeline_gpu_smoke.json`. This is not accuracy, native parity, donor-win parity, or 2.6B validation. The existing runtime report was preserved locally; the original checkout was not modified.

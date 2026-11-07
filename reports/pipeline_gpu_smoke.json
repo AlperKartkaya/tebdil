@@ -1,0 +1,50 @@
+{
+  "model": "ByteDance/Ouro-1.4B-Thinking",
+  "device": "NVIDIA L4",
+  "scope": "two-token cached execution smoke; not correctness or native parity",
+  "results": {
+    "S0": {
+      "method": "S0",
+      "generated_token_ids": [
+        37,
+        446
+      ],
+      "decoded_text": "5 =",
+      "stop_reason": "max_output_tokens",
+      "completed": false,
+      "excursion_token_indices": [],
+      "excursion_count": 0,
+      "recurrent_block_calls": 12,
+      "wall_seconds": 2.418
+    },
+    "P0": {
+      "method": "P0",
+      "generated_token_ids": [
+        37,
+        446
+      ],
+      "decoded_text": "5 =",
+      "stop_reason": "max_output_tokens",
+      "completed": false,
+      "excursion_token_indices": [],
+      "excursion_count": 0,
+      "recurrent_block_calls": 18,
+      "wall_seconds": 0.7052
+    },
+    "E2": {
+      "method": "E2",
+      "generated_token_ids": [
+        37,
+        446
+      ],
+      "decoded_text": "5 =",
+      "stop_reason": "max_output_tokens",
+      "completed": false,
+      "excursion_token_indices": [],
+      "excursion_count": 0,
+      "recurrent_block_calls": 14,
+      "wall_seconds": 0.5405
+    },
+    "peak_memory_bytes": 2889218048
+  }
+}
