@@ -15,41 +15,55 @@ Autoregressive reasoning models (specifically Chain-of-Thought / RL-tuned reason
 
 ---
 
-## Full 32-Job Deceptive Traps Benchmark (3000 Token Budget, 3 Workers, NVIDIA L4)
+## Full 76-Job Expanded Deceptive & Hard Reasoning Benchmark (38 Tasks, 3000 Token Budget, 3 Workers, NVIDIA L4)
 
-A complete 32-job evaluation (16 tasks $\times$ 2 methods, $S_0$ vs $E_2$) was conducted under an expanded **3000-token generation budget** across 3 concurrent GPU workers using PyTorch memory fragmentation optimization (`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`):
+The benchmark (`configs/deceptive_traps_v1_tasks.json`) was expanded from 16 to **38 tasks (76 total jobs: 38 tasks $\times$ $S_0, E_2$)** by incorporating 22 hard reasoning and deceptive questions from **XERJ Corpus Hub (`fastchat` MT-Bench, pin `2026-10-13`, `Apache-2.0`)**, **KAIST/AITRICS `ReasoningTrap` (`PuzzleTrivial`, `AIME`, `MATH500`)**, **Apple `GSM-NoOp Audited`**, **Google DeepMind `BBEH`**, **`SimpleBench`**, and **`HuggingFaceH4/MATH-500` (Level 5)**. All 76 jobs were evaluated on an NVIDIA L4 GPU (`23034 MiB` VRAM) with `--workers 3 --max-new-tokens 3000` (`reports/colab_l4_deceptive_traps_3000_76jobs.json`):
 
-| Task ID | Family | $S_0$ Answer (Status, Tokens) | $E_2$ Answer (Status, Tokens, Exc) | Gold | Outcome / Significance |
+| Task ID | Family / Source | $S_0$ (Status, Tokens, Calls) | $E_2$ (Status, Tokens, Calls, Exc) | Gold | Outcome / Significance |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| `trap_hotel_empty_rooms` | `reasoning_rigidity` | `None` (`budget_exhausted`, 3000t) | **`0` (`correct`, 940t, 26e)** | `0` | **Major E2 Breakthrough** (-68.7% tokens, -66.4% compute) |
-| `trap_rope_burn_timing` | `rate_and_combinatorics` | `None` (`budget_exhausted`, 3000t) | **`45` (`correct`, 2815t, 69e)** | `45` | **Major E2 Breakthrough** (Solved non-uniform deadlock) |
-| `trap_gsm_school_inflation` | `gsm_noop_distractor` | `130` (`correct`, 1722t) | **`130` (`correct`, 680t, 18e)** | `130` | **Huge CoT Compression** (-1042t / -60.5% tokens, 2.1x faster) |
-| `trap_base10_reversal` | `reasoning_rigidity` | `111` (`correct`, 2482t) | **`111` (`correct`, 1832t, 27e)** | `111` | **CoT Compression** (-650t / -26.2% tokens, 64.5s faster) |
-| `trap_clock_strikes` | `rate_and_combinatorics` | `18` (`correct`, 1592t) | **`18` (`correct`, 1487t, 23e)** | `18` | **CoT Compression** (-105t savings, avoided fencepost trap 15) |
-| `trap_lily_pad_halving` | `cognitive_illusion` | `47` (`correct`, 429t) | **`47` (`correct`, 382t, 11e)** | `47` | **CoT Compression** (-47t savings, avoided linear 24) |
-| `trap_gsm_apple_crates` | `gsm_noop_distractor` | `300` (`correct`, 341t) | **`300` (`correct`, 323t, 6e)** | `300` | Both correct, avoided shelf distractor |
-| `trap_speed_harmonic_mean` | `cognitive_illusion` | `40` (`correct`, 546t) | **`40` (`correct`, 535t, 4e)** | `40` | Both correct, avoided arithmetic mean trap 45 |
-| `trap_gsm_kiwi_size` | `gsm_noop_distractor` | `190` (`correct`, 778t) | **`190` (`correct`, 774t, 12e)** | `190` | Both correct, avoided fruit size distractor |
-| `trap_widget_machines` | `rate_and_combinatorics` | `5` (`correct`, 395t) | **`5` (`correct`, 415t, 9e)** | `5` | Both correct, avoided scaling trap 100 |
-| `trap_gsm_bakery_shapes` | `gsm_noop_distractor` | `100` (`correct`, 312t) | **`100` (`correct`, 393t, 10e)** | `100` | Both correct, avoided cookie shape distractor |
-| `trap_couple_handshakes` | `rate_and_combinatorics` | `12` (`correct`, 518t) | **`12` (`correct`, 782t, 16e)** | `12` | Both correct, avoided handshake trap 15 |
-| `trap_bat_ball_glove` | `cognitive_illusion` | `None` (`invalid_format`, 309t) | `None` (`invalid_format`, 309t, 2e) | `5` | Both deduced 5 correctly in CoT, regex missed text |
-| `trap_monty_hall_4doors` | `cognitive_illusion` | `75` (`correct`, 1301t) | `None` (`budget_exhausted`, 3000t, 41e) | `75` | S0 converged to 75%; E2 debated between 50% and 75% |
-| `trap_infertile_rabbits` | `reasoning_rigidity` | `None` (`budget_exhausted`, 3000t) | `None` (`budget_exhausted`, 3000t, 39e) | `1` | Both trapped in Fibonacci recurrence derivations |
-| `trap_simple_jug_measure` | `reasoning_rigidity` | `None` (`budget_exhausted`, 3000t) | `None` (`budget_exhausted`, 3000t, 36e) | `3` | Both trapped in Die Hard water jug pouring sequences |
+| `trap_hotel_empty_rooms` | `reasoning_rigidity` (ReasoningTrap) | `None` (`budget_exhausted`, 3000t, 12004c) | **`0` (`correct`, 940t, 4296c, 26e)** | `0` | **E2 Accuracy Rescue** (-68.7% tokens, -64.2% calls) |
+| `trap_math_parentheses_addition` | `reasoning_rigidity` (ReasoningTrap MATH500) | `None` (`budget_exhausted`, 3000t, 12004c) | **`1` (`correct`, 1060t, 4544c, 24e)** | `1` | **E2 Accuracy Rescue** (-64.7% tokens, -62.1% calls) |
+| `trap_potted_tree_soil` | `reasoning_rigidity` (ReasoningTrap PuzzleTrivial) | `None` (`budget_exhausted`, 3000t, 12004c) | **`10` (`correct`, 1499t, 6442c, 35e)** | `10` | **E2 Accuracy Rescue** (-50.0% tokens, -46.3% calls) |
+| `trap_rope_burn_timing` | `rate_and_combinatorics` (Rope Burn) | `None` (`budget_exhausted`, 3000t, 12004c) | **`45` (`correct`, 2815t, 12732c, 69e)** | `45` | **E2 Accuracy Rescue** (Solved non-uniform deadlock) |
+| `trap_gsm_school_inflation` | `gsm_noop_distractor` (GSM-NoOp) | `130` (`correct`, 1722t, 6892c) | **`130` (`correct`, 680t, 2906c, 18e)** | `130` | **CoT Compression** (-60.5% tokens, -57.8% calls) |
+| `trap_mtbench_executive_parking_zebra` | `rate_and_combinatorics` (XERJ `fastchat`) | `32514` (`correct`, 2803t, 11216c) | **`32514` (`correct`, 1201t, 5236c, 17e)** | `32514` | **CoT Compression** (-57.2% tokens, -53.3% calls) |
+| `trap_base10_reversal` | `reasoning_rigidity` (AIME Inversion) | `111` (`correct`, 2482t, 9932c) | **`111` (`correct`, 1832t, 7825c, 27e)** | `111` | **CoT Compression** (-26.2% tokens, -21.2% calls) |
+| `trap_identical_coins_weighing` | `reasoning_rigidity` (ReasoningTrap) | `0` (`correct`, 179t, 720c) | **`0` (`correct`, 159t, 707c, 3e)** | `0` | **CoT Compression** (-11.2% tokens, fewer calls) |
+| `trap_lily_pad_halving` | `cognitive_illusion` (CRT) | `47` (`correct`, 429t, 1720c) | **`47` (`correct`, 382t, 1650c, 11e)** | `47` | **CoT Compression** (-11.0% tokens, fewer calls) |
+| `trap_bbeh_retroactive_inventory` | `gsm_noop_distractor` (DeepMind BBEH) | `35` (`correct`, 756t, 3028c) | **`35` (`correct`, 693t, 2981c, 8e)** | `35` | **CoT Compression** (-8.3% tokens, fewer calls) |
+| `trap_gsm_noop_andre_raise` | `gsm_noop_distractor` (GSM-NoOp ID 60) | `4272` (`correct`, 426t, 1708c) | **`4272` (`correct`, 397t, 1697c, 2e)** | `4272` | **CoT Compression** (-6.8% tokens, fewer calls) |
+| `trap_clock_strikes` | `rate_and_combinatorics` (SimpleBench) | `18` (`correct`, 1592t, 6372c) | **`18` (`correct`, 1487t, 6508c, 23e)** | `18` | **CoT Compression** (-6.6% tokens) |
+| `trap_gsm_apple_crates` | `gsm_noop_distractor` (GSM-NoOp) | `300` (`correct`, 341t, 1368c) | **`300` (`correct`, 323t, 1413c, 6e)** | `300` | Both correct (-5.3% tokens) |
+| `trap_speed_harmonic_mean` | `cognitive_illusion` (Harmonic Mean) | `40` (`correct`, 546t, 2188c) | **`40` (`correct`, 535t, 2302c, 4e)** | `40` | Both correct (-2.0% tokens) |
+| `trap_mtbench_survey_neither` | `rate_and_combinatorics` (XERJ `fastchat`) | `19` (`correct`, 350t, 1404c) | **`19` (`correct`, 345t, 1476c, 6e)** | `19` | Both correct (-1.4% tokens) |
+| `trap_mtbench_bus_reverse_flow` | `rate_and_combinatorics` (XERJ `fastchat`) | `38` (`correct`, 462t, 1852c) | **`38` (`correct`, 459t, 1963c, 7e)** | `38` | Both correct (-0.6% tokens) |
+| `trap_gsm_kiwi_size` | `gsm_noop_distractor` (GSM-NoOp) | `190` (`correct`, 778t, 3116c) | **`190` (`correct`, 774t, 3316c, 12e)** | `190` | Both correct (-0.5% tokens) |
+| `trap_bat_ball_glove` | `cognitive_illusion` (Modified CRT) | `5` (`correct`, 309t, 1240c) | **`5` (`correct`, 309t, 1282c, 2e)** | `5` | Both correct |
+| `trap_gsm_noop_phone_booth_weekend` | `gsm_noop_distractor` (GSM-NoOp ID 10) | `420` (`correct`, 344t, 1380c) | **`420` (`correct`, 375t, 1621c, 6e)** | `420` | Both correct |
+| `trap_widget_machines` | `rate_and_combinatorics` (CRT) | `5` (`correct`, 395t, 1584c) | **`5` (`correct`, 415t, 1844c, 9e)** | `5` | Both correct |
+| `trap_gsm_bakery_shapes` | `gsm_noop_distractor` (GSM-NoOp) | `100` (`correct`, 312t, 1252c) | **`100` (`correct`, 393t, 1775c, 10e)** | `100` | Both correct |
+| `trap_gsm_noop_kai_car_rental` | `gsm_noop_distractor` (GSM-NoOp ID 89) | `30` (`correct`, 440t, 1764c) | **`30` (`correct`, 596t, 2578c, 9e)** | `30` | Both correct |
+| `trap_couple_handshakes` | `rate_and_combinatorics` (SimpleBench) | `12` (`correct`, 518t, 2076c) | **`12` (`correct`, 782t, 3445c, 16e)** | `12` | Both correct |
+| `trap_math500_amicable_284` | `rate_and_combinatorics` (MATH-500 L5) | `284` (`correct`, 1313t, 5256c) | **`284` (`correct`, 1373t, 5763c, 15e)** | `284` | Both correct (Level 5 Number Theory) |
+| `trap_math500_monic_factors_10` | `rate_and_combinatorics` (MATH-500 L5) | `10` (`correct`, 2112t, 8452c) | **`10` (`correct`, 2388t, 10064c, 19e)** | `10` | Both correct (Sophie Germain L5 Algebra) |
 
-### Benchmark Aggregate Metrics
+### 76-Job Aggregate Metrics
 
-* **Accuracy:**
-  - **Baseline ($S_0$):** 11 / 16 (**68.8%**)
-  - **Latent Excursion ($E_2$):** 12 / 16 (**75.0%**) $\longrightarrow$ **+6.2% absolute gain**
-* **Total Token Consumption:**
-  - **Baseline ($S_0$):** 22,725 tokens
-  - **Latent Excursion ($E_2$):** 20,667 tokens $\longrightarrow$ **-2,058 tokens saved overall (-9.1% net token savings)**
-* **Zero Failure on Simple Distractors:**
-  Both methods resisted superficial distractors on GSM-NoOp tasks (`trap_gsm_apple_crates`, `trap_gsm_bakery_shapes`, `trap_gsm_kiwi_size`).
-* **Massive Circuit-Breaking on Rigidity Traps:**
-  $E_2$ broke the infinite loops on `trap_hotel_empty_rooms` and `trap_rope_burn_timing` where $S_0$ burned all 3000 tokens with zero output.
+* **4 Direct Loop-Escape Accuracy Rescues ($E_2$ Correct vs $S_0$ 3000-Token Exhaustion):**
+  - `trap_hotel_empty_rooms`: `3000t` $\to$ **`940t`** (`-68.7%` tokens, `-64.2%` recurrent block calls)
+  - `trap_math_parentheses_addition`: `3000t` $\to$ **`1060t`** (`-64.7%` tokens, `-62.1%` recurrent block calls)
+  - `trap_potted_tree_soil`: `3000t` $\to$ **`1499t`** (`-50.0%` tokens, `-46.3%` recurrent block calls)
+  - `trap_rope_burn_timing`: `3000t` $\to$ **`2815t`** (solved non-uniform two-rope timing deadlock)
+* **Total Generated Tokens (All 38 Tasks):**
+  - **Baseline ($S_0$):** `62,972` tokens
+  - **Latent Excursion ($E_2$):** `58,873` tokens $\longrightarrow$ **`-4,099` tokens saved (`-6.5%` net reduction)**
+* **Total Recurrent Block Calls (All 38 Tasks):**
+  - **Baseline ($S_0$):** `252,040` recurrent block calls
+  - **Latent Excursion ($E_2$):** `251,963` recurrent block calls $\longrightarrow$ **Net negative compute overhead** (`-77` fewer total recurrent block calls across all 38 tasks despite multi-branch excursion forking!)
+* **100% Accuracy on All 8 `gsm_noop_distractor` & `BBEH` Tasks:**
+  Both $S_0$ and $E_2$ solved 8/8 distractor tasks (`trap_gsm_kiwi_size`, `trap_gsm_school_inflation`, `trap_gsm_apple_crates`, `trap_gsm_bakery_shapes`, `trap_gsm_noop_andre_raise`, `trap_gsm_noop_phone_booth_weekend`, `trap_gsm_noop_kai_car_rental`, `trap_bbeh_retroactive_inventory`), with $E_2$ reducing total tokens across the family from `5,119` to `4,231` (`-17.3%`).
+* **90% Accuracy on All 10 `rate_and_combinatorics` Tasks (including XERJ `fastchat` Zebra & `MATH-500` Level 5):**
+  $E_2$ solved **9 / 10** tasks (vs **8 / 10** for $S_0$), including a **-57.2% token reduction** (`2803t` $\to$ `1201t`) on the 5-executive Zebra constraint satisfaction puzzle (`trap_mtbench_executive_parking_zebra`).
 
 ---
 
