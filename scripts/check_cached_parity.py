@@ -32,8 +32,12 @@ def main():
     parser.add_argument('--revision', default=PINNED_OURO_THINKING_REV)
     parser.add_argument('--dtype', choices=['float32', 'bfloat16'], default='bfloat16')
     parser.add_argument('--attention', choices=['eager', 'sdpa'], default='sdpa')
+    parser.add_argument('--prefix-lengths', type=int, nargs='+', default=[1, 5])
+    parser.add_argument('--tokens', type=int, default=3)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
+    if args.tokens < 1 or any(length < 1 for length in args.prefix_lengths):
+        parser.error('Prefix lengths and token count must be positive')
     if not re.fullmatch('[0-9a-f]{40}', args.revision) or args.output.exists():
         parser.error('Require immutable revision and a new output path')
     if args.model != 'ByteDance/Ouro-1.4B-Thinking' and args.revision == PINNED_OURO_THINKING_REV:
@@ -42,11 +46,11 @@ def main():
         parser.error('Real checkpoint parity targets a CUDA runtime')
     adapter = OuroRecurrentAdapter.from_pretrained(repo_id=args.model, revision=args.revision, device='cuda', dtype=getattr(torch, args.dtype), cache_mode='branched_kv', attn_implementation=args.attention)
     rows = []
-    for length in [1, 5]:
-        rows.extend(check(adapter, torch.arange(1, length + 1, device='cuda').unsqueeze(0)))
+    for length in args.prefix_lengths:
+        rows.extend(check(adapter, torch.arange(1, length + 1, device='cuda').unsqueeze(0), tokens=args.tokens))
     tolerance = 1e-4 if args.dtype == 'float32' else .25
     passed = all(r['finite'] and r['top1_match'] and r['cache_lengths_match'] and r['max_abs_difference'] <= tolerance for r in rows)
-    report = {'model': args.model, 'revision': args.revision, 'device': torch.cuda.get_device_name(0), 'dtype': args.dtype, 'attention': args.attention, 'torch': torch.__version__, 'absolute_logit_tolerance': tolerance, 'rows': rows, 'passed': passed, 'peak_memory_bytes': torch.cuda.max_memory_allocated(), 'scope': 'six synthetic-prefix S0 steps; not accuracy or intervention parity', 'script_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+    report = {'model': args.model, 'revision': args.revision, 'device': torch.cuda.get_device_name(0), 'dtype': args.dtype, 'attention': args.attention, 'torch': torch.__version__, 'absolute_logit_tolerance': tolerance, 'rows': rows, 'passed': passed, 'peak_memory_bytes': torch.cuda.max_memory_allocated(), 'prefix_lengths': args.prefix_lengths, 'steps_per_prefix': args.tokens, 'scope': 'synthetic-prefix S0 checks; not accuracy or intervention parity', 'script_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open('x') as stream:
         json.dump(report, stream, indent=2)

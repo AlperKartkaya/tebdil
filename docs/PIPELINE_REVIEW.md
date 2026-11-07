@@ -24,11 +24,11 @@ Current execution entry point: `scripts/run_colab_l4.py`. Historical protocol-na
 
 ## Multi-model evaluation
 
-The upstream [Ouro release](https://ouro-llm.github.io/) includes 1.4B and 2.6B Thinking models. The runner accepts `--model ByteDance/Ouro-2.6B-Thinking --revision <full-commit-sha>`. This is plumbing, not validated model compatibility or an established L4 memory fit. Run native/cached parity and one short smoke first. Use one worker initially and measure peak memory.
+The upstream [Ouro release](https://ouro-llm.github.io/) includes 1.4B and 2.6B Thinking models. The runner accepts `--model ByteDance/Ouro-2.6B-Thinking --revision <full-commit-sha>`. Both checkpoints have since passed the bounded FP32 L4 parity gates described below. This does not establish long-generation accuracy or intervention benefit. Use one worker and measure peak memory for each task budget.
 
 Freeze identical task IDs, prompts, stopping/parser rules and paired seeds. Report parameters, recurrent calls, tokens, wall time and peak memory. Use model-specific colors only after verified results exist; include labels/markers so color is not the sole identifier. Do not manufacture comparative graph points from advertised model sizes or unrelated upstream scores.
 
-## Validation boundary
+## Initial review boundary (before Colab follow-up)
 
 The baseline suite passed 340 tests with four real-model tests excluded. Public tunnel startup, Google runtime recovery, 2.6B parity and GPU outcomes were not tested in this review. No Colab connection was supplied. Site styling and historical scores remain unchanged.
 
@@ -49,3 +49,7 @@ Publisher license declarations are pinned in `docs/dataset_license_metadata.json
 A fresh-process checkpoint test verifies reuse without recomputation. Interrupted temporary publication and corrupt payloads are also tested. The live Colab checkpoint-restart trial could not start after the tunnel hostname stopped resolving; Google runtime replacement and mounted-Drive durability remain unverified. All eight parity records were downloaded before disconnection.
 
 No-op excursions (`alpha=0` or `beta=0`) previously inflated `excursion_count` despite matching baseline tokens. The counter now excludes identity/unstable attempts, and these cases have multi-token cache regressions. Cached generation accepts only the currently supported baseline/control/excursion methods; historical scheduler names are not silently interpreted as fixed excursions.
+
+## Fresh-runtime follow-up
+
+A replacement Colab VM was observed with the old `/content` checkout absent. Both models passed FP32/SDPA checks at 128/512-token prefixes. A real four-token generation checkpoint was exported locally, uploaded into a new directory, and reused by a fresh process with identical records. See [recovery findings](../reports/runtime_recovery_findings.md). Mounted-Drive durability and automatic VM restart remain outside the verified claim.

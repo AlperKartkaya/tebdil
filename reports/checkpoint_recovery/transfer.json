@@ -1,0 +1,5 @@
+{
+  "checkpoint_key": "3806f81904eff78a9dedbbb37796c6adc2040548bc7aadf3e5cbdbb9e734ddfe",
+  "sha256": "fc0faaaa44396e44d321f9bd5b847a4e822eec90dfeb9d96cccd9b289038f815",
+  "transfer": "download then upload to a new checkpoint directory; original retained"
+}

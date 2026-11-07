@@ -26,3 +26,5 @@ The precision dependence is evidence consistent with numerical drift, not a proo
 No task-accuracy gain, long-generation equivalence, or cross-model intervention benefit follows. P0 donor-cache storage is covered separately by a real miniature-cache regression; these GPU gates exercise S0 only.
 
 Reproduce with `scripts/check_cached_parity.py`, supplying the model and full revision from each raw record plus `--dtype`, `--attention` and a new `--output`. Every record resolves to its exact hash-named script snapshot in `parity_sources/`; the current CLI adds precision and attention selection to the initial BF16/SDPA diagnostic. Short-prefix synthetic diagnostics must be supplemented with chat-format and longer-prefix checks before a paper claim.
+
+Reference boundary: “native” here means the repository’s vendored Ouro full-prefix forward at the final recurrent depth. These gates compare that forward with the custom cached scheduler, not an independently loaded upstream implementation. Upstream-code equivalence and long completed reasoning trajectories require separate checks.
