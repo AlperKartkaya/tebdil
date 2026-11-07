@@ -164,3 +164,23 @@ def test_equation_fallback_compares_integer_values(monkeypatch, answer):
         max_tasks=1, generator=generate,
     )
     assert rows[0]['evaluation']['status'] == 'correct'
+    assert rows[0]['excursion_config']['excursion_window_tokens'] == 1
+    assert rows[0]['policy_config'] == runner.asdict(runner.AdaptivePolicyConfig())
+
+
+def test_literature_records_effective_configuration(monkeypatch):
+    import torch
+    from types import SimpleNamespace
+    monkeypatch.setattr(runner, 'encode_reasoning_prompt', lambda *a: torch.tensor([[1]]))
+    monkeypatch.setattr(runner, 'evaluate_literature_reasoning', lambda *a: {'extracted_answer': None, 'status': 'budget_exhausted'})
+    def generate(**kwargs):
+        return {'decoded_text': 'unfinished', 'completed': False, 'generated_token_ids': [2],
+                'excursion_count': 0, 'recurrent_block_calls': 4, 'wall_seconds': 0}
+    rows = runner.run_literature_reasoning_suite(
+        SimpleNamespace(device='cpu'), SimpleNamespace(eos_token='<eos>'),
+        ['S0'], runner.ExcursionConfig(), runner.AdaptivePolicyConfig(),
+        max_tasks=1, generator=generate,
+    )
+    assert rows[0]['excursion_config']['excursion_window_tokens'] == 1
+    assert rows[0]['excursion_config']['beta'] == 0.65
+    assert rows[0]['policy_config']['min_entropy_trigger'] == 1.20
