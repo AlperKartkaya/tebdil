@@ -29,6 +29,7 @@ from tebdil.evaluation.reasoning import (
 )
 from tebdil.models.ouro_adapter import OuroRecurrentAdapter, PINNED_OURO_THINKING_REV
 from tebdil.tasks.literature_reasoning import evaluate_literature_reasoning
+from tebdil.tasks.deceptive_reasoning import evaluate_deceptive_reasoning
 from tebdil.tasks.reasoning import evaluate_reasoning_task
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -259,9 +260,18 @@ def run_literature_reasoning_suite(
     max_new_tokens: int = 640,
     seed: int = 42,
     generator=generate_tebdil_cached,
+    task_suite: str = "literature",
 ) -> list[dict]:
-    lit_data = json.loads((ROOT / "configs/literature_reasoning_v1_tasks.json").read_text(encoding="utf-8"))
-    all_tasks = lit_data["partitions"][partition]
+    if task_suite == "deceptive":
+        if partition != "development":
+            raise ValueError("Deceptive tasks are development diagnostics only")
+        lit_data = json.loads((ROOT / "configs/deceptive_traps_v1_tasks.json").read_text())
+        all_tasks = lit_data["tasks"]
+    elif task_suite == "literature":
+        lit_data = json.loads((ROOT / "configs/literature_reasoning_v1_tasks.json").read_text())
+        all_tasks = lit_data["partitions"][partition]
+    else:
+        raise ValueError(f"Unsupported task suite: {task_suite}")
     if task_ids:
         id_set = set(task_ids)
         unknown = id_set - {t["problem_id"] for t in all_tasks}
@@ -273,6 +283,8 @@ def run_literature_reasoning_suite(
 
     records = []
     lit_exc_cfg = replace(exc_cfg, excursion_window_tokens=1, beta=0.65)
+    if task_suite == "deceptive":
+        lit_exc_cfg = replace(lit_exc_cfg, alpha=0.65)
     lit_pol_cfg = replace(
         pol_cfg,
         min_entropy_trigger=1.20,
@@ -283,7 +295,7 @@ def run_literature_reasoning_suite(
         prompt_ids = encode_reasoning_prompt(tokenizer, task["prompt"]).to(adapter.device)
         for m in methods:
             print(
-                f"  [Literature Suite] {task['problem_id']} ({task['family']}) | method={m} ...",
+                f"  [{task_suite} Suite] {task['problem_id']} ({task['family']}) | method={m} ...",
                 flush=True,
             )
             gen = generator(
@@ -319,7 +331,8 @@ def run_literature_reasoning_suite(
                 **gen,
                 **split_info,
             }
-            eval_res = evaluate_literature_reasoning(row, task["gold_answer"])
+            evaluator = evaluate_deceptive_reasoning if task_suite == "deceptive" else evaluate_literature_reasoning
+            eval_res = evaluator(row, task["gold_answer"])
             eval_res["hit_trap_answer"] = (
                 eval_res["extracted_answer"] in set(task.get("trap_answers", []))
                 if eval_res["extracted_answer"] is not None
@@ -343,23 +356,23 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=ROOT / "reports/colab_l4_tebdil_run.json")
     parser.add_argument(
         "--suite",
-        choices=("all", "stall", "completion", "reasoning_v1", "literature"),
+        choices=("all", "stall", "completion", "reasoning_v1", "literature", "deceptive"),
         default="all",
     )
     parser.add_argument("--partition", choices=("development", "reserved_test"), default="development")
     parser.add_argument("--max-tasks", type=int, default=2)
-    parser.add_argument("--task-ids", nargs="+", default=None, help="Explicit selection for the literature suite only")
+    parser.add_argument("--task-ids", nargs="+", default=None, help="Explicit selection for literature or deceptive suites")
     parser.add_argument("--max-new-tokens", type=int, default=512)
     parser.add_argument("--continuation-tokens", type=int, default=32)
-    parser.add_argument("--methods", nargs="+", choices=("S0", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1", "E2"), default=["S0", "M1", "E1", "E2"])
+    parser.add_argument("--methods", nargs="+", choices=("S0", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1", "E2", "E3"), default=["S0", "M1", "E1", "E2"])
     parser.add_argument("--attn", choices=("sdpa", "eager"), default="sdpa" if torch.cuda.is_available() else "eager")
     parser.add_argument("--dtype", choices=("float32", "bfloat16"), default="float32")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--model", default="ByteDance/Ouro-1.4B-Thinking")
     parser.add_argument("--revision", help="Pinned model commit; required for non-default models")
     args = parser.parse_args()
-    if args.task_ids is not None and args.suite != "literature":
-        parser.error("--task-ids is supported only by --suite literature")
+    if args.task_ids is not None and args.suite not in ("literature", "deceptive"):
+        parser.error("--task-ids requires --suite literature or deceptive")
     if args.partition != "development" and args.suite not in ("literature", "reasoning_v1"):
         parser.error("--partition reserved_test requires --suite literature or reasoning_v1")
     if args.max_tasks < 1 or args.max_new_tokens < 1 or args.continuation_tokens < 1:
@@ -453,7 +466,7 @@ def main() -> int:
             seed=args.seed,
         )
 
-    if args.suite in ("all", "literature"):
+    if args.suite in ("all", "literature", "deceptive"):
         literature_records = run_literature_reasoning_suite(
             generator=generator,
             adapter=adapter,
@@ -461,6 +474,7 @@ def main() -> int:
             methods=args.methods,
             exc_cfg=exc_cfg,
             pol_cfg=pol_cfg,
+            task_suite="deceptive" if args.suite == "deceptive" else "literature",
             partition=args.partition,
             max_tasks=args.max_tasks,
             task_ids=args.task_ids,
@@ -527,7 +541,8 @@ def main() -> int:
         "stall_recovery_records": stall_records,
         "completion_reasoning_records": completion_records,
         "reasoning_v1_records": reasoning_v1_records,
-        "literature_reasoning_records": literature_records,
+        "literature_reasoning_records": literature_records if args.suite != "deceptive" else [],
+        "deceptive_traps_records": literature_records if args.suite == "deceptive" else [],
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x", encoding="utf-8") as stream:

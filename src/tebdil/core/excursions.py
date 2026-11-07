@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 import torch
 from torch import Tensor
@@ -52,6 +52,7 @@ class ExcursionTelemetry:
     applied_update_frob: float = 0.0
     returned_shift_vs_normal_frob: float = 0.0
     coordinate_topk_fraction: float = 1.0
+    return_rejected: bool = False
 
 
 def compute_branch_similarity(a_hidden: Tensor, b_hidden: Tensor) -> tuple[float, float, float]:
@@ -121,6 +122,7 @@ def execute_excursion_step(
     ablate_curvature: bool = False,
     random_curvature_seed: Optional[int] = None,
     random_direction_seed: Optional[int] = None,
+    require_return_improvement: bool = False,
 ) -> tuple[BranchState, BranchState, ExcursionTelemetry]:
     """Execute one recurrent step with cooperative latent excursion from A toward B.
 
@@ -396,4 +398,18 @@ def execute_excursion_step(
         returned_shift_vs_normal_frob=shift_vs_normal,
         coordinate_topk_fraction=eff_topk_frac,
     )
+    if require_return_improvement and not skipped_unstable:
+        from tebdil.core.policies import accept_returned_excursion
+
+        if not accept_returned_excursion(adapter, next_a_normal, next_a):
+            next_a = next_a_normal
+            telemetry = replace(
+                telemetry, return_rejected=True, effective_alpha=0.0,
+                post_receiving_state_hash=hash_tensor(next_a_normal.hidden),
+                applied_update_hash=hash_tensor(v_a),
+                applied_update_frob=float(torch.linalg.vector_norm(v_a).item()),
+                returned_shift_vs_normal_frob=0.0,
+                post_rms_a=compute_rms(next_a_normal.hidden),
+                post_finite=check_tensor_finite(next_a_normal.hidden),
+            )
     return next_a, next_b, telemetry

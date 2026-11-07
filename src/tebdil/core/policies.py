@@ -237,3 +237,14 @@ class AdaptiveExcursionPolicy:
             adaptive_alpha=base_alpha,
             adaptive_beta=base_beta,
         )
+
+
+def accept_returned_excursion(adapter, normal_state, candidate_state) -> bool:
+    """E3 checks receiver confidence after return; never consults task answers."""
+    normal = _fast_readout(adapter, normal_state)
+    candidate = _fast_readout(adapter, candidate_state)
+    if not torch.isfinite(normal).all() or not torch.isfinite(candidate).all():
+        return False
+    normal_entropy, normal_margin = compute_last_token_uncertainty(normal)
+    candidate_entropy, candidate_margin = compute_last_token_uncertainty(candidate)
+    return candidate_margin >= normal_margin + 0.10 and candidate_entropy <= normal_entropy

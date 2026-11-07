@@ -181,6 +181,7 @@ def run_scheduled_trajectory(
         "E1_gated",
         "E1_multi_visit",
         "E2",
+        "E3",
         "EXIT_2",
         "E3_t2_1donor",
     }
@@ -477,7 +478,7 @@ def run_scheduled_trajectory(
                         token_scope=c_dec.token_scope,
                         visit_step=t,
                     )
-            elif method == "E2":
+            elif method in ("E2", "E3"):
                 policy = AdaptiveExcursionPolicy(policy_config)
                 budget_rem = max(1, (total_steps - t) * len(branches))
                 t_pol0 = time.perf_counter()
@@ -561,7 +562,8 @@ def run_scheduled_trajectory(
                 )
             else:  # E1, E2, E3_*, D_*, E1_*
                 next_a, next_donor, exc_telemetry = execute_excursion_step(
-                    adapter, state_a, selected_donor, active_cfg
+                    adapter, state_a, selected_donor, active_cfg,
+                    require_return_improvement=method == "E3",
                 )
 
             # E0 visits a seeded random direction, not the donor interpolation reconstructed here.
@@ -590,10 +592,11 @@ def run_scheduled_trajectory(
             else:
                 branches = [next_a]
             committed_depth_states.append(branches[0])
-            prev_exc_count += 1
+            accepted_return = not exc_telemetry.return_rejected
+            prev_exc_count += int(accepted_return)
             if record_snapshots:
                 snap_now = _snapshot(
-                    t + 1, branches, intervened=True, telem=exc_telemetry, dec=pol_decision
+                    t + 1, branches, intervened=accepted_return, telem=exc_telemetry, dec=pol_decision
                 )
                 step_snapshots.append(snap_now)
                 post_mar_a = snap_now.branch_margin.get("A", pre_mar_a)
@@ -720,7 +723,7 @@ def generate_tebdil_cached(
     seed: int = 42,
 ) -> Dict[str, Any]:
     """KV-cached multi-token generation with persistent latent excursion windows."""
-    if method not in {"S0", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1", "E2"}:
+    if method not in {"S0", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1", "E2", "E3"}:
         raise ValueError(f"Unsupported cached-generation method: {method}")
     if excursion_config is None:
         excursion_config = ExcursionConfig()
@@ -750,6 +753,7 @@ def generate_tebdil_cached(
 
     generated_tokens: List[int] = []
     excursion_token_indices: List[int] = []
+    rejected_return_indices: List[int] = []
     window_state = ExcursionWindowState(
         cooldown_remaining=16 if max_new_tokens > 64 else 0,
         post_excursion_cooldown=18 if max_new_tokens > 64 else 2,
@@ -768,6 +772,8 @@ def generate_tebdil_cached(
 
     for k in range(max_new_tokens):
         step_method, was_window_continuation = window_state.select(method, method in unconditional_methods)
+        if method == "E3" and was_window_continuation:
+            step_method = "E3"
 
         res = run_scheduled_trajectory(
             adapter=adapter,
@@ -787,6 +793,8 @@ def generate_tebdil_cached(
             record_snapshots=False,
         )
         telemetry = res.excursion_telemetry
+        if telemetry is not None and telemetry.return_rejected:
+            rejected_return_indices.append(k)
         did_intervene = (
             telemetry is not None
             and not telemetry.skipped_unstable
@@ -818,6 +826,7 @@ def generate_tebdil_cached(
         "completed": stop_reason == "eos_token",
         "excursion_token_indices": excursion_token_indices,
         "excursion_count": len(excursion_token_indices),
+        "rejected_return_token_indices": rejected_return_indices,
         "recurrent_block_calls": adapter.recurrent_block_calls - calls_before,
         "wall_seconds": round(wall_s, 4),
     }

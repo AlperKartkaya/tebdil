@@ -184,3 +184,22 @@ def test_literature_records_effective_configuration(monkeypatch):
     assert rows[0]['excursion_config']['excursion_window_tokens'] == 1
     assert rows[0]['excursion_config']['beta'] == 0.65
     assert rows[0]['policy_config']['min_entropy_trigger'] == 1.20
+
+
+def test_deceptive_suite_preserves_historical_settings(monkeypatch):
+    import torch
+    from types import SimpleNamespace
+    seen = []
+    monkeypatch.setattr(runner, 'encode_reasoning_prompt', lambda *a: torch.tensor([[1]]))
+    def generate(**kwargs):
+        seen.append(kwargs)
+        return {'decoded_text': 'unfinished', 'completed': False, 'generated_token_ids': [2], 'excursion_count': 0, 'recurrent_block_calls': 4, 'wall_seconds': 0}
+    rows = runner.run_literature_reasoning_suite(SimpleNamespace(device='cpu'), SimpleNamespace(eos_token='<eos>'), ['E3'], runner.ExcursionConfig(), runner.AdaptivePolicyConfig(), task_suite='deceptive', task_ids=['trap_hotel_empty_rooms'], generator=generate)
+    assert len(rows) == 1
+    assert rows[0]['problem_id'] == 'trap_hotel_empty_rooms'
+    assert seen[0]['excursion_config'].alpha == 0.65
+    assert seen[0]['excursion_config'].beta == 0.65
+    assert seen[0]['excursion_config'].excursion_window_tokens == 1
+    assert seen[0]['perturbation_relative_norm'] == 0.14
+    assert seen[0]['method'] == 'E3'
+    assert rows[0]['evaluation']['status'] == 'budget_exhausted'
