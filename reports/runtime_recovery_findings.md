@@ -34,3 +34,7 @@ The exact diagnostic source is archived by SHA-256 in `parity_sources/`. Reprodu
 The four-token completion was budget-exhausted, not a correct or incorrect completed answer. Historical generation costs remain in the reused record; they are not costs of new inference. This verifies exported-checkpoint restoration across directories/processes. We did not delete the VM during this trial, test mounted-Drive durability, or demonstrate automatic Google runtime restart.
 
 Reference boundary: “native” here means the repository’s vendored Ouro full-prefix forward at the final recurrent depth. These gates compare that forward with the custom cached scheduler, not an independently loaded upstream implementation. Upstream-code equivalence and long completed reasoning trajectories require separate checks.
+
+## Pinned 2.6B source audit
+
+A subsequent [static source comparison](upstream_26b_source_audit.json) fetched the pinned upstream modeling/configuration files without executing them. Modeling ASTs match outside the intentionally modified cache class. Configuration ASTs match after excluding the upstream `pad_token_id=2` assignment absent from the vendor copy. This narrows the architecture-compatibility uncertainty but does not replace an independent execution check or establish padded-batch equivalence.

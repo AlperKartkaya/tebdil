@@ -1,0 +1,26 @@
+{
+  "model": "ByteDance/Ouro-2.6B-Thinking",
+  "revision": "f1edd81e7ac41355db670500ceaf204e0f73af68",
+  "method": "download pinned source without executing it; compare Python ASTs after the stated exclusions",
+  "files": {
+    "modeling_ouro.py": {
+      "upstream_sha256": "263c097a2ed6870ce549a65ef6d6bb9e8e167423f87d2c494e0988b9a4f63f4b",
+      "vendored_sha256": "583d9cb3afab83cea2e397ad854177aa2390d16ac858dd507ed2972771bf591c",
+      "comparison_scope": "all top-level code except UniversalTransformerCache",
+      "ast_equal": true,
+      "source_url": "https://huggingface.co/ByteDance/Ouro-2.6B-Thinking/blob/f1edd81e7ac41355db670500ceaf204e0f73af68/modeling_ouro.py"
+    },
+    "configuration_ouro.py": {
+      "upstream_sha256": "ba60253335cecc5bd9cb3e5f8cfbd214aa7e865fc97a98208976fb2517811de6",
+      "vendored_sha256": "950443e32929047aa08d02abad2e1888bc1914b3db988d3d675f70787f65dafb",
+      "comparison_scope": "configuration after excluding upstream pad_token_id=2 assignment",
+      "ast_equal": true,
+      "source_url": "https://huggingface.co/ByteDance/Ouro-2.6B-Thinking/blob/f1edd81e7ac41355db670500ceaf204e0f73af68/configuration_ouro.py"
+    }
+  },
+  "differences": [
+    "Vendored cache adds property-backed storage, length, deep clone and crop operations; constructor uses backing fields.",
+    "Upstream configuration assigns pad_token_id=2; vendored configuration omits that assignment."
+  ],
+  "limits": "Static source comparison, not an independently executed upstream-model parity test. Existing single-unpadded-prompt gates do not validate padding behavior."
+}
