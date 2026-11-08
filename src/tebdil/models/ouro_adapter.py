@@ -200,6 +200,48 @@ class OuroRecurrentAdapter:
         return norm_mod.weight * x.to(input_dtype)
 
     @torch.no_grad()
+    def geometry_coordinates(self, post_norm_hidden: Tensor) -> Tensor:
+        """Undo shared RMSNorm gains; only post-stack boundaries are comparable."""
+        weight = self.model.model.norm.weight.detach().float()
+        if (post_norm_hidden.ndim < 1 or post_norm_hidden.shape[-1] != self.hidden_size
+                or not post_norm_hidden.is_floating_point()):
+            raise ValueError("Expected post-normalization hidden-size vectors")
+        if not torch.isfinite(weight).all() or (weight.abs() <= 1e-8).any():
+            raise ValueError("Geometry requires finite invertible RMSNorm gains")
+        return post_norm_hidden.detach().float() / weight
+
+    @torch.no_grad()
+    def geometry_retract_hidden(self, post_norm_hidden: Tensor, direction: Tensor, radius: float) -> Tensor:
+        """Pure last-token retraction, not a BranchState/cache commit or an excursion.
+
+        Preserve the ungained boundary norm, hence the native RMSNorm sphere for
+        the original raw norm. Never apply RMSNorm twice to a normalized state.
+        """
+        from tebdil.analysis.normalization import match_token_norm
+        import math
+        if post_norm_hidden.ndim != 3 or post_norm_hidden.shape[0] != 1 or post_norm_hidden.shape[1] < 1:
+            raise ValueError("Retraction requires one nonempty sequence")
+        current = self.geometry_coordinates(post_norm_hidden[:, -1:, :])
+        norm = current.norm(dim=-1, keepdim=True)
+        direction = direction.detach().to(device=current.device, dtype=torch.float32)
+        if (direction.shape != (self.hidden_size,) or not math.isfinite(radius) or not 0 <= radius < 1
+                or not torch.isfinite(current).all() or not torch.isfinite(norm).all() or (norm <= 1e-8).any()
+                or not torch.isfinite(direction).all()):
+            raise ValueError("Invalid metric retraction inputs")
+        q = current / norm
+        if abs(float(direction.norm()) - 1) > 1e-5 or abs(float((q * direction).sum())) > 1e-5:
+            raise ValueError("Retraction direction must be unit and tangent")
+        result = post_norm_hidden.detach().clone()
+        if radius == 0:
+            return result
+        weight = self.model.model.norm.weight.detach()
+        candidate = (q + radius * direction) * weight.float()
+        result[:, -1:, :] = match_token_norm(candidate, post_norm_hidden[:, -1:, :], weight).to(result.dtype)
+        if not torch.isfinite(result).all():
+            raise ValueError("Retraction produced nonfinite hidden state")
+        return result
+
+    @torch.no_grad()
     def prefill_kv_cache(self, prefix_ids: Tensor) -> UniversalTransformerCache:
         """Prefill UniversalTransformerCache on `prefix_ids` across all recurrent depths."""
         if prefix_ids.dim() == 1:

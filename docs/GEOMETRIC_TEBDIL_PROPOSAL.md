@@ -1,6 +1,6 @@
 # TEBDİL: deterministic geometry-guided excursions
 
-Status: **isolated geometry primitives implemented after the user requested the next pass; no inference integration or efficacy validation**.
+Status: **geometry primitives and opt-in native S0 shadow instrumentation implemented; no geometric intervention or efficacy validation**.
 Scope: training-free detection, deterministic waypoint selection and bounded return
 on supported recurrent/looped model adapters. This document does not authorize a GPU efficacy campaign. Do not reinterpret this proposal as a demonstrated improvement.
 
@@ -266,3 +266,60 @@ estimators, and shadow-mode logging before any intervention. The caller currentl
 supplies the already-observed scale and Boolean ambiguity; their causal provenance
 cannot be established by a pure geometry function. A low-motion diagnostic is not
 permitted to bypass the ambiguity/persistence gate.
+
+
+## 10. Adapter and shadow integration pass
+
+The next user-approved pass integrates observation only. Call
+`generate_tebdil_cached(..., method="S0", geometry_shadow=True)` to opt in.
+Default S0/E2/E3 execution and default result schema remain unchanged. Other
+intervention methods cannot enable this observer. The hook runs after native
+boundary 3, before boundary 4, without adding recurrent transitions. It uses only
+post-stack states at boundaries 1, 2 and 3 of the current token. Embeddings are
+excluded. One extra vocabulary projection per token is explicitly counted;
+observer time is included in total generation time, not treated as free compute.
+
+Ouro's metric divides post-stack coordinates by the shared learned RMSNorm gains.
+Zero/near-zero/nonfinite gains fail closed; they are not silently replaced by ones.
+Unit directions then match raw residual directions, up to numerical rounding.
+`geometry_retract_hidden` is a pure tensor operation: it rotates only the active
+last token toward a unit tangent and preserves its ungained norm. This matches
+rotating the pre-norm residual at fixed norm followed by native RMSNorm. It returns
+a tensor, not a coherent branch/cache; it is never invoked by shadow generation.
+Zero radius preserves exact hidden values. This is a declared geometric sphere,
+not a claim to know the model's semantic manifold.
+
+For this bounded shadow pass the bank contains the most recent 64 prior decode
+positions at boundary 3. Prefill anchor capture is intentionally deferred: a
+smaller bank is preferable to introducing unverified hooks on native prefill.
+Reference statistics retain the last 32 valid observations, warm up for 8, use
+the prior median final within-token movement and prior 75th percentile normalized
+entropy. The current sample enters both reference buffers and the bank only AFTER
+scoring. These fixed values are chosen before observing model outcomes. No task
+label, correctness result or dataset-specific override enters the observer.
+
+A fresh observer is constructed for every generation. Invalid geometry/readout
+samples reset suspicion and do not enter its buffers. A closing think token or EOS
+closes its eligibility gate; native generation remains governed by existing stop
+rules. Shadow eligibility/selection never calls `attempted`, since no visit occurs;
+therefore repeated shadow selections are NOT counts of hypothetical interventions.
+Actual intervention frequency will differ once attempt cooldown is applied.
+
+The minimal logged trace includes prior bank positions, reference count/scale,
+normalized entropy and its causal threshold, motion statistics, eligibility and
+selected anchor/score. It does not publish hidden vectors or every candidate score.
+An invalid candidate or unavailable direction is an abstention, never a fallback.
+
+Run `scripts/verify_geometry_shadow.py --output <new-path>` for mini-model parity;
+add `--real-model` for the pinned 1.4B FP32/SDPA checkpoint on CUDA. This diagnostic
+compares every final logit hash, generated token and committed cache slot with
+native S0, counts extra readouts and independently checks tensor-only retraction.
+It records code hashes, model revision, prompt IDs, packages and raw traces. The
+fixed prompt and short token budget are engineering checks, not a benchmark or
+completed-answer evaluation. Timing includes diagnostic hashing and is not a
+measurement of production overhead. No new performance claim belongs on the site.
+
+Remaining intervention gate: wire a selected retracted input into isolated visit
+execution, reconcile it explicitly with the existing return operator, and verify
+rollback/commit behavior before any efficacy campaign. No geometric visit/return
+or changed E2/E3 acceptance is implemented by this pass.

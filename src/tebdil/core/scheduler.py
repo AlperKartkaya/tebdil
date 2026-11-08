@@ -15,6 +15,7 @@ if TYPE_CHECKING:
         LearnedControllerCheckpoint,
     )
 
+from tebdil.core.geometry_shadow import GeometryShadow
 from tebdil.core.branching import fork_branches
 from tebdil.core.controls import (
     execute_direct_state_mixing_step,
@@ -142,6 +143,8 @@ def run_scheduled_trajectory(
     record_pca: bool = True,
     use_cached_step: bool = False,
     record_snapshots: bool = True,
+    geometry_observer: Optional[GeometryShadow] = None,
+    geometry_position: int = 0,
 ) -> TrajectoryScheduleResult:
     """Execute a complete recurrent trajectory under the specified intervention method.
 
@@ -190,6 +193,13 @@ def run_scheduled_trajectory(
 
     base_steps = recurrent_steps if recurrent_steps is not None else adapter.total_steps
     total_steps = base_steps + extra_steps_for_s1 if method == "S1" else base_steps
+
+    if geometry_observer is not None:
+        if (input_ids.ndim not in (1, 2) or (input_ids.ndim == 2 and input_ids.shape[0] != 1)
+                or method != "S0" or total_steps != adapter.total_steps or total_steps <= geometry_observer.boundary
+                or getattr(adapter, "readout_mode", None) != "last_step"
+                or not hasattr(adapter, "geometry_coordinates")):
+            raise ValueError("Geometry shadow requires native-depth S0 and a declared metric/last-step readout")
 
     calls_before = adapter.recurrent_block_calls
     t0 = time.perf_counter()
@@ -263,6 +273,12 @@ def run_scheduled_trajectory(
         for t in range(total_steps):
             state_a = adapter.transition(state_a)
             committed_depth_states.append(state_a)
+            if geometry_observer is not None and state_a.recurrent_step == geometry_observer.boundary:
+                path = torch.stack([st.hidden[0, -1] for st in committed_depth_states])
+                path = adapter.geometry_coordinates(path)
+                logits = _fast_readout(adapter, state_a)[0, -1]
+                geometry_observer.extra_readouts += 1
+                geometry_observer.observe(path, logits, geometry_position)
             if record_snapshots:
                 step_snapshots.append(_snapshot(t + 1, [state_a]))
 
@@ -721,6 +737,7 @@ def generate_tebdil_cached(
     policy_config: Optional[AdaptivePolicyConfig] = None,
     controller_checkpoint: Optional[LearnedControllerCheckpoint] = None,
     seed: int = 42,
+    geometry_shadow: bool = False,
 ) -> Dict[str, Any]:
     """KV-cached multi-token generation with persistent latent excursion windows."""
     if method not in {"S0", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1", "E2", "E3"}:
@@ -737,6 +754,12 @@ def generate_tebdil_cached(
         raise ValueError("max_new_tokens must be positive")
     device = getattr(adapter, "device", prompt_ids.device)
     prompt_ids = prompt_ids.to(device=device)
+
+    if geometry_shadow and (method != "S0" or not hasattr(adapter, "geometry_coordinates")
+                            or adapter.total_steps <= GeometryShadow.boundary
+                            or getattr(adapter, "readout_mode", None) != "last_step"):
+        raise ValueError("Geometry shadow is supported only for native S0 with a declared adapter metric")
+    observer = GeometryShadow() if geometry_shadow else None
 
     t0 = time.perf_counter()
     calls_before = adapter.recurrent_block_calls
@@ -791,6 +814,8 @@ def generate_tebdil_cached(
             record_pca=False,
             use_cached_step=use_kv,
             record_snapshots=False,
+            geometry_observer=observer,
+            geometry_position=int(prompt_ids.shape[1]) - 1 + k,
         )
         telemetry = res.excursion_telemetry
         if telemetry is not None and telemetry.return_rejected:
@@ -809,7 +834,11 @@ def generate_tebdil_cached(
         generated_tokens.append(tok_id)
         if think_close_id is not None and tok_id == think_close_id:
             window_state.close_thinking()
+            if observer is not None:
+                observer.gate.close()
         if eos_id is not None and tok_id == eos_id:
+            if observer is not None:
+                observer.gate.close()
             stop_reason = "eos_token"
             break
 
@@ -818,7 +847,7 @@ def generate_tebdil_cached(
 
     wall_s = time.perf_counter() - t0
     decoded = tokenizer.decode(generated_tokens, skip_special_tokens=False) if tokenizer is not None else ""
-    return {
+    result = {
         "method": method,
         "generated_token_ids": generated_tokens,
         "decoded_text": decoded,
@@ -830,3 +859,7 @@ def generate_tebdil_cached(
         "recurrent_block_calls": adapter.recurrent_block_calls - calls_before,
         "wall_seconds": round(wall_s, 4),
     }
+
+    if observer is not None:
+        result["geometry_shadow"] = observer.report()
+    return result
