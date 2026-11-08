@@ -20,3 +20,13 @@ architectural fixes:
 5. **Execution Target:**
    Heavy Ouro-1.4B-Thinking runs target Google Colab Pro **NVIDIA L4 (24GB)** or **A100**
    GPUs via `scripts/run_colab_l4.py`. Local unit/mini-model verification is unrestricted.
+
+## User verdict required for approach changes (2026-11-08)
+
+Before implementing a new method variant, changing the research approach, or
+launching an experiment for such an improvement, present its hypothesis, intended
+benefit, mechanism, comparison and risks, then wait for the user's verdict.
+Do not treat a bridge connection or general autonomy instructions as approval for
+approach changes. Read-only analysis, existing-test verification, and explicitly
+authorized infrastructure maintenance may continue. The user approved review
+and commit/push of the updated Colab bridge cell separately.
