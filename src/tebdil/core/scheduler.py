@@ -15,7 +15,7 @@ if TYPE_CHECKING:
         LearnedControllerCheckpoint,
     )
 
-from tebdil.core.geometry_shadow import GeometryShadow
+from tebdil.core.geometry_controller import GeometryController
 from tebdil.core.branching import fork_branches
 from tebdil.core.controls import (
     execute_direct_state_mixing_step,
@@ -143,7 +143,7 @@ def run_scheduled_trajectory(
     record_pca: bool = True,
     use_cached_step: bool = False,
     record_snapshots: bool = True,
-    geometry_observer: Optional[GeometryShadow] = None,
+    geometry_observer: Optional[GeometryController] = None,
     geometry_position: int = 0,
 ) -> TrajectoryScheduleResult:
     """Execute a complete recurrent trajectory under the specified intervention method.
@@ -194,12 +194,15 @@ def run_scheduled_trajectory(
     base_steps = recurrent_steps if recurrent_steps is not None else adapter.total_steps
     total_steps = base_steps + extra_steps_for_s1 if method == "S1" else base_steps
 
+    if method == "geometry" and (geometry_observer is None or excursion_config.token_scope != "last_token"
+                                  or excursion_config.update_space != "pre_norm"):
+        raise ValueError("Geometry requires its causal controller and last-token pre-norm transport")
     if geometry_observer is not None:
         if (input_ids.ndim not in (1, 2) or (input_ids.ndim == 2 and input_ids.shape[0] != 1)
-                or method != "S0" or total_steps != adapter.total_steps or total_steps <= geometry_observer.boundary
+                or method not in ("S0", "geometry") or total_steps != adapter.total_steps or total_steps <= geometry_observer.boundary
                 or getattr(adapter, "readout_mode", None) != "last_step"
                 or not hasattr(adapter, "geometry_coordinates")):
-            raise ValueError("Geometry shadow requires native-depth S0 and a declared metric/last-step readout")
+            raise ValueError("Geometry requires native-depth S0/geometry and a declared metric/last-step readout")
 
     calls_before = adapter.recurrent_block_calls
     t0 = time.perf_counter()
@@ -268,17 +271,36 @@ def run_scheduled_trajectory(
         )
 
     # Single-branch methods: S0, S1
-    if method in ("S0", "S1") or branch_count == 1:
+    if method in ("S0", "S1", "geometry") or branch_count == 1:
         state_a = root.clone(new_branch_id="A")
+        waypoint = None
         for t in range(total_steps):
-            state_a = adapter.transition(state_a)
+            if waypoint is not None and method == "geometry":
+                donor = state_a.clone(new_branch_id="waypoint")
+                donor.hidden = adapter.geometry_retract_hidden(state_a.hidden, waypoint.direction, waypoint.radius)
+                relative = float((donor.hidden[:, -1].float() - state_a.hidden[:, -1].float()).norm()
+                                 / state_a.hidden[:, -1].float().norm().clamp_min(1e-12))
+                row = geometry_observer.records[-1]
+                if excursion_config.max_relative_norm > 0 and relative > excursion_config.max_relative_norm:
+                    row["abstention"] = "native_trust_bound"
+                    state_a = adapter.transition(state_a)
+                else:
+                    geometry_observer.gate.attempted()
+                    row["attempted"] = True
+                    state_a, _, exc_telemetry = execute_excursion_step(
+                        adapter, state_a, donor, replace(excursion_config, alpha=1.0))
+                    row["rolled_back"] = exc_telemetry.skipped_unstable
+                    row["visit_relative_offset"] = exc_telemetry.visit_relative_offset
+                waypoint = None
+            else:
+                state_a = adapter.transition(state_a)
             committed_depth_states.append(state_a)
             if geometry_observer is not None and state_a.recurrent_step == geometry_observer.boundary:
                 path = torch.stack([st.hidden[0, -1] for st in committed_depth_states])
                 path = adapter.geometry_coordinates(path)
                 logits = _fast_readout(adapter, state_a)[0, -1]
                 geometry_observer.extra_readouts += 1
-                geometry_observer.observe(path, logits, geometry_position)
+                waypoint = geometry_observer.observe(path, logits, geometry_position)
             if record_snapshots:
                 step_snapshots.append(_snapshot(t + 1, [state_a]))
 
@@ -300,6 +322,7 @@ def run_scheduled_trajectory(
             recurrent_block_calls=adapter.recurrent_block_calls - calls_before,
             wall_time_ms=wall_ms,
             perturbation_reports=[],
+            excursion_telemetry=exc_telemetry,
             step_snapshots=step_snapshots,
             pca_coords=pca_coords,
             pca_explained_variance=pca_evr,
@@ -740,7 +763,7 @@ def generate_tebdil_cached(
     geometry_shadow: bool = False,
 ) -> Dict[str, Any]:
     """KV-cached multi-token generation with persistent latent excursion windows."""
-    if method not in {"S0", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1", "E2", "E3"}:
+    if method not in {"S0", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1", "E2", "E3", "geometry"}:
         raise ValueError(f"Unsupported cached-generation method: {method}")
     if excursion_config is None:
         excursion_config = ExcursionConfig()
@@ -756,10 +779,16 @@ def generate_tebdil_cached(
     prompt_ids = prompt_ids.to(device=device)
 
     if geometry_shadow and (method != "S0" or not hasattr(adapter, "geometry_coordinates")
-                            or adapter.total_steps <= GeometryShadow.boundary
+                            or adapter.total_steps <= GeometryController.boundary
                             or getattr(adapter, "readout_mode", None) != "last_step"):
         raise ValueError("Geometry shadow is supported only for native S0 with a declared adapter metric")
-    observer = GeometryShadow() if geometry_shadow else None
+    if method == "geometry" and (not hasattr(adapter, "geometry_retract_hidden")
+                                  or adapter.total_steps <= GeometryController.boundary
+                                  or getattr(adapter, "readout_mode", None) != "last_step"
+                                  or excursion_config.token_scope != "last_token"
+                                  or excursion_config.update_space != "pre_norm"):
+        raise ValueError("Geometry requires a declared metric/retraction and last-token pre-norm transport")
+    observer = GeometryController() if geometry_shadow or method == "geometry" else None
 
     t0 = time.perf_counter()
     calls_before = adapter.recurrent_block_calls
@@ -791,7 +820,7 @@ def generate_tebdil_cached(
         except Exception:
             think_close_id = None
     stop_reason = "max_output_tokens"
-    unconditional_methods = ("S0", "S1", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1")
+    unconditional_methods = ("S0", "S1", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1", "geometry")
 
     for k in range(max_new_tokens):
         step_method, was_window_continuation = window_state.select(method, method in unconditional_methods)
@@ -828,7 +857,8 @@ def generate_tebdil_cached(
         )
         if did_intervene:
             excursion_token_indices.append(k)
-            window_state.intervene(was_window_continuation, excursion_config.excursion_window_tokens)
+            if method != "geometry":
+                window_state.intervene(was_window_continuation, excursion_config.excursion_window_tokens)
 
         tok_id = int(res.primary_logits[:, -1, :].argmax(dim=-1).item())
         generated_tokens.append(tok_id)
@@ -861,5 +891,6 @@ def generate_tebdil_cached(
     }
 
     if observer is not None:
-        result["geometry_shadow"] = observer.report()
+        result["geometry" if method == "geometry" else "geometry_shadow"] = observer.report(
+            mode="active" if method == "geometry" else "shadow_only")
     return result

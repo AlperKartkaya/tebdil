@@ -1,8 +1,8 @@
 # TEBDİL: deterministic geometry-guided excursions
 
-Status: **geometry primitives and opt-in native S0 shadow instrumentation implemented; no geometric intervention or efficacy validation**.
+Status: **geometry path implemented; fixed development evaluation pending; no efficacy claim**.
 Scope: training-free detection, deterministic waypoint selection and bounded return
-on supported recurrent/looped model adapters. This document does not authorize a GPU efficacy campaign. Do not reinterpret this proposal as a demonstrated improvement.
+on supported recurrent/looped model adapters. The user authorized the bounded development evaluation below. Do not reinterpret the proposal as a demonstrated improvement.
 
 ## 1. Research objective and exclusions
 
@@ -201,7 +201,7 @@ Selection itself has no recurrent calls. A cheap rejected selection need not cla
 an accepted intervention. Log trigger inputs, causal bank membership, candidate
 scores, selected anchor, radius, actual attempt/rollback and physical work.
 
-## 7. What must be frozen after the user's verdict
+## 7. Evaluation contract
 
 The equations are a design family until a profile is fixed: history window m, bank
 capacity/retention, warm-up, reference-scale update, ambiguity quantile, persistence K,
@@ -235,91 +235,50 @@ https://barak.net.technion.ac.il/files/2012/11/sussillo_barak-neco.pdf
 
 These references motivate diagnostics. They do not validate this waypoint score,
 its transport, or an expected TEBDİL performance gain. All such claims remain
-hypotheses pending the user's verdict and controlled evaluation.
+hypotheses pending controlled evaluation.
 
 
-## 9. Isolated implementation pass
+## 9. Implementation and evaluation pass
 
-`src/tebdil/core/geometry.py` implements motion diagnostics, causal-anchor validation,
-deterministic waypoint scoring, and a per-request/per-boundary persistence/cooldown
-gate. `tests/test_geometry.py` exercises synthetic progress, cycles, stable confident
-convergence, degeneracy, causality violations, tie-breaking, rotation/scale behavior,
-and absence of input mutation/RNG use. These fixtures are not reasoning benchmarks.
+Cleanup scope: the geometry observer/controller, its scheduler wiring and duplicated
+status prose. Preserve the tested detector and native S0/E2 behavior. Keep deliberate
+abstention and instability rollback; remove no safety fallback. No new dependencies,
+controller framework or versioned method names. The 47 geometry/operator/cache
+regression tests pass before this change. Review scope separately before editing:
+no donor search, task rules, learned thresholds or E3 acceptance gate are introduced.
 
-The provisional mechanics profile is fixed here before any efficacy observation:
-net/path threshold 0.25, relative-motion threshold 0.10, cosine locality [0.50, 0.95],
-minimum candidate score 0.05, radius multiplier 0.50, maximum metric radius 0.10,
-persistence 3 eligible consecutive positions, cooldown 18 token positions.
-Numerical epsilon is 1e-8, separate from scientific thresholds. These constants are
-not claimed optimal or portable; they are a reproducible starting profile, not
-values fitted to task answers. Scale/rotation tests exclude numerical degeneracy
-and do not claim invariance under arbitrary anisotropic reparameterizations.
+The canonical method name is `geometry`. One controller observes boundary 3 using
+post-stack states 1–3, prior decode anchors (capacity 64), prior movement/entropy
+statistics (capacity 32), warm-up 8, entropy quantile 0.75, persistence 3 and attempt
+cooldown 18. The existing geometry profile remains unchanged. Shadow S0 is still
+available for non-interference checks. Prefill anchors remain excluded.
 
-The module deliberately does NOT create model states, normalize an Ouro state,
-change a cache, read a gold answer, run a recurrent step, or invoke an excursion.
-Its result is a direction in declared metric coordinates, not an injectable latent.
-No new method name is registered and S0/E2/E3 execution is unchanged.
+The adapter removes learned RMSNorm gains for metric comparisons. Retraction
+preserves the ungained norm at the active last token. Zero/invalid gains fail closed;
+there is no random fallback. The waypoint is used as the donor AND visit endpoint
+(alpha=1), so `v_mix=v_B`, curvature is zero and there is no curvature amplification.
+The ordinary A and selected endpoint each run once. Existing E2 rho estimation,
+pre-norm transport, contraction compensation, configured beta, instability rollback and
+K/V blending remain in force. This is an explicit endpoint specialization, not an
+unchanged E2 operator configuration. A waypoint outside the existing 0.35 relative
+input trust bound is rejected rather than clipped off its retracted sphere.
 
-Remaining integration gates: a validated metric/retraction adapter, causal capture
-of a bounded per-request native anchor bank, reference-scale and readout-ambiguity
-estimators, and shadow-mode logging before any intervention. The caller currently
-supplies the already-observed scale and Boolean ambiguity; their causal provenance
-cannot be established by a pure geometry function. A low-motion diagnostic is not
-permitted to bypass the ambiguity/persistence gate.
+No additional final-answer confidence test is used. Every attempted visit enters
+cooldown, including rollback. The selected prefix anchor is never resumed or given
+its old cache. Only the selected current-context branch's per-depth K/V is committed.
 
+First evaluation: pinned Ouro-1.4B-Thinking on L4, FP32/SDPA, seed 42, 1024 output
+tokens, beta=0.65 for both E2 and geometry, paired S0/E2/geometry using the existing runner and complete-generation
+checkpoints. Fixed development IDs: trap_hotel_empty_rooms, trap_monty_hall_4doors,
+trap_bat_ball_glove, trap_speed_harmonic_mean. This includes the prior E3 pilot tasks
+and two additional trap families. It is a development pilot, not held-out proof.
+Report completed-answer correctness, rescues/regressions, budget exhaustion, actual
+attempts/rollbacks, readout projections and recurrent calls. Do not tune thresholds
+or select replacement problems after observing outcomes. No attempt means no test
+of geometric intervention efficacy; equal outcomes then only establish abstention.
 
-## 10. Adapter and shadow integration pass
-
-The next user-approved pass integrates observation only. Call
-`generate_tebdil_cached(..., method="S0", geometry_shadow=True)` to opt in.
-Default S0/E2/E3 execution and default result schema remain unchanged. Other
-intervention methods cannot enable this observer. The hook runs after native
-boundary 3, before boundary 4, without adding recurrent transitions. It uses only
-post-stack states at boundaries 1, 2 and 3 of the current token. Embeddings are
-excluded. One extra vocabulary projection per token is explicitly counted;
-observer time is included in total generation time, not treated as free compute.
-
-Ouro's metric divides post-stack coordinates by the shared learned RMSNorm gains.
-Zero/near-zero/nonfinite gains fail closed; they are not silently replaced by ones.
-Unit directions then match raw residual directions, up to numerical rounding.
-`geometry_retract_hidden` is a pure tensor operation: it rotates only the active
-last token toward a unit tangent and preserves its ungained norm. This matches
-rotating the pre-norm residual at fixed norm followed by native RMSNorm. It returns
-a tensor, not a coherent branch/cache; it is never invoked by shadow generation.
-Zero radius preserves exact hidden values. This is a declared geometric sphere,
-not a claim to know the model's semantic manifold.
-
-For this bounded shadow pass the bank contains the most recent 64 prior decode
-positions at boundary 3. Prefill anchor capture is intentionally deferred: a
-smaller bank is preferable to introducing unverified hooks on native prefill.
-Reference statistics retain the last 32 valid observations, warm up for 8, use
-the prior median final within-token movement and prior 75th percentile normalized
-entropy. The current sample enters both reference buffers and the bank only AFTER
-scoring. These fixed values are chosen before observing model outcomes. No task
-label, correctness result or dataset-specific override enters the observer.
-
-A fresh observer is constructed for every generation. Invalid geometry/readout
-samples reset suspicion and do not enter its buffers. A closing think token or EOS
-closes its eligibility gate; native generation remains governed by existing stop
-rules. Shadow eligibility/selection never calls `attempted`, since no visit occurs;
-therefore repeated shadow selections are NOT counts of hypothetical interventions.
-Actual intervention frequency will differ once attempt cooldown is applied.
-
-The minimal logged trace includes prior bank positions, reference count/scale,
-normalized entropy and its causal threshold, motion statistics, eligibility and
-selected anchor/score. It does not publish hidden vectors or every candidate score.
-An invalid candidate or unavailable direction is an abstention, never a fallback.
-
-Run `scripts/verify_geometry_shadow.py --output <new-path>` for mini-model parity;
-add `--real-model` for the pinned 1.4B FP32/SDPA checkpoint on CUDA. This diagnostic
-compares every final logit hash, generated token and committed cache slot with
-native S0, counts extra readouts and independently checks tensor-only retraction.
-It records code hashes, model revision, prompt IDs, packages and raw traces. The
-fixed prompt and short token budget are engineering checks, not a benchmark or
-completed-answer evaluation. Timing includes diagnostic hashing and is not a
-measurement of production overhead. No new performance claim belongs on the site.
-
-Remaining intervention gate: wire a selected retracted input into isolated visit
-execution, reconcile it explicitly with the existing return operator, and verify
-rollback/commit behavior before any efficacy campaign. No geometric visit/return
-or changed E2/E3 acceptance is implemented by this pass.
+Historical shadow verification remains in `reports/geometry_shadow/`: exact
+native token/logit/cache parity on one short prompt. The executable
+`scripts/verify_geometry_shadow.py` remains a bounded parity/retraction check,
+not an efficacy benchmark. All earlier caveats about cosine, confidence and
+model portability remain applicable.

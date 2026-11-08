@@ -1,4 +1,4 @@
-"""Causal, generation-only geometric observer. Never executes an intervention."""
+"""Causal geometry decisions; the scheduler owns execution and cache commits."""
 from collections import deque
 from dataclasses import asdict
 import math
@@ -9,7 +9,7 @@ from tebdil.core.geometry import (
 )
 
 
-class GeometryShadow:
+class GeometryController:
     # Frozen mechanics profile, not tuned on answers; decode-only bank avoids prefill hooks.
     boundary = 3
     bank_capacity = 64
@@ -26,7 +26,7 @@ class GeometryShadow:
         self.records = []
         self.extra_readouts = 0
 
-    def observe(self, path: Tensor, logits: Tensor, token_position: int) -> None:
+    def observe(self, path: Tensor, logits: Tensor, token_position: int):
         """Three post-normalization boundaries of ONE token, before boundary four."""
         if path.ndim != 2 or path.shape[0] != 3:
             raise ValueError('Shadow requires three comparable post-boundary vectors')
@@ -72,8 +72,10 @@ class GeometryShadow:
             self.entropies.append(entropy)
             self.anchors.append(GeometryAnchor('generation', token_position, self.boundary, path[-1].clone()))
 
-    def report(self) -> dict:
-        return {'mode': 'shadow_only', 'metric': 'adapter_declared', 'boundary': self.boundary,
+        return waypoint
+
+    def report(self, mode='shadow_only') -> dict:
+        return {'mode': mode, 'metric': 'adapter_declared', 'boundary': self.boundary,
                 'bank_source': 'prior_decode_positions_only', 'bank_capacity': self.bank_capacity,
                 'reference_capacity': self.reference_capacity, 'warmup': self.warmup,
                 'ambiguity_quantile': self.ambiguity_quantile, 'profile': asdict(self.profile),

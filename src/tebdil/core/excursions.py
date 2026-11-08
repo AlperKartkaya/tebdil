@@ -109,6 +109,8 @@ def build_visit_state(
     visit_rel = visit_norm / (norm_a + 1e-12)
 
     h_visit = (h_a + delta).to(dtype=state_a.hidden.dtype)
+    if config.alpha == 1.0 and not clipped and direction_override is None:
+        h_visit = torch.where(scope_mask > 0.5, state_b.hidden, state_a.hidden)
     visit_state = state_a.clone(new_branch_id=f"{state_a.branch_id}_visit")
     visit_state.hidden = h_visit
     return visit_state, effective_alpha, clipped, visit_norm, visit_rel
@@ -231,7 +233,8 @@ def execute_excursion_step(
     visit_state, eff_alpha, clipped, visit_norm, visit_rel = build_visit_state(
         state_a, state_b, config, direction_override=direction_override
     )
-    next_visit = adapter.transition(visit_state)
+    # The endpoint already ran as B; reusing it avoids a duplicate recurrent call.
+    next_visit = next_b if torch.equal(visit_state.hidden, state_b.hidden) else adapter.transition(visit_state)
 
     h_visit_f = visit_state.hidden.detach().float()
     f_visit_f = (

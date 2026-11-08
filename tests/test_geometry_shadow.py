@@ -2,7 +2,7 @@
 import json
 import pytest
 import torch
-from tebdil.core.geometry_shadow import GeometryShadow
+from tebdil.core.geometry_controller import GeometryController
 from tebdil.core.scheduler import generate_tebdil_cached, run_scheduled_trajectory
 from tebdil.models.ouro_adapter import OuroRecurrentAdapter
 
@@ -52,7 +52,7 @@ def test_metric_removes_anisotropic_signed_gains_and_retraction_is_scoped():
 
 
 def test_causal_reference_bank_warmup_bounded_memory_and_no_rng():
-    observer = GeometryShadow()
+    observer = GeometryController()
     path = torch.tensor([[1., 0., 0.], [.8, .6, 0.], [1., 0., 0.]])
     rng = torch.random.get_rng_state().clone()
     for i in range(100):
@@ -73,7 +73,7 @@ def test_causal_reference_bank_warmup_bounded_memory_and_no_rng():
 
 
 def test_current_entropy_does_not_leak_into_threshold_and_invalids_do_not_pollute():
-    observer = GeometryShadow()
+    observer = GeometryController()
     path = torch.tensor([[1., 0., 0.], [.8, .6, 0.], [1., 0., 0.]])
     for i in range(8):
         observer.observe(path, torch.zeros(8), i)
@@ -118,7 +118,7 @@ def test_shadow_generation_preserves_exact_tokens_and_every_cache_slot():
 
 def test_observer_runs_before_fourth_boundary(monkeypatch):
     adapter = mini()
-    observer = GeometryShadow()
+    observer = GeometryController()
     transition = adapter.transition
     seen = []
     def step(state):
@@ -156,7 +156,7 @@ def test_shadow_rejects_unsupported_execution_before_model_calls(method, steps):
 
 
 def test_overflowing_entropy_abstains_without_nonfinite_json():
-    observer = GeometryShadow()
+    observer = GeometryController()
     path = torch.tensor([[1., 0.], [.8, .6], [1., 0.]])
     observer.observe(path, torch.tensor([3e38, -3e38]), 0)
     assert observer.records[0]['normalized_entropy'] is None

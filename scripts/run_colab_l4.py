@@ -294,6 +294,7 @@ def run_literature_reasoning_suite(
     for task in tasks:
         prompt_ids = encode_reasoning_prompt(tokenizer, task["prompt"]).to(adapter.device)
         for m in methods:
+            method_cfg = replace(lit_exc_cfg, alpha=1.0, visit_step=3, donor_strategy="geometry") if m == "geometry" else lit_exc_cfg
             print(
                 f"  [{task_suite} Suite] {task['problem_id']} ({task['family']}) | method={m} ...",
                 flush=True,
@@ -309,7 +310,7 @@ def run_literature_reasoning_suite(
                 branch_count=2,
                 perturbation_method="competitive_logit",
                 perturbation_relative_norm=0.14,
-                excursion_config=lit_exc_cfg,
+                excursion_config=method_cfg,
                 policy_config=lit_pol_cfg,
                 seed=seed,
             )
@@ -325,7 +326,7 @@ def run_literature_reasoning_suite(
                 "difficulty": task["difficulty"],
                 "gold_answer": task["gold_answer"],
                 "trap_answers": task.get("trap_answers", []),
-                "excursion_config": asdict(lit_exc_cfg),
+                "excursion_config": asdict(method_cfg),
                 "policy_config": asdict(lit_pol_cfg),
                 "generated_tokens": len(gen["generated_token_ids"]),
                 **gen,
@@ -364,7 +365,7 @@ def main() -> int:
     parser.add_argument("--task-ids", nargs="+", default=None, help="Explicit selection for literature or deceptive suites")
     parser.add_argument("--max-new-tokens", type=int, default=512)
     parser.add_argument("--continuation-tokens", type=int, default=32)
-    parser.add_argument("--methods", nargs="+", choices=("S0", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1", "E2", "E3"), default=["S0", "M1", "E1", "E2"])
+    parser.add_argument("--methods", nargs="+", choices=("S0", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1", "E2", "E3", "geometry"), default=["S0", "M1", "E1", "E2"])
     parser.add_argument("--attn", choices=("sdpa", "eager"), default="sdpa" if torch.cuda.is_available() else "eager")
     parser.add_argument("--dtype", choices=("float32", "bfloat16"), default="float32")
     parser.add_argument("--seed", type=int, default=42)
