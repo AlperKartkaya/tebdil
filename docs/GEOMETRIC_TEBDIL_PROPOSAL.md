@@ -1,6 +1,6 @@
 # TEBDİL: deterministic geometry-guided excursions
 
-Status: **geometry path implemented; fixed development evaluation pending; no efficacy claim**.
+Status: **geometry path implemented and evaluated on four development tasks; zero natural interventions and no demonstrated gain. See [pilot results](../reports/geometry_pilot/README.md).**
 Scope: training-free detection, deterministic waypoint selection and bounded return
 on supported recurrent/looped model adapters. The user authorized the bounded development evaluation below. Do not reinterpret the proposal as a demonstrated improvement.
 
