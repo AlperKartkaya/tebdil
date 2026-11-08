@@ -38,3 +38,44 @@ routing/rejection telemetry, canonical suite integration, mini-cache regression
 tests. No new dependency or learned-controller training. S0/E2 algorithm settings
 are unchanged. Unit tests verify both accepted/rejected cache selection and
 rejected E3 token/cache equality with S0.
+
+## Completed GPU results
+
+Executed commit: `0b937cb62b5259a2b348ed48f2dc62a3b071580c`.
+All six fresh generations completed their execution contract (EOS or the fixed
+1024-token budget). None reused a checkpoint. [Raw summary](summary.json), six
+per-generation [checkpoints](checkpoints/), and remote/local SHA-256
+[transfer verification](transfer.json) are retained. Each checkpoint binds prompt
+IDs, effective parameters, pinned model revision, environment and source hashes.
+
+| Task | Method | Outcome | Tokens | Recurrent calls | Accepted / rejected returns | Seconds |
+|---|---|---|---:|---:|---:|---:|
+| Hotel | S0 | Correct: 0 | 736 | 2,948 | 0 / 0 | 90.6519 |
+| Hotel | E2 | Correct: 0 | 769 | 3,331 | 19 / 0 | 103.1071 |
+| Hotel | E3 | Correct: 0 | 686 | 3,353 | 6 / 17 | 105.0320 |
+| Monty Hall | S0 | Budget exhausted | 1,024 | 4,100 | 0 / 0 | 123.8699 |
+| Monty Hall | E2 | Budget exhausted | 1,024 | 4,461 | 21 / 0 | 138.2475 |
+| Monty Hall | E3 | Budget exhausted | 1,024 | 4,960 | 12 / 22 | 155.0912 |
+
+### Interpretation
+
+- All methods completed one correct answer out of two attempts. E3 demonstrated
+  neither an accuracy gain nor a compute saving in this pilot.
+- Hotel E3 used fewer tokens than S0 and E2, but **more recurrent calls and time**.
+  A shorter answer trajectory did not make the speculative computation cheaper.
+- Across both tasks: S0 used 7,048 calls, E2 7,792, E3 8,313. Rejection preserves
+  the normal state/cache, but does not refund donor/visit work already performed.
+- E3 accepted 18 excursions and rejected 39 candidate returns. Fewer accepted
+  interventions alone is not evidence of a better policy.
+- The historical hotel rescue did not reproduce as a baseline failure: FP32 S0
+  itself answered correctly here. Precision, provenance and runtime differences
+  prevent attributing that change to any one cause.
+- Monty Hall remained unfinished for every method. This shorter-budget pilot
+  does not establish how E3 performs at the historical 3000-token budget.
+
+Keep E3 experimental; it is not promoted to the default. The next targeted
+optimization is a bounded probe/cooldown policy that limits the cost of repeated
+rejected proposals, evaluated against this unchanged pilot. Any larger-budget
+study must be a separately frozen campaign, not a retroactive extension or
+replacement of these outcomes. No held-out questions or controller training were
+used, and single-run timings are not latency-distribution estimates.
