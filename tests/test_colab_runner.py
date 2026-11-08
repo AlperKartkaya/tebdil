@@ -203,3 +203,23 @@ def test_deceptive_suite_preserves_historical_settings(monkeypatch):
     assert seen[0]['perturbation_relative_norm'] == 0.14
     assert seen[0]['method'] == 'E3'
     assert rows[0]['evaluation']['status'] == 'budget_exhausted'
+
+
+def test_e2_direction_arms_change_only_donor_selection(monkeypatch):
+    import torch
+    from types import SimpleNamespace
+    seen = []
+    monkeypatch.setattr(runner, 'encode_reasoning_prompt', lambda *a: torch.tensor([[1]]))
+    def generate(**kwargs):
+        seen.append(kwargs)
+        return {'decoded_text': 'unfinished', 'completed': False, 'generated_token_ids': [2],
+                'excursion_count': 0, 'recurrent_block_calls': 4, 'wall_seconds': 0}
+    rows = runner.run_literature_reasoning_suite(SimpleNamespace(device='cpu'), SimpleNamespace(eos_token='<eos>'),
+        ['S0', 'E2'], runner.ExcursionConfig(), runner.AdaptivePolicyConfig(), task_suite='deceptive',
+        task_ids=['trap_hotel_empty_rooms'], e2_directions=('mixture', 'single'), generator=generate)
+    assert len(rows) == 3 and [x['method'] for x in seen] == ['S0', 'E2', 'E2']
+    assert seen[1]['perturbation_method'] == 'competitive_logit'
+    assert seen[2]['perturbation_method'] == 'competitive_logit_single'
+    assert {k: v for k, v in seen[1].items() if k != 'perturbation_method'} == {k: v for k, v in seen[2].items() if k != 'perturbation_method'}
+    assert rows[2]['perturbation_method'] == 'competitive_logit_single'
+    assert seen[2]['excursion_config'].alpha == seen[2]['excursion_config'].beta == .65

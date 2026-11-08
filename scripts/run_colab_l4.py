@@ -261,7 +261,11 @@ def run_literature_reasoning_suite(
     seed: int = 42,
     generator=generate_tebdil_cached,
     task_suite: str = "literature",
+    e2_directions: tuple[str, ...] = ("mixture",),
 ) -> list[dict]:
+    if (not e2_directions or len(set(e2_directions)) != len(e2_directions)
+            or not set(e2_directions) <= {"mixture", "single"}):
+        raise ValueError("Expected unique mixture/single E2 directions")
     if task_suite == "deceptive":
         if partition != "development":
             raise ValueError("Deceptive tasks are development diagnostics only")
@@ -293,10 +297,13 @@ def run_literature_reasoning_suite(
     )
     for task in tasks:
         prompt_ids = encode_reasoning_prompt(tokenizer, task["prompt"]).to(adapter.device)
-        for m in methods:
+        arms = [(m, direction) for m in methods
+                for direction in (e2_directions if m == "E2" else ("mixture",))]
+        for m, direction in arms:
+            perturbation = "competitive_logit_single" if direction == "single" else "competitive_logit"
             method_cfg = replace(lit_exc_cfg, alpha=1.0, visit_step=3, donor_strategy="geometry") if m == "geometry" else lit_exc_cfg
             print(
-                f"  [{task_suite} Suite] {task['problem_id']} ({task['family']}) | method={m} ...",
+                f"  [{task_suite} Suite] {task['problem_id']} ({task['family']}) | method={m} direction={direction} ...",
                 flush=True,
             )
             gen = generator(
@@ -308,7 +315,7 @@ def run_literature_reasoning_suite(
                 recurrent_steps=4,
                 fork_after_step=1,
                 branch_count=2,
-                perturbation_method="competitive_logit",
+                perturbation_method=perturbation,
                 perturbation_relative_norm=0.14,
                 excursion_config=method_cfg,
                 policy_config=lit_pol_cfg,
@@ -326,6 +333,7 @@ def run_literature_reasoning_suite(
                 "difficulty": task["difficulty"],
                 "gold_answer": task["gold_answer"],
                 "trap_answers": task.get("trap_answers", []),
+                "perturbation_method": perturbation,
                 "excursion_config": asdict(method_cfg),
                 "policy_config": asdict(lit_pol_cfg),
                 "generated_tokens": len(gen["generated_token_ids"]),
@@ -366,12 +374,18 @@ def main() -> int:
     parser.add_argument("--max-new-tokens", type=int, default=512)
     parser.add_argument("--continuation-tokens", type=int, default=32)
     parser.add_argument("--methods", nargs="+", choices=("S0", "P0", "P1", "M0", "M1", "R0", "C0", "E0", "E1", "E2", "E3", "geometry"), default=["S0", "M1", "E1", "E2"])
+    parser.add_argument("--e2-directions", nargs="+", choices=("mixture", "single"), default=["mixture"],
+                        help="E2 donor-direction comparison for literature/deceptive suites")
     parser.add_argument("--attn", choices=("sdpa", "eager"), default="sdpa" if torch.cuda.is_available() else "eager")
     parser.add_argument("--dtype", choices=("float32", "bfloat16"), default="float32")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--model", default="ByteDance/Ouro-1.4B-Thinking")
     parser.add_argument("--revision", help="Pinned model commit; required for non-default models")
     args = parser.parse_args()
+    if len(set(args.e2_directions)) != len(args.e2_directions):
+        parser.error("Duplicate E2 directions")
+    if args.e2_directions != ["mixture"] and (args.suite not in ("literature", "deceptive") or "E2" not in args.methods):
+        parser.error("--e2-directions requires literature/deceptive suite with E2")
     if args.task_ids is not None and args.suite not in ("literature", "deceptive"):
         parser.error("--task-ids requires --suite literature or deceptive")
     if args.partition != "development" and args.suite not in ("literature", "reasoning_v1"):
@@ -476,6 +490,7 @@ def main() -> int:
             exc_cfg=exc_cfg,
             pol_cfg=pol_cfg,
             task_suite="deceptive" if args.suite == "deceptive" else "literature",
+            e2_directions=tuple(args.e2_directions),
             partition=args.partition,
             max_tasks=args.max_tasks,
             task_ids=args.task_ids,

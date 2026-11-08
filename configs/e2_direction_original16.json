@@ -1,0 +1,53 @@
+{
+  "source_commit": "bfe4f046d4759df76bda96a085f701afa1b66c45",
+  "source_report": "reports/colab_l4_deceptive_traps_3000_32jobs.json",
+  "source_report_sha256": "cbe2f1ea15dec79a573484ae9b016787ca17f2fd12f0b7f4f3bbabd037cb993f",
+  "max_new_tokens": 3000,
+  "seed": 42,
+  "dtype": "float32",
+  "attention": "sdpa",
+  "methods": [
+    "S0",
+    "E2"
+  ],
+  "e2_directions": [
+    "mixture",
+    "single"
+  ],
+  "task_ids": [
+    "trap_base10_reversal",
+    "trap_bat_ball_glove",
+    "trap_clock_strikes",
+    "trap_couple_handshakes",
+    "trap_gsm_apple_crates",
+    "trap_gsm_bakery_shapes",
+    "trap_gsm_kiwi_size",
+    "trap_gsm_school_inflation",
+    "trap_hotel_empty_rooms",
+    "trap_infertile_rabbits",
+    "trap_lily_pad_halving",
+    "trap_monty_hall_4doors",
+    "trap_rope_burn_timing",
+    "trap_simple_jug_measure",
+    "trap_speed_harmonic_mean",
+    "trap_widget_machines"
+  ],
+  "task_sha256": {
+    "trap_base10_reversal": "64b24143ab51ef3b79ee79fee6da31e96c69081b63cd89fec2de2a6aa39814b4",
+    "trap_bat_ball_glove": "38d57eae93a2a344a0f0379427b7d6e5ab32ac384fd14f166fd2b25f8116fdbc",
+    "trap_clock_strikes": "640644784401abcb7d2beacc155036029b83909bcafed7283f11b64d39f2f3a1",
+    "trap_couple_handshakes": "57bf2b7c2983945c0c1ec8b5540dfb23d166b081a3b277c576f4dd8e1938c111",
+    "trap_gsm_apple_crates": "ae8ad4159828152cb8dc0378936f309cd9d631503974d7b61818c107852cf220",
+    "trap_gsm_bakery_shapes": "a460ba7f43ac1d328f4d2c96783fefbadfd5d0369146b1004346c76fd6abb39a",
+    "trap_gsm_kiwi_size": "80dfc66cee5ebdbdb209693b0141612265d35636123aa71da8c57c43998f51e5",
+    "trap_gsm_school_inflation": "1803c7f83c4b4f17130f461da8a90e6df195ff3fe73a0b63b3849811d0f012b3",
+    "trap_hotel_empty_rooms": "abcf3c65e3b2d8292501ec7117597ce7cfd6daa7ee0804f54fbfc0ee434dfb03",
+    "trap_infertile_rabbits": "aa587cd00b827e153faa8a37e78d0e6cff120edb993d4c885835d3bb62540734",
+    "trap_lily_pad_halving": "37ae99a99818f85feb56154fd4a9bc3084827b24d139e3544ec876db374c02e6",
+    "trap_monty_hall_4doors": "8cab0983c9749c2b68842d6911fe66e1f431db14fac0d849316f6f8eec2732d3",
+    "trap_rope_burn_timing": "60e0aa8599c106864dccea712c432c550e3eeb439c46699742700771f92ccdbe",
+    "trap_simple_jug_measure": "fba067b84176d9f203fc62a1bc8ff8c37884bf5ae8a400a2f7b4420ed8ced7f2",
+    "trap_speed_harmonic_mean": "e4352fe1e042824025c785da7c4bd988fe16cd03e2b01e65a77cf2b30405cef1",
+    "trap_widget_machines": "b788e66e0413b75984e9f6ba588765317124a61605d2945aed8bdcc2efdd7aec"
+  }
+}
